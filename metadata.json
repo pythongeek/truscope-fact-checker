@@ -1,0 +1,6 @@
+{
+  "name": "TruScope AI Fact-Checker",
+  "description": "An AI-powered tool to analyze news articles for factual accuracy, misinformation risk, and adherence to journalistic standards. Paste an article to get an in-depth analysis, verify claims with Google Search, and see how it compares to major publications.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
