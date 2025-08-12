@@ -1,5 +1,4 @@
-
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { LoadingSpinner } from './components/LoadingSpinner';
@@ -55,7 +54,7 @@ export default function App() {
     } catch (err) {
       console.error('Analysis failed:', err);
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during analysis.';
-      setError(`Analysis Failed: ${errorMessage}. This can happen due to high demand or invalid API key. Please check the console and try again later.`);
+      setError(`Analysis Failed: ${errorMessage}. This can happen due to high demand or an invalid API key. Please check the console and try again later.`);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
@@ -93,7 +92,7 @@ export default function App() {
 }, [handleAnalysis, isLoading]);
 
   return (
-    <div className="min-h-screen text-gray-800">
+    <div className="min-h-screen text-gray-800 bg-gray-50">
       <div className="container mx-auto max-w-7xl px-4 py-8 sm:py-12">
         <Header />
         <main>
