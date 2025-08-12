@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.gradient-text {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.enhanced-article-content b {
+   @apply bg-green-100 text-green-800 font-semibold px-1 py-0.5 rounded-sm;
+ }
+ .enhanced-article-content del {
+   @apply bg-red-100 text-red-700 line-through decoration-red-500 decoration-2 px-1 py-0.5 rounded-sm;
+ }
+ .enhanced-article-content ins {
+    @apply bg-green-100 text-green-800 font-semibold no-underline px-1 py-0.5 rounded-sm;
+ }
+ .enhanced-article-content mark {
+   @apply bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded-sm relative cursor-help;
+ }
+ .enhanced-article-content mark::after {
+    content: attr(title);
+    @apply absolute bottom-full left-1/2 mb-2 w-max max-w-xs bg-gray-800 text-white text-xs font-sans rounded p-1 z-10 text-center whitespace-normal
+           opacity-0 invisible 
+           transform -translate-x-1/2 translate-y-2 
+           transition-all duration-200 ease-out;
+ }
+ .enhanced-article-content mark:hover::after {
+    @apply opacity-100 visible translate-y-0;
+ }
+ .enhanced-article-content a {
+    @apply text-blue-600 underline decoration-offset-2 transition-colors hover:text-blue-800;
+ }
+
+ body {
+    font-family: 'Inter', sans-serif;
+    @apply bg-gray-50;
+    /*
+    background: linear-gradient(-45deg, #f0f4f8, #e6eef8, #d9e2f0, #e6f0f8);
+    background-size: 400% 400%;
+    animation: subtleGradient 15s ease infinite;
+    */
+ }
+
+@keyframes subtleGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.animate-entry {
+  opacity: 0;
+}
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out forwards;
+}
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
