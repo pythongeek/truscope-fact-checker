@@ -4,113 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TruScope AI Fact-Checker</title>
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              serif: ['Lora', 'serif'],
-            },
-          },
-        },
-      }
-    </script>
-    <style type="text/tailwindcss">
-        @tailwind base;
-        @tailwind components;
-        @tailwind utilities;
-
-        @layer base {
-          body {
-            font-family: 'Inter', sans-serif;
-            @apply bg-gray-50;
-          }
-        }
-
-        @layer components {
-         .gradient-text {
-            background-clip: text;
-            -webkit-background-clip: text;
-            color: transparent;
-            -webkit-text-fill-color: transparent;
-          }
-        }
-
-        @layer utilities {
-          .enhanced-article-content b {
-            @apply bg-green-100 text-green-800 font-semibold px-1 py-0.5 rounded-sm;
-          }
-          .enhanced-article-content del {
-            @apply bg-red-100 text-red-700 line-through decoration-red-500 decoration-2 px-1 py-0.5 rounded-sm;
-          }
-          .enhanced-article-content ins {
-              @apply bg-green-100 text-green-800 font-semibold no-underline px-1 py-0.5 rounded-sm;
-          }
-          .enhanced-article-content mark {
-            @apply bg-yellow-100 text-yellow-800 font-semibold px-1 py-0.5 rounded-sm relative cursor-help;
-          }
-          .enhanced-article-content mark::after {
-              content: attr(title);
-              @apply absolute bottom-full left-1/2 mb-2 w-max max-w-xs bg-gray-800 text-white text-xs font-sans rounded p-1 z-10 text-center whitespace-normal opacity-0 invisible transform -translate-x-1/2 translate-y-2 transition-all duration-200 ease-out;
-          }
-          .enhanced-article-content mark:hover::after {
-              @apply opacity-100 visible translate-y-0;
-          }
-          .enhanced-article-content a {
-              @apply text-blue-600 underline decoration-offset-2 transition-colors hover:text-blue-800;
-          }
-
-          @keyframes fadeInUp {
-              from {
-                  opacity: 0;
-                  transform: translateY(20px);
-              }
-              to {
-                  opacity: 1;
-                  transform: translateY(0);
-              }
-          }
-
-          @keyframes fadeIn {
-              from { opacity: 0; }
-              to { opacity: 1; }
-          }
-
-          .animate-entry {
-            opacity: 0;
-          }
-          .fade-in {
-            animation: fadeIn 0.5s ease-in-out forwards;
-          }
-          .fade-in-up {
-            animation: fadeInUp 0.6s ease-out forwards;
-          }
-        }
-    </style>
-    <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.13.0",
-    "react": "https://esm.sh/react@^19.1.1",
-    "react-dom/client": "https://esm.sh/react-dom@^19.1.1/client",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-    "react/": "https://esm.sh/react@^19.1.1/",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.0.0",
-    "vite": "https://esm.sh/vite@^7.1.1"
-  }
-}
-</script>
-  <link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
 </html>
