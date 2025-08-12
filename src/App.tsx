@@ -1,3 +1,4 @@
+import { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { InputSection } from './components/InputSection';
 import { LoadingSpinner } from './components/LoadingSpinner';
