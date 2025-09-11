@@ -102,7 +102,7 @@ const App: React.FC = () => {
         </div>
       </main>
       <footer className="text-center py-4 text-slate-500 text-sm">
-        <p>Powered by Google Gemini. For informational purposes only.</p>
+        <p>Created By Ni-On, Powered by Google Gemini</p>
       </footer>
     </div>
   );
