@@ -3,6 +3,7 @@ import Header from './components/Header';
 import InputSection from './components/InputSection';
 import Dashboard from './components/Dashboard';
 import UsageStats from './components/UsageStats';
+import ApiKeyModal from './components/ApiKeyModal';
 import { analyzeContent, getDailyUsage, DAILY_LIMIT } from './services/geminiService';
 import type { AnalysisResult } from './types';
 
@@ -17,9 +18,14 @@ const App: React.FC = () => {
   const [requestTimes, setRequestTimes] = useState<number[]>([]);
   const lastRequestRef = useRef<number>(0);
   const [dailyUsage, setDailyUsage] = useState<number>(0);
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [hasUserApiKey, setHasUserApiKey] = useState<boolean>(false);
 
   useEffect(() => {
     setDailyUsage(getDailyUsage());
+    // Check if user has set their own API key
+    const userApiKey = localStorage.getItem('gemini_api_key');
+    setHasUserApiKey(!!userApiKey);
   }, []);
 
   const checkRateLimit = useCallback((): boolean => {
@@ -66,6 +72,9 @@ const App: React.FC = () => {
       setAnalysisResult(result);
       setDailyUsage(getDailyUsage()); // Update usage after successful analysis
     } catch (err) {
+      if (err instanceof Error && err.message.includes('API key')) {
+        setShowApiKeyModal(true);
+      }
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
       setAnalysisResult(null);
     } finally {
@@ -73,12 +82,28 @@ const App: React.FC = () => {
     }
   }, [inputText, checkRateLimit]);
 
+  const handleApiKeySaved = (apiKey: string) => {
+    localStorage.setItem('gemini_api_key', apiKey);
+    setHasUserApiKey(true);
+    setShowApiKeyModal(false);
+    setError(null);
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setHasUserApiKey(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 font-sans text-slate-200">
-      <Header />
+      <Header onApiKeyClick={() => setShowApiKeyModal(true)} hasUserApiKey={hasUserApiKey} />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
-          <UsageStats dailyUsage={dailyUsage} dailyLimit={DAILY_LIMIT} />
+          <UsageStats
+            dailyUsage={dailyUsage}
+            dailyLimit={DAILY_LIMIT}
+            usingUserApiKey={hasUserApiKey}
+          />
           <InputSection
             inputText={inputText}
             setInputText={setInputText}
@@ -86,10 +111,39 @@ const App: React.FC = () => {
             isLoading={isLoading}
           />
 
+          {!hasUserApiKey && (
+            <div className="mt-4 bg-amber-900/30 border border-amber-600/50 text-amber-200 px-4 py-3 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">Using Shared API Key</p>
+                  <p className="text-sm">Limited to {DAILY_LIMIT} requests per day. Add your own API key for unlimited usage.</p>
+                </div>
+                <button
+                  onClick={() => setShowApiKeyModal(true)}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  Add API Key
+                </button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mt-6 bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg animate-fade-in" role="alert">
-              <p className="font-bold">Error</p>
-              <p>{error}</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-bold">Error</p>
+                  <p>{error}</p>
+                </div>
+                {error.includes('API key') && (
+                  <button
+                    onClick={() => setShowApiKeyModal(true)}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    Set API Key
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -101,6 +155,15 @@ const App: React.FC = () => {
 
         </div>
       </main>
+
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onSave={handleApiKeySaved}
+        onClear={handleClearApiKey}
+        hasExistingKey={hasUserApiKey}
+      />
+
       <footer className="text-center py-4 text-slate-500 text-sm">
         <p>Created By Ni-On, Powered by Google Gemini</p>
       </footer>
