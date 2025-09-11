@@ -113,9 +113,10 @@ ${text}
 
     const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let jsonString = response.text().trim();
+    const response = result.response;
+    const text = response.text();
 
+    let jsonString = text.trim();
     const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (jsonMatch && jsonMatch[1]) {
       jsonString = jsonMatch[1];
