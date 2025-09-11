@@ -1,0 +1,5 @@
+{
+  "name": "TruScope AI",
+  "description": "An AI-powered fact-checking application that analyzes text to verify claims, assess credibility, and provide detailed insights using Google's Gemini API.",
+  "requestFramePermissions": []
+}
