@@ -11,13 +11,16 @@ let dailyUsage = 0;
 let lastResetDate = new Date().toDateString();
 
 export const DAILY_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT || '100', 10);
-const API_KEY = process.env.GEMINI_API_KEY;
 
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable is not set.");
-}
+const getAiClient = () => {
+  const userApiKey = localStorage.getItem('gemini_api_key');
+  const apiKey = userApiKey || process.env.GEMINI_API_KEY;
 
-const ai = new GoogleGenerativeAI(API_KEY);
+  if (!apiKey) {
+    throw new Error("API key not found. Please set your API key.");
+  }
+  return new GoogleGenerativeAI(apiKey);
+};
 
 const checkDailyLimit = (): boolean => {
   const today = new Date().toDateString();
@@ -108,9 +111,12 @@ ${text}
 ---`;
 
   try {
-    // Increment usage counter
-    dailyUsage++;
+    // Increment usage counter only if not using user's key
+    if (!localStorage.getItem('gemini_api_key')) {
+      dailyUsage++;
+    }
 
+    const ai = getAiClient();
     const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
     const result = await model.generateContent(prompt);
     const response = result.response;
