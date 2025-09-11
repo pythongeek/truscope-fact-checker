@@ -120,7 +120,7 @@ ${text}
     const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
     const result = await model.generateContent(prompt);
     const response = result.response;
-    const text = response.text();
+    const text = await response.text();
 
     let jsonString = text.trim();
     const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -146,6 +146,23 @@ ${text}
     }
 
     const finalResult = parsedResult as AnalysisResult;
+
+    // Extract and de-duplicate sources from grounding metadata
+    const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+    if (groundingMetadata?.groundingChunks) {
+      const uniqueSources = new Map<string, { uri: string; title: string }>();
+      groundingMetadata.groundingChunks
+        .filter(chunk => chunk.web && chunk.web.uri)
+        .forEach(chunk => {
+          if (chunk.web) {
+            uniqueSources.set(chunk.web.uri, {
+              uri: chunk.web.uri,
+              title: chunk.web.title || chunk.web.uri,
+            });
+          }
+        });
+      finalResult.sources = Array.from(uniqueSources.values());
+    }
 
     // Cache the result
     if (ENABLE_CACHING) {
