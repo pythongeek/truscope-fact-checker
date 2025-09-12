@@ -81,3 +81,30 @@ export interface SourceAnalysis {
   consensus_level: number; // 0-100, how much sources agree
   contradiction_level: number; // 0-100, how much sources disagree
 }
+
+export type ClaimDomain = 'political' | 'scientific' | 'financial' | 'health' | 'general';
+
+export type DomainWeights = {
+  [key in SourceType['category']]?: number;
+};
+
+export interface ClaimContext {
+  user_profile?: 'novice' | 'expert';
+  verification_goal?: 'quick_check' | 'deep_dive';
+  region?: string;
+  language?: string;
+}
+
+export interface PrioritizedSourceList {
+  prioritized_sources: {
+    source: SourceItem;
+    priority_score: number;
+    ranking_factors: {
+      domain_relevance: number;
+      context_relevance: number;
+      recency: number;
+    };
+  }[];
+  domain_classification: ClaimDomain;
+  prioritization_reasoning: string;
+}
