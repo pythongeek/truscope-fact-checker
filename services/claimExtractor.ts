@@ -1,8 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { AnalysisResult } from '../types';
+import type { ClaimAnalysisResult } from '../types/claim';
+import { fetchWithRetry } from '../utils/api';
 
 // Simple in-memory cache (consider Redis for production)
-const analysisCache = new Map<string, { result: AnalysisResult; timestamp: number }>();
+const analysisCache = new Map<string, { result: ClaimAnalysisResult; timestamp: number }>();
 const CACHE_TTL = parseInt(process.env.CACHE_TTL || '1800000', 10); // 30 minutes
 const ENABLE_CACHING = process.env.ENABLE_CACHING === 'true';
 
@@ -10,7 +10,7 @@ const ENABLE_CACHING = process.env.ENABLE_CACHING === 'true';
 let dailyUsage = 0;
 let lastResetDate = new Date().toDateString();
 
-export const DAILY_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT || '100', 10);
+const DAILY_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT || '100', 10);
 const SHARED_API_KEY = process.env.GEMINI_API_KEY;
 
 const getUserApiKey = (): string | null => {
@@ -86,17 +86,7 @@ const cleanCache = (): void => {
   }
 };
 
-export const getDailyUsage = (): number => {
-  // Only return usage for shared API key
-  if (!isUsingSharedKey()) {
-    return 0; // No usage tracking for user's own API key
-  }
-
-  checkDailyLimit();
-  return dailyUsage;
-};
-
-export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
+export const extractClaims = async (text: string): Promise<ClaimAnalysisResult> => {
   let apiKey: string;
 
   try {
@@ -136,19 +126,22 @@ export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
     throw new Error('Text is too long. Please limit to 10,000 characters.');
   }
 
-  const prompt = `You are an expert fact-checker and critical analyst. Your task is to analyze the following text, identify the main factual claims, and evaluate their credibility. Use Google Search to find supporting or contradicting evidence from reliable sources to improve the accuracy of your claims verification.
+  const prompt = `You are a journalistic fact-checker. Your task is to parse the following text and identify sentences that are factual claims. A factual claim is a statement that can be verified with evidence, such as statistics, names, dates, or direct quotes. Distinguish these from subjective or opinion-based statements.
 
-Provide an overall credibility score from 0 to 100, where 100 is completely credible. Also, provide a brief summary of your analysis. For each claim you identify, state the claim, classify its status as 'Verified', 'Uncertain', or 'False', and provide a concise explanation for your reasoning, citing web sources if available.
+Provide the output as a structured JSON object containing an array of identified claims. Each claim object should have the original text and a boolean flag 'isVerifiable' indicating if it's a verifiable claim or an opinion.
+
+Here are some examples to guide you:
+- "The Earth orbits the sun." -> isVerifiable: true
+- "Pizza is the best food." -> isVerifiable: false
+- "The new policy was announced on Tuesday." -> isVerifiable: true
+- "Many people believe the new policy is a mistake." -> isVerifiable: false
 
 IMPORTANT: Your response must be a single, valid JSON object. Do not include any text, markdown formatting like \`\`\`json, or any explanations outside of this JSON object. The JSON object must conform to the following structure:
 {
-  "overallScore": number (0-100),
-  "summary": string,
   "claims": [
     {
-      "claim": string,
-      "status": "Verified" | "Uncertain" | "False",
-      "explanation": string
+      "text": string,
+      "isVerifiable": boolean
     }
   ]
 }
@@ -164,36 +157,53 @@ ${text}
       dailyUsage++;
     }
 
-    const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const responseText = response.text();
+    const API_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    let jsonString = responseText.trim();
-    const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      jsonString = jsonMatch[1];
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        response_mime_type: "application/json",
+      }
+    };
+
+    const response = await fetchWithRetry(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
+        console.error('Gemini API Error:', errorData);
+        throw new Error(`API request failed with status ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
     }
+
+    const responseData = await response.json();
+    const responseText = responseData.candidates[0].content.parts[0].text;
 
     let parsedResult;
     try {
-      parsedResult = JSON.parse(jsonString);
+      parsedResult = JSON.parse(responseText);
     } catch (e) {
-      console.error("Failed to parse JSON response:", jsonString);
+      console.error("Failed to parse JSON response:", responseText);
       throw new Error('The AI returned a response in an unexpected format. Please try again or rephrase your text.');
     }
 
     // Validate the structure
     if (
-      typeof parsedResult.overallScore !== 'number' ||
-      typeof parsedResult.summary !== 'string' ||
-      !Array.isArray(parsedResult.claims)
+      !Array.isArray(parsedResult.claims) ||
+      !parsedResult.claims.every((claim: any) => typeof claim.text === 'string' && typeof claim.isVerifiable === 'boolean')
     ) {
       throw new Error('The AI returned a response with a missing or invalid structure. Please try again.');
     }
 
-    const finalResult = parsedResult as AnalysisResult;
+    const finalResult = parsedResult as ClaimAnalysisResult;
 
     // Cache the result
     if (ENABLE_CACHING) {
