@@ -6,9 +6,11 @@ interface InputSectionProps {
   setInputText: (text: string) => void;
   onAnalyze: () => void;
   isLoading: boolean;
+  onExtractClaims: () => void;
+  isExtractingClaims: boolean;
 }
 
-const InputSection: React.FC<InputSectionProps> = ({ inputText, setInputText, onAnalyze, isLoading }) => {
+const InputSection: React.FC<InputSectionProps> = ({ inputText, setInputText, onAnalyze, isLoading, onExtractClaims, isExtractingClaims }) => {
   return (
     <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 shadow-lg">
       <h2 className="text-xl font-semibold mb-4 text-slate-100">Analyze Content</h2>
@@ -20,13 +22,27 @@ const InputSection: React.FC<InputSectionProps> = ({ inputText, setInputText, on
         onChange={(e) => setInputText(e.target.value)}
         placeholder="Enter text to analyze..."
         className="w-full h-48 p-4 bg-slate-900/70 border border-slate-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none transition duration-200 text-slate-200 resize-y"
-        disabled={isLoading}
+        disabled={isLoading || isExtractingClaims}
       />
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end gap-4">
+        <button
+          onClick={onExtractClaims}
+          disabled={isLoading || isExtractingClaims || !inputText.trim()}
+          className="flex items-center justify-center px-6 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-green-500"
+        >
+          {isExtractingClaims ? (
+            <>
+              <LoadingSpinner />
+              <span className="ml-2">Extracting...</span>
+            </>
+          ) : (
+            'Extract Claims'
+          )}
+        </button>
         <button
           onClick={onAnalyze}
-          disabled={isLoading || !inputText.trim()}
-          className="flex items-center justify-center px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
+          disabled={isLoading || isExtractingClaims || !inputText.trim()}
+          className="flex items-center justify-center px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-70.0 disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-blue-500"
         >
           {isLoading ? (
             <>

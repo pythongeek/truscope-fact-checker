@@ -5,14 +5,19 @@ import Dashboard from './components/Dashboard';
 import UsageStats from './components/UsageStats';
 import ApiKeyModal from './components/ApiKeyModal';
 import { analyzeContent, getDailyUsage, DAILY_LIMIT } from './services/geminiService';
+import { extractClaims } from './services/claimExtractor';
 import type { AnalysisResult } from './types';
+import type { Claim } from './types/claim';
+import ClaimDelineation from './components/ClaimDelineation';
 
 const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
 const MAX_REQUESTS_PER_WINDOW = parseInt(process.env.MAX_REQUESTS_PER_WINDOW || '3', 10);
 
 const App: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [claimAnalysisResult, setClaimAnalysisResult] = useState<Claim[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isExtractingClaims, setIsExtractingClaims] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [inputText, setInputText] = useState<string>('');
   const [requestTimes, setRequestTimes] = useState<number[]>([]);
@@ -82,6 +87,37 @@ const App: React.FC = () => {
     }
   }, [inputText, checkRateLimit]);
 
+  const handleExtractClaims = useCallback(async () => {
+    if (!checkRateLimit()) {
+      return;
+    }
+
+    if (!inputText.trim()) {
+      setError('Please enter some text to analyze.');
+      return;
+    }
+
+    const now = Date.now();
+    setRequestTimes(prev => [...prev.filter(time => now - time < RATE_LIMIT_WINDOW), now]);
+    lastRequestRef.current = now;
+
+    setIsExtractingClaims(true);
+    setError(null);
+    setClaimAnalysisResult(null);
+    try {
+      const result = await extractClaims(inputText);
+      setClaimAnalysisResult(result.claims);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('API key')) {
+        setShowApiKeyModal(true);
+      }
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setClaimAnalysisResult(null);
+    } finally {
+      setIsExtractingClaims(false);
+    }
+  }, [inputText, checkRateLimit]);
+
   const handleApiKeySaved = (apiKey: string) => {
     localStorage.setItem('gemini_api_key', apiKey);
     setHasUserApiKey(true);
@@ -109,6 +145,8 @@ const App: React.FC = () => {
             setInputText={setInputText}
             onAnalyze={handleAnalyze}
             isLoading={isLoading}
+            onExtractClaims={handleExtractClaims}
+            isExtractingClaims={isExtractingClaims}
           />
 
           {!hasUserApiKey && (
@@ -153,6 +191,11 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {(isExtractingClaims || claimAnalysisResult) && !error && (
+            <div className="mt-8">
+              <ClaimDelineation claims={claimAnalysisResult} isLoading={isExtractingClaims} />
+            </div>
+          )}
         </div>
       </main>
 
