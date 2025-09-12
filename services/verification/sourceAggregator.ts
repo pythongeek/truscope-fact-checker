@@ -1,8 +1,10 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SourceCollection, SearchStrategy } from '../../types/verification';
+import { executeGeminiQuery } from '../geminiService';
+import { VerificationError } from '../../types/errorHandler';
+import { isSourceCollection } from './validation';
 
 export class SourceAggregator {
-  constructor(private geminiClient: GoogleGenerativeAI) {}
+  constructor() {}
 
   async aggregateSourcesForClaim(
     claim: string,
@@ -10,12 +12,9 @@ export class SourceAggregator {
   ): Promise<SourceCollection> {
 
     const prompt = this.buildPrompt(claim, strategies);
-    const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const responseText = response.text();
+      const responseText = await executeGeminiQuery(prompt);
 
       let jsonString = responseText.trim();
       const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -24,16 +23,19 @@ export class SourceAggregator {
       }
 
       const sources = JSON.parse(jsonString);
-      // TODO: Add validation for the parsed sources
+
+      if (!isSourceCollection(sources)) {
+        throw new VerificationError('AI returned an invalid source collection object.');
+      }
+
       return sources;
     } catch (error) {
-      console.error("Error aggregating sources:", error);
-      return {
-        primary_sources: [],
-        news_sources: [],
-        fact_checking_sources: [],
-        expert_sources: [],
-      };
+      console.error("Error in SourceAggregator:", error);
+      // Re-throw the error to be handled by the orchestrator
+      if (error instanceof VerificationError) {
+          throw error;
+      }
+      throw new VerificationError(`Source aggregation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -41,47 +43,25 @@ export class SourceAggregator {
     const strategiesString = strategies.map(s => `- ${s.search_type}: ${s.queries.join(', ')}`).join('\n');
 
     return `
-      You are simulating access to comprehensive information sources for fact-checking.
-      For the claim: "${claim}"
+      You are a simulation AI that provides realistic, synthesized source information for fact-checking purposes. Based on your training data, you will generate plausible source snippets that would be found when researching a claim.
 
-      Using your training knowledge and the following search strategies:
+      Claim: "${claim}"
+
+      Based on the claim and the following search strategies, generate a collection of simulated source information.
+      Search Strategies:
       ${strategiesString}
 
-      Provide detailed information as if you searched:
+      For each of the following categories, provide 2-3 detailed, distinct, and realistic source entries. The content should be neutral and encyclopedic, reflecting what one would find in a real-world search.
 
-      PRIMARY SOURCES:
-      - Government databases (.gov sites, regulatory filings, official reports)
-      - Academic repositories (PubMed, arXiv, institutional databases)
-      - Legal documents (court records, legislation, regulatory text)
-      - Corporate filings (SEC, earnings reports, official statements)
+      The JSON object you return should have keys for: "primary_sources", "academic_sources", "news_sources", and "expert_sources". Each key should correspond to an array of source objects. Each source object must have the following properties:
+      - source_name: The name of the publication, institution, or document (e.g., "U.S. Bureau of Labor Statistics", "The New England Journal of Medicine", "Reuters").
+      - access_url: A realistic, plausible URL for the source.
+      - credibility_score: A number from 1 to 100, representing the general credibility of the source type.
+      - publication_date: A realistic date for the information, in YYYY-MM-DD format.
+      - verification_strength: A string, one of 'strong_support', 'weak_support', 'neutral', 'weak_contradiction', 'strong_contradiction'.
+      - relevant_information: A 2-4 sentence detailed snippet of information relevant to the claim, written in a style appropriate for the source.
 
-      NEWS SOURCES:
-      - Associated Press, Reuters (wire service accuracy)
-      - Major newspapers (NYT, WSJ, Washington Post, Guardian)
-      - Broadcast networks (BBC, NPR, PBS NewsHour)
-      - Specialized outlets (Politico, ProPublica for investigative)
-
-      FACT-CHECKING SOURCES:
-      - PolitiFact, FactCheck.org, Snopes
-      - International fact-checkers (AFP Fact Check, BBC Reality Check)
-      - Academic fact-checking (Duke Reporters' Lab, Poynter)
-
-      EXPERT SOURCES:
-      - University researchers and professors
-      - Think tank analysts and reports
-      - Industry professionals and trade publications
-      - Scientific societies and professional organizations
-
-      For each source type, provide:
-      - source_name: "Authoritative source name"
-      - source_type: "government/academic/news/factcheck/expert"
-      - credibility_score: 1-100 based on source reputation
-      - relevant_information: "Key facts supporting or contradicting the claim"
-      - publication_date: "When this information was published/updated"
-      - access_url: "Realistic URL where this would be found"
-      - verification_strength: "strong_support/weak_support/neutral/weak_contradiction/strong_contradiction"
-
-      Return comprehensive results as JSON in a SourceCollection object.
+      Return a single, valid JSON object. Do not include any text, markdown formatting, or explanations outside of the JSON object.
     `;
   }
 }

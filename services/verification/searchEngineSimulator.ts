@@ -1,11 +1,9 @@
-// AI CODING INSTRUCTION: Create a sophisticated search engine simulation
-// that mimics the behavior of multiple search engines using Gemini's knowledge
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SearchEngine, MultiEngineSearchResult, EngineSearchResult, ConsensusMetrics, SimulatedSearchResult } from '../../types/verification';
+import { executeGeminiQuery } from '../geminiService';
+import { VerificationError } from '../../types/errorHandler';
 
 export class SearchEngineSimulator {
-  constructor(private geminiClient: GoogleGenerativeAI) {}
+  constructor() {}
 
   async simulateMultiEngineSearch(
     query: string,
@@ -32,187 +30,107 @@ export class SearchEngineSimulator {
     engine: SearchEngine
   ): Promise<EngineSearchResult> {
 
-    const enginePrompts = {
-      google: this.buildGoogleSimulationPrompt(query),
-      bing: this.buildBingSimulationPrompt(query),
-      scholarly: this.buildScholarlySimulationPrompt(query),
-      news: this.buildNewsSimulationPrompt(query),
-      government: this.buildGovernmentSimulationPrompt(query)
-    };
+    try {
+      const enginePrompts = {
+        google: this.buildGoogleSimulationPrompt(query),
+        bing: this.buildBingSimulationPrompt(query),
+        scholarly: this.buildScholarlySimulationPrompt(query),
+        news: this.buildNewsSimulationPrompt(query),
+        government: this.buildGovernmentSimulationPrompt(query)
+      };
 
-    const prompt = enginePrompts[engine];
-    const result = await this.executeEngineQuery(prompt, engine);
+      const prompt = enginePrompts[engine];
+      const result = await this.executeEngineQuery(prompt, engine);
 
-    return {
-      engine,
-      query,
-      results: result.results,
-      result_count: result.results.length,
-      search_quality_score: result.quality_score,
-      unique_domains: this.extractUniqueDomains(result.results)
-    };
+      return {
+        engine,
+        query,
+        results: result.results,
+        result_count: result.results.length,
+        search_quality_score: result.quality_score,
+        unique_domains: this.extractUniqueDomains(result.results)
+      };
+    } catch (error) {
+        console.error(`Error simulating search for engine ${engine}:`, error);
+        if (error instanceof VerificationError) {
+            throw error;
+        }
+        throw new VerificationError(`Search simulation failed for engine ${engine}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private async executeEngineQuery(prompt: string, engine: SearchEngine): Promise<{ results: SimulatedSearchResult[], quality_score: number }> {
-    const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
-    try {
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+    // No try/catch here, let it bubble up to the caller (simulateEngineSpecificSearch)
+    const responseText = await executeGeminiQuery(prompt);
 
-      let jsonString = responseText.trim();
-      const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch && jsonMatch[1]) {
-        jsonString = jsonMatch[1];
-      }
-
-      const results = JSON.parse(jsonString);
-
-      let quality_score = 50;
-      if (results.length > 0) {
-        if ('authority_score' in results[0]) {
-          quality_score = results.reduce((acc: number, r: any) => acc + (r.authority_score || 0), 0) / results.length;
-        } else if ('credibility_score' in results[0]) {
-          quality_score = results.reduce((acc: number, r: any) => acc + (r.credibility_score || 0), 0) / results.length;
-        } else if ('citations' in results[0]) {
-          quality_score = (results.reduce((acc: number, r: any) => acc + (r.citations || 0), 0) / results.length) / 10;
-        }
-      }
-
-      return {
-        results: results as SimulatedSearchResult[],
-        quality_score: Math.min(100, quality_score)
-      };
-    } catch (error) {
-      console.error(`Error executing engine query for ${engine}:`, error);
-      return { results: [], quality_score: 0 };
+    let jsonString = responseText.trim();
+    const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      jsonString = jsonMatch[1];
     }
+
+    const results = JSON.parse(jsonString);
+
+    let quality_score = 50;
+    if (results.length > 0) {
+      if ('authority_score' in results[0] && typeof results[0].authority_score === 'number') {
+        quality_score = results.reduce((acc: number, r: any) => acc + (r.authority_score || 0), 0) / results.length;
+      } else if ('credibility_score' in results[0] && typeof results[0].credibility_score === 'number') {
+        quality_score = results.reduce((acc: number, r: any) => acc + (r.credibility_score || 0), 0) / results.length;
+      } else if ('citations' in results[0] && typeof results[0].citations === 'number') {
+        const avgCitations = results.reduce((acc: number, r: any) => acc + (r.citations || 0), 0) / results.length;
+        quality_score = Math.min(100, (avgCitations / 100) * 100);
+      }
+    }
+
+    return {
+      results: results as SimulatedSearchResult[],
+      quality_score: Math.min(100, quality_score)
+    };
   }
 
   private buildGoogleSimulationPrompt(query: string): string {
     return `
 Simulate Google search results for: "${query}"
-
-Provide 8-10 realistic search results that Google would return, focusing on:
-- High-authority domains (.gov, .edu, major news sites)
-- Recent, relevant content
-- Mix of different content types (articles, reports, studies)
-- Realistic page titles and meta descriptions
-- Proper URL structures
-
-For each result provide:
-- title: "Realistic page title"
-- url: "https://realistic-domain.com/path"
-- domain: "domain.com"
-- snippet: "Meta description or excerpt (150-160 chars)"
-- date_published: "YYYY-MM-DD"
-- content_type: "article/report/study/news/official"
-- authority_score: 1-100
-
-Results should reflect Google's ranking algorithm preferences.
-Return as JSON array.
+Provide 8-10 realistic results focusing on high-authority domains, recent content, and a mix of types.
+For each result provide: title, url, domain, snippet (150-160 chars), date_published (YYYY-MM-DD), content_type ('article'/'report'/'study'/'news'/'official'), and authority_score (1-100).
+Return as a valid JSON array of objects.
     `;
   }
 
   private buildBingSimulationPrompt(query: string): string {
     return `
 Simulate Bing search results for: "${query}"
-
-Provide 8-10 realistic search results that Bing would return, focusing on:
-- Multimedia results and rich snippets
-- Social media signals and discussions
-- Mix of informational and commercial content
-- Realistic page titles and meta descriptions
-- Proper URL structures
-
-For each result provide:
-- title: "Realistic page title"
-- url: "https://realistic-domain.com/path"
-- domain: "domain.com"
-- snippet: "Meta description or excerpt (150-160 chars)"
-- date_published: "YYYY-MM-DD"
-- content_type: "article/report/study/news/official"
-- authority_score: 1-100
-
-Results should reflect Bing's ranking algorithm preferences.
-Return as JSON array.
+Provide 8-10 realistic results focusing on multimedia, rich snippets, and social media signals.
+For each result provide: title, url, domain, snippet (150-160 chars), date_published (YYYY-MM-DD), content_type ('article'/'report'/'study'/'news'/'official'), and authority_score (1-100).
+Return as a valid JSON array of objects.
     `;
   }
 
   private buildScholarlySimulationPrompt(query: string): string {
     return `
 Simulate Google Scholar search results for: "${query}"
-
-Provide 6-8 academic search results including:
-- Peer-reviewed journal articles
-- Conference papers
-- Preprints and working papers
-- Book chapters
-- Thesis/dissertation works
-
-For each result provide:
-- title: "Academic paper title"
-- authors: ["Author 1", "Author 2"]
-- journal: "Journal Name"
-- year: 2020-2024
-- citations: realistic citation count
-- url: "https://doi.org/realistic-doi" or institutional URL
-- abstract_snippet: "Brief excerpt from abstract"
-- methodology: "experimental/survey/review/theoretical"
-- peer_reviewed: boolean
-
-Focus on recent, high-impact research relevant to the query.
-Return as JSON array.
+Provide 6-8 academic results like peer-reviewed articles and conference papers.
+For each result provide: title, authors (array of strings), journal, year, citations, url, abstract_snippet, methodology ('experimental'/'survey'/'review'/'theoretical'), and peer_reviewed (boolean).
+Return as a valid JSON array of objects.
     `;
   }
 
   private buildNewsSimulationPrompt(query: string): string {
     return `
 Simulate news search results for: "${query}"
-
-Provide 8-10 news articles from diverse, credible sources:
-- Wire services (AP, Reuters, Bloomberg)
-- Major newspapers (NYT, WSJ, Washington Post, Guardian)
-- Broadcast networks (BBC, CNN, NPR)
-- Specialized publications
-- Local news when relevant
-
-For each result provide:
-- title: "News headline"
-- source: "Publication name"
-- author: "Reporter name"
-- url: "https://news-site.com/article-url"
-- date_published: "YYYY-MM-DD"
-- article_snippet: "Lead paragraph or key excerpt"
-- news_category: "breaking/analysis/investigation/feature"
-- credibility_score: 1-100
-
-Prioritize recent coverage and authoritative sources.
-Return as JSON array.
+Provide 8-10 news articles from diverse, credible sources.
+For each result provide: title, source, author, url, date_published (YYYY-MM-DD), article_snippet, news_category ('breaking'/'analysis'/'investigation'/'feature'), and credibility_score (1-100).
+Return as a valid JSON array of objects.
     `;
   }
 
   private buildGovernmentSimulationPrompt(query: string): string {
     return `
 Simulate a government-focused search for: "${query}"
-
-Provide 6-8 results from official government sources, including:
-- Federal and state agency websites (.gov, .mil)
-- Public records databases
-- Legislative information (bills, laws)
-- Official reports and publications
-- Court filings and records
-
-For each result provide:
-- title: "Official document or page title"
-- source_agency: "Name of Government Agency"
-- url: "https://agency.gov/path/to/document"
-- date_published: "YYYY-MM-DD"
-- document_type: "report/database/law/record"
-- summary_snippet: "Brief official summary of the content"
-- authority_level: "federal/state/local"
-
-Focus on authoritative, primary source government information.
-Return as JSON array.
+Provide 6-8 results from official government sources.
+For each result provide: title, source_agency, url, date_published (YYYY-MM-DD), document_type ('report'/'database'/'law'/'record'), summary_snippet, and authority_level ('federal'/'state'/'local').
+Return as a valid JSON array of objects.
     `;
   }
 
@@ -276,7 +194,7 @@ Return as JSON array.
   private calculateDiversityMetrics(engineResults: EngineSearchResult[]): any {
     const allResults = this.aggregateSearchResults(engineResults);
     const uniqueDomains = this.extractUniqueDomains(allResults);
-    const contentTypes = allResults.map(r => 'content_type' in r ? r.content_type : 'other');
+    const contentTypes = allResults.map(r => ('content_type' in r && r.content_type) ? r.content_type : 'other');
     const contentTypeDistribution = contentTypes.reduce((acc: any, ct) => {
       acc[ct] = (acc[ct] || 0) + 1;
       return acc;

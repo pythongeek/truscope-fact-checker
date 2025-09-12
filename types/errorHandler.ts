@@ -28,7 +28,7 @@ export type ProgressCallback = (progress: number, message: string) => void;
 /**
  * Contextual information about the verification operation that failed.
  */
-export interface VerificationContext {
+export interface ErrorHandlingContext {
   operationId: string;
   currentProgress: number;
   partialResults?: Partial<VerificationResult>;

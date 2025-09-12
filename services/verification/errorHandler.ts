@@ -1,6 +1,6 @@
 import {
   VerificationError,
-  VerificationContext,
+  ErrorHandlingContext,
   ProgressCallback,
   RecoveryResult,
   ErrorType,
@@ -21,7 +21,7 @@ export class VerificationErrorHandler {
 
   async handleVerificationError(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     onProgress?: ProgressCallback
   ): Promise<RecoveryResult> {
     const errorType = this.classifyError(error);
@@ -50,7 +50,7 @@ export class VerificationErrorHandler {
 
   private async handleRetryStrategy(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     strategy: RetryStrategy,
     onProgress?: ProgressCallback
   ): Promise<RecoveryResult> {
@@ -84,7 +84,7 @@ export class VerificationErrorHandler {
 
   private async handleFallbackStrategy(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     strategy: FallbackStrategy,
     onProgress?: ProgressCallback
   ): Promise<RecoveryResult> {
@@ -115,7 +115,7 @@ export class VerificationErrorHandler {
 
   private async handleGracefulDegradation(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     strategy: DegradationStrategy
   ): Promise<RecoveryResult> {
     switch (strategy.degradationLevel) {
@@ -150,7 +150,7 @@ export class VerificationErrorHandler {
 
   private async handleSkipAndContinue(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     strategy: SkipAndContinueStrategy
   ): Promise<RecoveryResult> {
     const message = `Skipping operation ${context.operationId} due to input validation error: ${error.message}`;
@@ -164,7 +164,7 @@ export class VerificationErrorHandler {
     };
   }
 
-  private handleFatalError(error: VerificationError, context: VerificationContext, note?: string): Promise<RecoveryResult> {
+  private handleFatalError(error: VerificationError, context: ErrorHandlingContext, note?: string): Promise<RecoveryResult> {
     const message = `Fatal error during verification for operation ${context.operationId}: ${error.message}`;
     console.error(message, { context });
     this.failedOperations.add(context.operationId);
@@ -195,7 +195,7 @@ export class VerificationErrorHandler {
     return 'unknown';
   }
 
-  private getRecoveryStrategy(errorType: ErrorType, context: VerificationContext): RecoveryStrategy {
+  private getRecoveryStrategy(errorType: ErrorType, context: ErrorHandlingContext): RecoveryStrategy {
     // This could be enhanced with dynamic strategies based on context
     const strategies: Record<ErrorType, RecoveryStrategy> = {
       rate_limit: {
@@ -233,7 +233,7 @@ export class VerificationErrorHandler {
 
   private async escalateToFallback(
     error: VerificationError,
-    context: VerificationContext,
+    context: ErrorHandlingContext,
     onProgress?: ProgressCallback
   ): Promise<RecoveryResult> {
     // When retries fail, we manually trigger the fallback strategy for 'network' or 'rate_limit' errors.
@@ -256,7 +256,7 @@ export class VerificationErrorHandler {
    * @param context The context of the operation to retry.
    * @returns The result of the successful operation.
    */
-  protected async retryOperation(context: VerificationContext): Promise<VerificationResult> {
+  protected async retryOperation(context: ErrorHandlingContext): Promise<VerificationResult> {
     console.log(`[Placeholder] Retrying operation: ${context.operationId}`);
     // To test the retry logic, simulate a persistent failure.
     // In a real implementation, this would call the actual verification service.
@@ -269,7 +269,7 @@ export class VerificationErrorHandler {
    * @param context The context of the operation.
    * @returns The result from the successful fallback.
    */
-  protected async executeFallback(fallback: FallbackAlternative, context: VerificationContext): Promise<VerificationResult> {
+  protected async executeFallback(fallback: FallbackAlternative, context: ErrorHandlingContext): Promise<VerificationResult> {
     console.log(`[Placeholder] Executing fallback: ${fallback.name}`);
     // Simulate failure for all but a specific fallback for testing purposes.
     if (fallback.method !== 'useCachedOrDegraded') {
@@ -291,7 +291,7 @@ export class VerificationErrorHandler {
    * **[Placeholder]** This method should perform a simplified, lower-accuracy verification.
    * @param context The context of the operation.
    */
-  protected async performSimplifiedVerification(context: VerificationContext): Promise<Partial<VerificationResult>> {
+  protected async performSimplifiedVerification(context: ErrorHandlingContext): Promise<Partial<VerificationResult>> {
     console.log(`[Placeholder] Performing simplified verification for ${context.operationId}`);
     return {
       verification_status: 'partially_verified',
@@ -304,7 +304,7 @@ export class VerificationErrorHandler {
    * **[Placeholder]** This method should retrieve results from a cache.
    * @param context The context of the operation.
    */
-  protected async getCachedResults(context: VerificationContext): Promise<VerificationResult | null> {
+  protected async getCachedResults(context: ErrorHandlingContext): Promise<VerificationResult | null> {
     console.log(`[Placeholder] Checking cache for ${context.operationId}`);
     // Return null to simulate a cache miss.
     return null;
