@@ -237,3 +237,105 @@ ${text}
     throw new Error('An unexpected error occurred while communicating with the AI service. Please check your connection and try again.');
   }
 };
+
+import { SearchOrchestrator } from './verification/searchOrchestrator';
+import { VerificationResult } from '../types/verification';
+
+// Define a placeholder for the new type
+export interface EnhancedAnalysisResult extends AnalysisResult {
+  verification_results: VerificationResult[] | null;
+  enhanced_credibility_score?: number;
+}
+
+// Placeholder for a function that doesn't exist yet.
+const calculateEnhancedCredibility = (
+  baseScore: number,
+  verificationResults: VerificationResult[]
+): number => {
+  if (!verificationResults || verificationResults.length === 0) {
+    return baseScore;
+  }
+  const verificationScore = verificationResults.reduce((acc, r) => acc + r.confidence_score, 0) / verificationResults.length;
+  return (baseScore + verificationScore) / 2;
+};
+
+// Placeholder for a function that doesn't exist yet.
+const executeGeminiQuery = async (prompt: string): Promise<string> => {
+  const apiKey = getApiKey();
+  const ai = new GoogleGenerativeAI(apiKey);
+  const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+};
+
+// Placeholder for a function that doesn't exist yet.
+const parseQueryArray = (result: string): string[] => {
+  try {
+    const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (jsonMatch && jsonMatch[1]) {
+      return JSON.parse(jsonMatch[1]);
+    }
+    return JSON.parse(result);
+  } catch (error) {
+    console.error("Failed to parse query array:", error);
+    return [];
+  }
+};
+
+export const analyzeContentWithVerification = async (
+  text: string,
+  enableVerification: boolean = false
+): Promise<EnhancedAnalysisResult> => {
+
+  const baseResult = await analyzeContent(text);
+
+  if (!enableVerification) {
+    return { ...baseResult, verification_results: null };
+  }
+
+  // Initialize verification orchestrator
+  const apiKey = getApiKey();
+  const ai = new GoogleGenerativeAI(apiKey);
+  const searchOrchestrator = new SearchOrchestrator(ai);
+
+  // Verify each claim with real-time progress
+  const verificationPromises = baseResult.claims.map(async claim => {
+    return await searchOrchestrator.verifyClaimWithSources(claim.claim);
+  });
+
+  const verificationResults = await Promise.all(verificationPromises);
+
+  return {
+    ...baseResult,
+    verification_results: verificationResults,
+    enhanced_credibility_score: calculateEnhancedCredibility(
+      baseResult.overallScore,
+      verificationResults
+    )
+  };
+};
+
+// New function for strategic search query generation
+export const generateStrategicQueries = async (claim: string): Promise<string[]> => {
+  const prompt = `
+Generate 8-10 strategic search queries for fact-checking this claim: "${claim}"
+
+Create queries that would find:
+1. Official/government sources and data
+2. Academic research and peer-reviewed studies
+3. News coverage from major outlets
+4. Expert commentary and analysis
+5. Historical context and background
+6. Recent updates or changes
+7. Contradictory viewpoints or criticism
+8. Primary source materials (documents, transcripts, etc.)
+
+Make queries specific, using precise terminology and relevant keywords.
+Avoid generic terms. Focus on finding authoritative, verifiable sources.
+
+Return as a JSON array of search query strings.
+  `;
+
+  const result = await executeGeminiQuery(prompt);
+  return parseQueryArray(result);
+};
