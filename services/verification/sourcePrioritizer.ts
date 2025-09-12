@@ -1,15 +1,9 @@
-// AI CODING INSTRUCTION: Create a sophisticated source prioritization system
-// that dynamically ranks sources based on claim type, topic, and context
-
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { SourceItem, ClaimContext, PrioritizedSourceList, ClaimDomain, DomainWeights } from '../../types/verification';
+import { executeGeminiQuery } from '../geminiService';
+import { VerificationError } from '../../types/errorHandler';
 
 export class SourcePrioritizer {
-  private geminiClient: GoogleGenerativeAI;
-
-  constructor(geminiClient: GoogleGenerativeAI) {
-    this.geminiClient = geminiClient;
-  }
+  constructor() {}
 
   private readonly DOMAIN_WEIGHTS: { [key in ClaimDomain]: DomainWeights } = {
     political: {
@@ -60,44 +54,42 @@ export class SourcePrioritizer {
     claimContext?: ClaimContext
   ): Promise<PrioritizedSourceList> {
 
-    // Determine claim domain using AI analysis
-    const claimDomain = await this.classifyClaimDomain(claim);
+    try {
+        const claimDomain = await this.classifyClaimDomain(claim);
+        const weights = this.DOMAIN_WEIGHTS[claimDomain] || this.DOMAIN_WEIGHTS.general;
 
-    // Get domain-specific weights
-    const weights = this.DOMAIN_WEIGHTS[claimDomain] || this.DOMAIN_WEIGHTS.general;
+        const scoredSources = await Promise.all(
+          availableSources.map(async source => {
+            const baseScore = this.calculateBaseScore(source, weights);
+            const contextScore = await this.calculateContextScore(source, claim, claimContext);
+            const recencyScore = this.calculateRecencyScore(source);
 
-    // Score and rank sources
-    const scoredSources = await Promise.all(
-      availableSources.map(async source => {
-        const baseScore = this.calculateBaseScore(source, weights);
-        const contextScore = await this.calculateContextScore(source, claim, claimContext);
-        const recencyScore = this.calculateRecencyScore(source);
+            const finalScore = (baseScore * 0.6) + (contextScore * 0.3) + (recencyScore * 0.1);
 
-        const finalScore = (baseScore * 0.6) + (contextScore * 0.3) + (recencyScore * 0.1);
+            return {
+              source,
+              priority_score: finalScore,
+              ranking_factors: {
+                domain_relevance: baseScore,
+                context_relevance: contextScore,
+                recency: recencyScore
+              }
+            };
+          })
+        );
 
         return {
-          source,
-          priority_score: finalScore,
-          ranking_factors: {
-            domain_relevance: baseScore,
-            context_relevance: contextScore,
-            recency: recencyScore
-          }
+          prioritized_sources: scoredSources.sort((a, b) => b.priority_score - a.priority_score),
+          domain_classification: claimDomain,
+          prioritization_reasoning: this.generatePrioritizationReasoning(claimDomain, this.DOMAIN_WEIGHTS[claimDomain])
         };
-      })
-    );
-
-    return {
-      prioritized_sources: scoredSources.sort((a, b) => b.priority_score - a.priority_score),
-      domain_classification: claimDomain,
-      prioritization_reasoning: this.generatePrioritizationReasoning(claimDomain, this.DOMAIN_WEIGHTS[claimDomain])
-    };
-  }
-
-  private async executeClassificationQuery(prompt: string): Promise<string> {
-    const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(prompt);
-    return result.response.text();
+    } catch (error) {
+        console.error("Error in SourcePrioritizer:", error);
+        if (error instanceof VerificationError) {
+            throw error;
+        }
+        throw new VerificationError(`Source prioritization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   private parseClaimDomain(result: string): ClaimDomain {
@@ -106,7 +98,7 @@ export class SourcePrioritizer {
     if (validDomains.includes(domain)) {
       return domain;
     }
-    return 'general'; // Default to general if parsing fails
+    return 'general';
   }
 
   private async classifyClaimDomain(claim: string): Promise<ClaimDomain> {
@@ -124,27 +116,29 @@ Claim: "${claim}"
 Respond with just the domain name in lowercase.
     `;
 
-    const result = await this.executeClassificationQuery(prompt);
+    // No try/catch here, let it bubble up to the caller
+    const result = await executeGeminiQuery(prompt);
     return this.parseClaimDomain(result);
   }
 
   private calculateBaseScore(source: SourceItem, weights: DomainWeights): number {
-    return weights[source.type.category] || 0;
+    const category = source.type.category;
+    return weights[category] ?? 0;
   }
 
   private calculateRecencyScore(source: SourceItem): number {
     try {
       const publicationDate = new Date(source.publication_date);
       if (isNaN(publicationDate.getTime())) {
-        return 0.5; // Invalid date format
+        return 0.5; // Neutral score for invalid date format
       }
       const today = new Date();
       const timeDiff = today.getTime() - publicationDate.getTime();
       const daysDiff = timeDiff / (1000 * 3600 * 24);
 
-      if (daysDiff < 0) return 1; // Future date
+      if (daysDiff < 0) return 1; // Future date is considered most recent
 
-      // Score decays over 2 years
+      // Score decays exponentially over 2 years
       const score = Math.exp(-daysDiff / 730);
       return score;
     } catch (error) {
@@ -168,13 +162,10 @@ ${source.content.substring(0, 2000)}
 
 Relevance Score (0.0-1.0):
     `;
-    try {
-      const result = await this.executeClassificationQuery(prompt);
-      const score = parseFloat(result.trim());
-      return isNaN(score) ? 0.5 : Math.max(0, Math.min(1, score));
-    } catch (error) {
-      return 0.5; // Neutral score on error
-    }
+    // No try/catch here, let it bubble up to the caller
+    const result = await executeGeminiQuery(prompt);
+    const score = parseFloat(result.trim());
+    return isNaN(score) ? 0.5 : Math.max(0, Math.min(1, score));
   }
 
   private generatePrioritizationReasoning(

@@ -3,10 +3,13 @@ import type { AnalysisResult } from '../types';
 import type { VerificationResult } from '../types/verification';
 import { SearchOrchestrator } from './verification/searchOrchestrator';
 
-// Simple in-memory cache (consider Redis for production)
+// --- Caching Configuration ---
+const DEFAULT_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const ENABLE_CACHING = process.env.NODE_ENV !== 'development';
+
+// Simple in-memory caches (consider Redis for production)
+const queryCache = new Map<string, { response: string; timestamp: number }>();
 const analysisCache = new Map<string, { result: AnalysisResult; timestamp: number }>();
-const CACHE_TTL = parseInt(process.env.CACHE_TTL || '1800000', 10); // 30 minutes
-const ENABLE_CACHING = process.env.ENABLE_CACHING === 'true';
 
 // API usage tracking (only for shared API key)
 let dailyUsage = 0;
@@ -79,10 +82,15 @@ const hashApiKey = (apiKey: string): string => {
   return hash.toString();
 };
 
-const cleanCache = (): void => {
+const cleanCaches = (): void => {
   const now = Date.now();
+  for (const [key, value] of queryCache.entries()) {
+    if (now - value.timestamp > DEFAULT_CACHE_TTL) {
+      queryCache.delete(key);
+    }
+  }
   for (const [key, value] of analysisCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
+    if (now - value.timestamp > DEFAULT_CACHE_TTL) {
       analysisCache.delete(key);
     }
   }
@@ -98,146 +106,54 @@ export const getDailyUsage = (): number => {
   return dailyUsage;
 };
 
+/**
+ * Analyzes a piece of content to identify factual claims and assess credibility.
+ * Note: This function is separate from the main verification workflow and has its own cache.
+ */
 export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
-  let apiKey: string;
+    // This function remains for other potential uses, but is not part of the main orchestrator flow.
+    checkDailyLimit();
+    cleanCaches();
 
-  try {
-    apiKey = getApiKey();
-  } catch (error) {
-    throw error; // This will trigger the API key modal
-  }
-
-  const usingSharedKey = isUsingSharedKey();
-
-  // Check daily limit only for shared API key
-  if (usingSharedKey && !checkDailyLimit()) {
-    throw new Error('Daily API usage limit reached. Please add your own API key for unlimited usage or try again tomorrow.');
-  }
-
-  // Clean old cache entries
-  cleanCache();
-
-  // Check cache first
-  if (ENABLE_CACHING) {
-    const apiKeyHash = hashApiKey(apiKey);
-    const cacheKey = generateCacheKey(text, apiKeyHash);
-    const cachedResult = analysisCache.get(cacheKey);
-
-    if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_TTL) {
-      console.log('Returning cached result');
-      return cachedResult.result;
-    }
-  }
-
-  // Input validation
-  if (!text.trim()) {
-    throw new Error('Please provide text to analyze.');
-  }
-
-  if (text.length > 10000) {
-    throw new Error('Text is too long. Please limit to 10,000 characters.');
-  }
-
-  const prompt = `You are an expert fact-checker and critical analyst. Your task is to analyze the following text, identify the main factual claims, and evaluate their credibility. Use Google Search to find supporting or contradicting evidence from reliable sources to improve the accuracy of your claims verification.
-
-Provide an overall credibility score from 0 to 100, where 100 is completely credible. Also, provide a brief summary of your analysis. For each claim you identify, state the claim, classify its status as 'Verified', 'Uncertain', or 'False', and provide a concise explanation for your reasoning, citing web sources if available.
-
-IMPORTANT: Your response must be a single, valid JSON object. Do not include any text, markdown formatting like \`\`\`json, or any explanations outside of this JSON object. The JSON object must conform to the following structure:
-{
-  "overallScore": number (0-100),
-  "summary": string,
-  "claims": [
-    {
-      "claim": string,
-      "status": "Verified" | "Uncertain" | "False",
-      "explanation": string
-    }
-  ]
-}
-
-Text to analyze:
----
-${text}
----`;
-
-  try {
-    // Increment usage counter only for shared API key
-    if (usingSharedKey) {
-      dailyUsage++;
-    }
-
-    const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const responseText = response.text();
-
-    let jsonString = responseText.trim();
-    const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      jsonString = jsonMatch[1];
-    }
-
-    let parsedResult;
-    try {
-      parsedResult = JSON.parse(jsonString);
-    } catch (e) {
-      console.error("Failed to parse JSON response:", jsonString);
-      throw new Error('The AI returned a response in an unexpected format. Please try again or rephrase your text.');
-    }
-
-    // Validate the structure
-    if (
-      typeof parsedResult.overallScore !== 'number' ||
-      typeof parsedResult.summary !== 'string' ||
-      !Array.isArray(parsedResult.claims)
-    ) {
-      throw new Error('The AI returned a response with a missing or invalid structure. Please try again.');
-    }
-
-    const finalResult = parsedResult as AnalysisResult;
-
-    // Cache the result
     if (ENABLE_CACHING) {
-      const apiKeyHash = hashApiKey(apiKey);
-      const cacheKey = generateCacheKey(text, apiKeyHash);
-      analysisCache.set(cacheKey, {
-        result: finalResult,
-        timestamp: Date.now()
-      });
-    }
-
-    return finalResult;
-
-  } catch (error) {
-    console.error("Error calling Gemini API:", error);
-
-    // Handle specific error types
-    if (error instanceof Error) {
-      if (error.message.includes('API key not valid') || error.message.includes('API_KEY_INVALID')) {
-        throw new Error('Invalid API key. Please check your API key and try again.');
-      }
-      if (error.message.includes('SAFETY')) {
-        throw new Error('The provided content could not be analyzed as it violates safety guidelines. Please submit different text.');
-      }
-      if (error.message.includes('quota') || error.message.includes('limit')) {
-        if (usingSharedKey) {
-          throw new Error('API usage limit reached. Please add your own API key for unlimited usage.');
-        } else {
-          throw new Error('Your API key has reached its quota limit. Please check your Google Cloud console.');
+        const cacheKey = generateCacheKey(`analyze:${text}`);
+        const cached = analysisCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < DEFAULT_CACHE_TTL)) {
+            return cached.result;
         }
-      }
-      if (error.message.includes('429')) {
-        throw new Error('Too many requests. Please wait a moment and try again.');
-      }
-      if (error.message.includes('403')) {
-        throw new Error('API access forbidden. Please check your API key permissions in Google Cloud Console.');
-      }
-      throw error;
     }
 
-    throw new Error('An unexpected error occurred while communicating with the AI service. Please check your connection and try again.');
-  }
+    const prompt = `You are an expert fact-checker. Analyze the following text, identify the main factual claims, and evaluate their credibility.
+
+    Provide an overall credibility score from 0-100. For each claim, state it, classify its status ('Verified', 'Uncertain', 'False'), and provide a concise explanation.
+
+    Your response must be a single, valid JSON object with the structure:
+    { "overallScore": number, "summary": string, "claims": [{ "claim": string, "status": string, "explanation": string }] }
+
+    Text to analyze:
+    ---
+    ${text}
+    ---`;
+
+    const responseText = await executeGeminiQuery(prompt, { useCache: false }); // Use the core query executor
+
+    try {
+        let jsonString = responseText.trim();
+        const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+            jsonString = jsonMatch[1];
+        }
+        const parsedResult = JSON.parse(jsonString) as AnalysisResult;
+
+        if (ENABLE_CACHING) {
+            const cacheKey = generateCacheKey(`analyze:${text}`);
+            analysisCache.set(cacheKey, { result: parsedResult, timestamp: Date.now() });
+        }
+        return parsedResult;
+    } catch (e) {
+        console.error("Failed to parse JSON response from analyzeContent:", responseText);
+        throw new Error('The AI returned a response in an unexpected format.');
+    }
 };
 
 export interface EnhancedAnalysisResult extends AnalysisResult {
@@ -257,12 +173,62 @@ const calculateEnhancedCredibility = (
   return Math.round(enhancedScore);
 };
 
-const executeGeminiQuery = async (prompt: string): Promise<string> => {
-  const apiKey = getApiKey();
-  const ai = new GoogleGenerativeAI(apiKey);
-  const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+/**
+ * Executes a query against the Gemini API with centralized caching and error handling.
+ * @param prompt The prompt to send to the AI.
+ * @param options Optional settings for the query.
+ * @returns The text response from the AI.
+ */
+export const executeGeminiQuery = async (
+    prompt: string,
+    options: { useCache?: boolean; ttl?: number } = {}
+): Promise<string> => {
+  const { useCache = true, ttl = DEFAULT_CACHE_TTL } = options;
+
+  checkDailyLimit();
+  cleanCaches();
+
+  const cacheKey = generateCacheKey(prompt);
+  if (ENABLE_CACHING && useCache) {
+    const cached = queryCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < ttl)) {
+      return cached.response;
+    }
+  }
+
+  try {
+    const apiKey = getApiKey();
+    const ai = new GoogleGenerativeAI(apiKey);
+    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    if (isUsingSharedKey()) {
+      dailyUsage++;
+    }
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+
+    if (ENABLE_CACHING && useCache) {
+      queryCache.set(cacheKey, { response: responseText, timestamp: Date.now() });
+    }
+
+    return responseText;
+
+  } catch (error) {
+    console.error("Error calling Gemini API:", error);
+    if (error instanceof Error) {
+        if (error.message.includes('API key not valid')) {
+            throw new Error('Invalid API key. Please check your API key and try again.');
+        }
+        if (error.message.includes('SAFETY')) {
+            throw new Error('The prompt violates safety guidelines.');
+        }
+        if (error.message.includes('quota') || error.message.includes('limit')) {
+            throw new Error('API quota limit reached. Please check your account or add a new API key.');
+        }
+    }
+    throw error; // Re-throw for the handler to catch
+  }
 };
 
 const parseQueryArray = (result: string): string[] => {
@@ -276,69 +242,4 @@ const parseQueryArray = (result: string): string[] => {
     console.error("Failed to parse query array from AI response:", result);
     return [];
   }
-};
-
-export const analyzeContentWithVerification = async (
-  text: string,
-  enableVerification: boolean = false
-): Promise<EnhancedAnalysisResult> => {
-
-  const baseResult = await analyzeContent(text);
-
-  if (!enableVerification) {
-    return { ...baseResult, verification_results: null };
-  }
-
-  const apiKey = getApiKey();
-  const ai = new GoogleGenerativeAI(apiKey);
-  const searchOrchestrator = new SearchOrchestrator(ai);
-
-  const verificationPromises = baseResult.claims.map(async (claim) => {
-    const searchResult = await searchOrchestrator.verifyClaimWithSources(claim.claim);
-    // Map SearchResult to VerificationResult
-    return {
-        claim: searchResult.claim,
-        verification_status: searchResult.isVerified ? 'verified' : 'disputed',
-        confidence_score: searchResult.confidenceScore,
-        evidence_summary: { supporting_evidence: [], contradicting_evidence: [], neutral_evidence: [] },
-        source_analysis: { total_sources: 0, source_distribution: { government: 0, academic: 0, news: 0, factcheck: 0, expert: 0, industry: 0 }, credibility_distribution: { high: 0, medium: 0, low: 0 }, consensus_level: 0, contradiction_level: 0 },
-        verification_methodology: [],
-        last_updated: new Date().toISOString()
-    } as VerificationResult;
-  });
-
-  const verificationResults = await Promise.all(verificationPromises);
-
-  return {
-    ...baseResult,
-    verification_results: verificationResults,
-    enhanced_credibility_score: calculateEnhancedCredibility(
-      baseResult.overallScore,
-      verificationResults
-    )
-  };
-};
-
-export const generateStrategicQueries = async (claim: string): Promise<string[]> => {
-  const prompt = `
-Generate 8-10 strategic search queries for fact-checking this claim: "${claim}"
-
-Create queries that would find:
-1. Official/government sources and data
-2. Academic research and peer-reviewed studies
-3. News coverage from major outlets
-4. Expert commentary and analysis
-5. Historical context and background
-6. Recent updates or changes
-7. Contradictory viewpoints or criticism
-8. Primary source materials (documents, transcripts, etc.)
-
-Make queries specific, using precise terminology and relevant keywords.
-Avoid generic terms. Focus on finding authoritative, verifiable sources.
-
-Return as a JSON array of search query strings.
-  `;
-
-  const result = await executeGeminiQuery(prompt);
-  return parseQueryArray(result);
 };

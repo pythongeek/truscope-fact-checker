@@ -1,20 +1,19 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { VerificationContext, SearchStrategy } from '../../types/verification';
+import { executeGeminiQuery } from '../geminiService';
+import { VerificationError } from '../../types/errorHandler';
+import { isSearchStrategyArray } from './validation';
 
 export class QueryGenerator {
-  constructor(private geminiClient: GoogleGenerativeAI) {}
+  constructor() {}
 
   async generateSearchStrategies(
     claim: string,
     context?: VerificationContext
   ): Promise<SearchStrategy[]> {
     const prompt = this.buildPrompt(claim, context);
-    const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const responseText = response.text();
+      const responseText = await executeGeminiQuery(prompt);
 
       let jsonString = responseText.trim();
       const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -23,41 +22,36 @@ export class QueryGenerator {
       }
 
       const strategies = JSON.parse(jsonString);
-      // TODO: Add validation for the parsed strategies
+
+      if (!isSearchStrategyArray(strategies)) {
+        throw new VerificationError('AI returned an invalid array of search strategies.');
+      }
+
       return strategies;
     } catch (error) {
-      console.error("Error generating search strategies:", error);
-      // Fallback to a default strategy
-      return [
-        {
-          search_type: 'news',
-          queries: [claim],
-          target_sources: ['reputable news organizations'],
-          verification_angle: 'General verification of the claim.'
-        }
-      ];
+      console.error("Error in QueryGenerator:", error);
+      // Re-throw the error to be handled by the orchestrator
+      if (error instanceof VerificationError) {
+          throw error;
+      }
+      throw new VerificationError(`Query generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   private buildPrompt(claim: string, context?: VerificationContext): string {
+    // Note: The context object is not used yet, but is here for future enhancements.
     return `
-      You are an expert fact-checker creating search strategies. For the claim "${claim}", generate 5-7 different search approaches:
+      You are an expert fact-checker creating a series of strategic search queries. For the following claim, generate 5-7 different search strategies to comprehensively verify it from multiple angles.
 
-      1. PRIMARY SOURCE SEARCH: Queries to find original documents, official statements, raw data
-      2. ACADEMIC VERIFICATION: Scholarly articles, research papers, peer-reviewed studies
-      3. NEWS VERIFICATION: Reputable journalism, fact-checking organizations
-      4. EXPERT OPINION: Subject matter expert perspectives, professional analysis
-      5. HISTORICAL CONTEXT: Background information, related events, trends
-      6. COUNTER-EVIDENCE: Opposing viewpoints, contradictory information
-      7. RECENT DEVELOPMENTS: Latest updates, current status
+      Claim: "${claim}"
 
-      For each strategy, provide:
-      - search_type: (primary/academic/news/expert/historical/counter/recent)
-      - queries: [array of 3-5 specific search terms]
-      - target_sources: [types of sources to prioritize]
-      - verification_angle: (what aspect this strategy verifies)
+      For each strategy, provide the following in a JSON object:
+      - search_type: A category name for the search angle. Must be one of: 'primary_source', 'academic_verification', 'news_verification', 'expert_opinion', 'historical_context', 'counter_evidence', 'recent_developments'.
+      - queries: An array of 3-5 specific and diverse search query strings that an expert researcher would use.
+      - target_sources: An array of strings describing the ideal sources for these queries (e.g., "Government databases", "Peer-reviewed journals", "Major news outlets").
+      - verification_angle: A brief (1-sentence) explanation of what aspect of the claim this strategy aims to verify.
 
-      Return as JSON array of SearchStrategy objects.
+      Return your response as a single, valid JSON array of these strategy objects. Do not include any text, markdown formatting, or explanations outside of the JSON array.
     `;
   }
 }
