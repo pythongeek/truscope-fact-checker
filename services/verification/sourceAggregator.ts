@@ -1,11 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { EvidenceItem, SearchStrategy } from '../../types/verification';
+import type { SourceCollection, SearchStrategy } from '../../types/verification';
 
 export class SourceAggregator {
   constructor(private geminiClient: GoogleGenerativeAI) {}
 
-  async gatherEvidenceForStrategy(strategy: SearchStrategy): Promise<EvidenceItem[]> {
-    const prompt = this.buildPrompt(strategy);
+  async aggregateSourcesForClaim(
+    claim: string,
+    strategies: SearchStrategy[]
+  ): Promise<SourceCollection> {
+
+    const prompt = this.buildPrompt(claim, strategies);
     const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
@@ -19,46 +23,65 @@ export class SourceAggregator {
         jsonString = jsonMatch[1];
       }
 
-      const evidence = JSON.parse(jsonString);
-      // TODO: Add validation for the parsed evidence
-      return evidence.map((item: any) => ({ ...item, strategy }));
+      const sources = JSON.parse(jsonString);
+      // TODO: Add validation for the parsed sources
+      return sources;
     } catch (error) {
-      console.error(`Error gathering evidence for strategy "${strategy.query}":`, error);
-      return [];
+      console.error("Error aggregating sources:", error);
+      return {
+        primary_sources: [],
+        news_sources: [],
+        fact_checking_sources: [],
+        expert_sources: [],
+      };
     }
   }
 
-  private buildPrompt(strategy: SearchStrategy): string {
+  private buildPrompt(claim: string, strategies: SearchStrategy[]): string {
+    const strategiesString = strategies.map(s => `- ${s.search_type}: ${s.queries.join(', ')}`).join('\n');
+
     return `
-      You are an AI search simulation engine. Your task is to act as the search engine "${strategy.engine}" and generate a realistic set of search results for the query: "${strategy.query}".
+      You are simulating access to comprehensive information sources for fact-checking.
+      For the claim: "${claim}"
 
-      Prioritize sources of type: "${strategy.sourceType}".
+      Using your training knowledge and the following search strategies:
+      ${strategiesString}
 
-      Generate a JSON array of 3-5 search result objects. Each object should include:
-      1. "title": A realistic and relevant title for a search result link.
-      2. "url": A plausible, representative URL (e.g., "https://www.example.com/article/123").
-      3. "snippet": A descriptive snippet (1-2 sentences) that accurately summarizes the content of the hypothetical source and is relevant to the search query.
+      Provide detailed information as if you searched:
 
-      Example for query "Eiffel Tower construction material" and sourceType "general":
-      [
-        {
-          "title": "Eiffel Tower - Wikipedia",
-          "url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
-          "snippet": "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. It is named after the engineer Gustave Eiffel, whose company designed and built the tower."
-        },
-        {
-          "title": "The Construction of the Eiffel Tower - History.com",
-          "url": "https://www.history.com/topics/landmarks/eiffel-tower",
-          "snippet": "Learn about the design and construction of the Eiffel Tower, one of the world's most famous landmarks. The tower is composed of wrought iron, a type of iron with a very low carbon content."
-        },
-        {
-          "title": "Official Site of the Eiffel Tower: The Monument",
-          "url": "https://www.toureiffel.paris/en/the-monument",
-          "snippet": "Discover the history of the Eiffel Tower, from its construction for the 1889 World's Fair to its current status as a global icon. The structure is made of 7,300 tonnes of wrought iron."
-        }
-      ]
+      PRIMARY SOURCES:
+      - Government databases (.gov sites, regulatory filings, official reports)
+      - Academic repositories (PubMed, arXiv, institutional databases)
+      - Legal documents (court records, legislation, regulatory text)
+      - Corporate filings (SEC, earnings reports, official statements)
 
-      Now, generate the JSON for the query: "${strategy.query}"
+      NEWS SOURCES:
+      - Associated Press, Reuters (wire service accuracy)
+      - Major newspapers (NYT, WSJ, Washington Post, Guardian)
+      - Broadcast networks (BBC, NPR, PBS NewsHour)
+      - Specialized outlets (Politico, ProPublica for investigative)
+
+      FACT-CHECKING SOURCES:
+      - PolitiFact, FactCheck.org, Snopes
+      - International fact-checkers (AFP Fact Check, BBC Reality Check)
+      - Academic fact-checking (Duke Reporters' Lab, Poynter)
+
+      EXPERT SOURCES:
+      - University researchers and professors
+      - Think tank analysts and reports
+      - Industry professionals and trade publications
+      - Scientific societies and professional organizations
+
+      For each source type, provide:
+      - source_name: "Authoritative source name"
+      - source_type: "government/academic/news/factcheck/expert"
+      - credibility_score: 1-100 based on source reputation
+      - relevant_information: "Key facts supporting or contradicting the claim"
+      - publication_date: "When this information was published/updated"
+      - access_url: "Realistic URL where this would be found"
+      - verification_strength: "strong_support/weak_support/neutral/weak_contradiction/strong_contradiction"
+
+      Return comprehensive results as JSON in a SourceCollection object.
     `;
   }
 }

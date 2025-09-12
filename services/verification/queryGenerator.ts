@@ -30,42 +30,34 @@ export class QueryGenerator {
       // Fallback to a default strategy
       return [
         {
-          query: claim,
-          engine: 'Google',
-          sourceType: 'general',
-        },
+          search_type: 'news',
+          queries: [claim],
+          target_sources: ['reputable news organizations'],
+          verification_angle: 'General verification of the claim.'
+        }
       ];
     }
   }
 
   private buildPrompt(claim: string, context?: VerificationContext): string {
     return `
-      You are a world-class investigative journalist AI. Your task is to generate a diverse set of search strategies to verify the following claim: "${claim}"
+      You are an expert fact-checker creating search strategies. For the claim "${claim}", generate 5-7 different search approaches:
 
-      Consider the following context if provided:
-      - Topic: ${context?.topic || 'Not specified'}
-      - Preferred Source Type: ${context?.sourceType || 'Any'}
+      1. PRIMARY SOURCE SEARCH: Queries to find original documents, official statements, raw data
+      2. ACADEMIC VERIFICATION: Scholarly articles, research papers, peer-reviewed studies
+      3. NEWS VERIFICATION: Reputable journalism, fact-checking organizations
+      4. EXPERT OPINION: Subject matter expert perspectives, professional analysis
+      5. HISTORICAL CONTEXT: Background information, related events, trends
+      6. COUNTER-EVIDENCE: Opposing viewpoints, contradictory information
+      7. RECENT DEVELOPMENTS: Latest updates, current status
 
-      Generate a JSON array of 5-7 distinct search strategies. Each strategy object should include:
-      1. "query": A concise, effective search query (e.g., using keywords, direct quotes, or questions).
-      2. "engine": The simulated search engine to use ('Google', 'Bing', 'DuckDuckGo').
-      3. "sourceType": The type of source to prioritize ('general', 'news', 'academic', 'forum').
+      For each strategy, provide:
+      - search_type: (primary/academic/news/expert/historical/counter/recent)
+      - queries: [array of 3-5 specific search terms]
+      - target_sources: [types of sources to prioritize]
+      - verification_angle: (what aspect this strategy verifies)
 
-      Vary the strategies by:
-      - Using different query formulations (e.g., keyword-based, question-based, site-specific).
-      - Targeting different source types to gather a range of perspectives.
-      - Combining keywords from the claim in different ways.
-
-      Example output for the claim "The Eiffel Tower is made of cheese":
-      [
-        { "query": "Eiffel Tower construction material", "engine": "Google", "sourceType": "general" },
-        { "query": "is the Eiffel Tower made of cheese fact check", "engine": "DuckDuckGo", "sourceType": "general" },
-        { "query": "Eiffel Tower official website materials", "engine": "Google", "sourceType": "news" },
-        { "query": "scientific analysis of Eiffel Tower composition", "engine": "Google", "sourceType": "academic" },
-        { "query": "discussion about Eiffel Tower materials forum", "engine": "Bing", "sourceType": "forum" }
-      ]
-
-      Now, generate the JSON for the claim: "${claim}"
+      Return as JSON array of SearchStrategy objects.
     `;
   }
 }
