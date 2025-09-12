@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { ClaimAnalysisResult } from '../types/claim';
+import { fetchWithRetry } from '../utils/api';
 
 // Simple in-memory cache (consider Redis for production)
 const analysisCache = new Map<string, { result: ClaimAnalysisResult; timestamp: number }>();
@@ -157,23 +157,41 @@ ${text}
       dailyUsage++;
     }
 
-    const ai = new GoogleGenerativeAI(apiKey);
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash"});
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const responseText = response.text();
+    const API_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    let jsonString = responseText.trim();
-    const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      jsonString = jsonMatch[1];
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: prompt
+        }]
+      }],
+      generationConfig: {
+        response_mime_type: "application/json",
+      }
+    };
+
+    const response = await fetchWithRetry(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
+        console.error('Gemini API Error:', errorData);
+        throw new Error(`API request failed with status ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
     }
+
+    const responseData = await response.json();
+    const responseText = responseData.candidates[0].content.parts[0].text;
 
     let parsedResult;
     try {
-      parsedResult = JSON.parse(jsonString);
+      parsedResult = JSON.parse(responseText);
     } catch (e) {
-      console.error("Failed to parse JSON response:", jsonString);
+      console.error("Failed to parse JSON response:", responseText);
       throw new Error('The AI returned a response in an unexpected format. Please try again or rephrase your text.');
     }
 

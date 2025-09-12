@@ -1,4 +1,5 @@
 import type { FactCheckResult } from '../types/preCheck';
+import { fetchWithRetry } from '../utils/api';
 
 // Simple in-memory cache
 const cache = new Map<string, { result: FactCheckResult; timestamp: number }>();
@@ -35,7 +36,7 @@ export const checkForFactCheck = async (claim: string): Promise<FactCheckResult>
   const url = `${API_ENDPOINT}?query=${encodeURIComponent(claim)}&key=${API_KEY}`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetchWithRetry(url);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
       console.error('Fact Check API Error:', errorData);
