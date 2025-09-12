@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { SearchResult, VerificationContext, SearchStrategy, EvidenceItem, ScoredEvidence } from '../../types/verification';
+import type { SearchResult, VerificationContext, SourceCollection } from '../../types/verification';
 import { QueryGenerator } from './queryGenerator';
 import { SourceAggregator } from './sourceAggregator';
 import { CredibilityScorer } from './credibilityScorer';
@@ -31,15 +31,10 @@ export class SearchOrchestrator {
     const searchStrategies = await this.queryGenerator.generateSearchStrategies(claim, context);
 
     onProgress?.(30, "Gathering evidence from knowledge base...");
-    const evidenceResults = await Promise.all(
-      searchStrategies.map(strategy => this.sourceAggregator.gatherEvidenceForStrategy(strategy))
-    );
-
-    onProgress?.(60, "Evaluating source credibility...");
-    const scoredResults = await this.credibilityScorer.scoreAllSources(evidenceResults.flat());
+    const sources = await this.sourceAggregator.aggregateSourcesForClaim(claim, searchStrategies);
 
     onProgress?.(80, "Synthesizing verification report...");
-    const finalResult = await this.synthesizeResults(claim, scoredResults);
+    const finalResult = await this.synthesizeResults(claim, sources);
 
     this.cache.set(claim, finalResult);
     onProgress?.(100, "Verification complete");
@@ -47,8 +42,8 @@ export class SearchOrchestrator {
     return finalResult;
   }
 
-  private async synthesizeResults(claim: string, evidence: ScoredEvidence[]): Promise<SearchResult> {
-    const prompt = this.buildSynthesizePrompt(claim, evidence);
+  private async synthesizeResults(claim: string, sources: SourceCollection): Promise<SearchResult> {
+    const prompt = this.buildSynthesizePrompt(claim, sources);
     const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     try {
@@ -67,7 +62,7 @@ export class SearchOrchestrator {
       return {
         ...synthesizedResult,
         claim,
-        evidence,
+        sources,
       };
     } catch (error) {
       console.error("Error synthesizing results:", error);
@@ -76,22 +71,26 @@ export class SearchOrchestrator {
         isVerified: false,
         confidenceScore: 0,
         summary: "Error synthesizing results.",
-        evidence,
+        sources,
       };
     }
   }
 
-  private buildSynthesizePrompt(claim: string, evidence: ScoredEvidence[]): string {
-    const evidenceString = evidence
-      .filter(item => item.isRelevant && item.credibilityScore > 50)
-      .map(item => `
-        Source: ${item.title} (${item.url})
-        Credibility: ${item.credibilityScore}/100
-        Snippet: ${item.snippet}
-      `).join('\n\n');
+  private buildSynthesizePrompt(claim: string, sources: SourceCollection): string {
+    const evidenceString = Object.entries(sources).map(([sourceType, sourceList]) => {
+        if (sourceList.length === 0) return '';
+        const sourcesString = sourceList.map(s => `
+            Source: ${s.source_name} (${s.access_url})
+            Credibility: ${s.credibility_score}/100
+            Publication Date: ${s.publication_date}
+            Verification: ${s.verification_strength}
+            Relevant Info: ${s.relevant_information}
+        `).join('');
+        return `\n--- ${sourceType.replace('_', ' ').toUpperCase()} ---\n${sourcesString}`;
+    }).join('');
 
     return `
-      You are a senior fact-checking editor AI. Your job is to synthesize the provided evidence to verify a claim.
+      You are a senior fact-checking editor AI. Your job is to synthesize the provided evidence from multiple source types to verify a claim.
 
       Claim to verify: "${claim}"
 
