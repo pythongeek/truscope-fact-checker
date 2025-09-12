@@ -9,6 +9,8 @@ import { extractClaims } from './services/claimExtractor';
 import type { AnalysisResult } from './types';
 import type { Claim } from './types/claim';
 import ClaimDelineation from './components/ClaimDelineation';
+import VerificationDashboard from './components/verification/VerificationDashboard';
+import type { VerificationResult } from './types/verification';
 
 const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
 const MAX_REQUESTS_PER_WINDOW = parseInt(process.env.MAX_REQUESTS_PER_WINDOW || '3', 10);
@@ -25,6 +27,8 @@ const App: React.FC = () => {
   const [dailyUsage, setDailyUsage] = useState<number>(0);
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
   const [hasUserApiKey, setHasUserApiKey] = useState<boolean>(false);
+  const [showVerificationDashboard, setShowVerificationDashboard] = useState<boolean>(false);
+  const [verificationResults, setVerificationResults] = useState<VerificationResult[]>([]);
 
   useEffect(() => {
     setDailyUsage(getDailyUsage());
@@ -194,6 +198,26 @@ const App: React.FC = () => {
           {(isExtractingClaims || claimAnalysisResult) && !error && (
             <div className="mt-8">
               <ClaimDelineation claims={claimAnalysisResult} isLoading={isExtractingClaims} />
+            </div>
+          )}
+
+          {claimAnalysisResult && claimAnalysisResult.length > 0 && (
+            <div className="mt-8 text-center">
+              <button
+                onClick={() => setShowVerificationDashboard(!showVerificationDashboard)}
+                className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-slate-600 transition-all duration-300 shadow-md hover:shadow-lg"
+              >
+                {showVerificationDashboard ? 'Hide' : 'Show'} Verification Dashboard
+              </button>
+            </div>
+          )}
+
+          {showVerificationDashboard && claimAnalysisResult && (
+            <div className="mt-8">
+              <VerificationDashboard
+                claims={claimAnalysisResult.filter(c => c.isVerifiable).map(c => c.text)}
+                onVerificationComplete={setVerificationResults}
+              />
             </div>
           )}
         </div>
