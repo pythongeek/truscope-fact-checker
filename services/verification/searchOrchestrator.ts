@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { SearchResult, VerificationContext, SourceCollection } from '../../types/verification';
+import type { SearchResult, VerificationContext, SourceCollection, SearchStrategy } from '../../types/verification';
+import { VERIFICATION_PROMPTS } from './promptTemplates';
 import { QueryGenerator } from './queryGenerator';
 import { SourceAggregator } from './sourceAggregator';
 import { CredibilityScorer } from './credibilityScorer';
@@ -115,3 +116,26 @@ export class SearchOrchestrator {
     `;
   }
 }
+
+const extractTopicFromClaim = (claim: string): string => {
+  // This is a placeholder. A more sophisticated implementation would use NLP.
+  const words = claim.split(' ');
+  // Find the longest word, assume it is the topic.
+  return words.reduce((a, b) => a.length > b.length ? a : b, '');
+}
+
+const buildVerificationPrompt = (
+  claim: string,
+  strategy: SearchStrategy
+): string => {
+  const promptKey = (strategy.search_type.toUpperCase() + '_SOURCE_SIMULATION') as keyof typeof VERIFICATION_PROMPTS;
+  const basePrompt = VERIFICATION_PROMPTS[promptKey];
+
+  if (!basePrompt) {
+    throw new Error(`Invalid search strategy type: ${strategy.search_type}`);
+  }
+
+  return basePrompt
+    .replace('{claim}', claim)
+    .replace('{topic}', extractTopicFromClaim(claim));
+};
