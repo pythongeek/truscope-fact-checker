@@ -108,3 +108,98 @@ export interface PrioritizedSourceList {
   domain_classification: ClaimDomain;
   prioritization_reasoning: string;
 }
+
+export type SearchEngine = 'google' | 'bing' | 'scholarly' | 'news' | 'government';
+
+export interface GoogleSearchResult {
+  title: string;
+  url: string;
+  domain: string;
+  snippet: string;
+  date_published: string;
+  content_type: 'article' | 'report' | 'study' | 'news' | 'official';
+  authority_score: number;
+}
+
+export interface ScholarlySearchResult {
+  title: string;
+  authors: string[];
+  journal: string;
+  year: number;
+  citations: number;
+  url: string;
+  abstract_snippet: string;
+  methodology: 'experimental' | 'survey' | 'review' | 'theoretical';
+  peer_reviewed: boolean;
+}
+
+export interface NewsSearchResult {
+  title: string;
+  source: string;
+  author: string;
+  url: string;
+  date_published: string;
+  article_snippet: string;
+  news_category: 'breaking' | 'analysis' | 'investigation' | 'feature';
+  credibility_score: number;
+}
+
+export type SimulatedSearchResult = GoogleSearchResult | ScholarlySearchResult | NewsSearchResult;
+
+export interface EngineSearchResult {
+  engine: SearchEngine;
+  query: string;
+  results: SimulatedSearchResult[];
+  result_count: number;
+  search_quality_score: number;
+  unique_domains: string[];
+}
+
+export interface ConsensusMetrics {
+  domain_consensus: number;
+  content_consensus: number;
+  authority_consensus: number;
+  overall_consensus: number;
+}
+
+export interface MultiEngineSearchResult {
+  query: string;
+  engines_searched: SearchEngine[];
+  aggregated_results: SimulatedSearchResult[];
+  result_consensus: ConsensusMetrics;
+  diversity_metrics: any;
+}
+
+export interface VerificationStep {
+  id: string;
+  label: string;
+  weight: number;
+}
+
+export interface ProgressUpdate {
+  step: string;
+  progress: number;
+  status: string;
+  details?: string;
+}
+
+export interface SynthesizedSourceItem {
+  source_name: string;
+  access_url: string;
+  credibility_score: number;
+  publication_date: string;
+  verification_strength: string;
+  relevant_information: string;
+}
+
+export interface SourceCollection {
+  [key: string]: SynthesizedSourceItem[];
+}
+
+export interface SearchResult {
+  claim: string;
+  isVerified: boolean;
+  confidenceScore: number;
+  summary: string;
+  sources: SourceCollection;
+}

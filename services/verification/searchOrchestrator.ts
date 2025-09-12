@@ -1,20 +1,25 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { SearchResult, VerificationContext, SourceCollection, SearchStrategy } from '../../types/verification';
-import { VERIFICATION_PROMPTS } from './promptTemplates';
+import type { SearchResult, VerificationContext, SourceCollection, MultiEngineSearchResult, PrioritizedSourceList, SourceItem, ClaimContext, SearchEngine } from '../../types/verification';
 import { QueryGenerator } from './queryGenerator';
 import { SourceAggregator } from './sourceAggregator';
 import { CredibilityScorer } from './credibilityScorer';
+import { SourcePrioritizer } from './sourcePrioritizer';
+import { SearchEngineSimulator } from './searchEngineSimulator';
 
 export class SearchOrchestrator {
   private queryGenerator: QueryGenerator;
   private sourceAggregator: SourceAggregator;
   private credibilityScorer: CredibilityScorer;
+  private sourcePrioritizer: SourcePrioritizer;
+  private searchEngineSimulator: SearchEngineSimulator;
   private cache = new Map<string, SearchResult>();
 
   constructor(private geminiClient: GoogleGenerativeAI) {
     this.queryGenerator = new QueryGenerator(geminiClient);
     this.sourceAggregator = new SourceAggregator(geminiClient);
     this.credibilityScorer = new CredibilityScorer(geminiClient);
+    this.sourcePrioritizer = new SourcePrioritizer(geminiClient);
+    this.searchEngineSimulator = new SearchEngineSimulator(geminiClient);
   }
 
   async verifyClaimWithSources(
@@ -41,6 +46,14 @@ export class SearchOrchestrator {
     onProgress?.(100, "Verification complete");
 
     return finalResult;
+  }
+
+  async simulateSearch(query: string, engines?: SearchEngine[]): Promise<MultiEngineSearchResult> {
+    return this.searchEngineSimulator.simulateMultiEngineSearch(query, engines);
+  }
+
+  async prioritizeSources(claim: string, sources: SourceItem[], context?: ClaimContext): Promise<PrioritizedSourceList> {
+    return this.sourcePrioritizer.prioritizeSources(claim, sources, context);
   }
 
   private async synthesizeResults(claim: string, sources: SourceCollection): Promise<SearchResult> {
@@ -116,26 +129,3 @@ export class SearchOrchestrator {
     `;
   }
 }
-
-const extractTopicFromClaim = (claim: string): string => {
-  // This is a placeholder. A more sophisticated implementation would use NLP.
-  const words = claim.split(' ');
-  // Find the longest word, assume it is the topic.
-  return words.reduce((a, b) => a.length > b.length ? a : b, '');
-}
-
-const buildVerificationPrompt = (
-  claim: string,
-  strategy: SearchStrategy
-): string => {
-  const promptKey = (strategy.search_type.toUpperCase() + '_SOURCE_SIMULATION') as keyof typeof VERIFICATION_PROMPTS;
-  const basePrompt = VERIFICATION_PROMPTS[promptKey];
-
-  if (!basePrompt) {
-    throw new Error(`Invalid search strategy type: ${strategy.search_type}`);
-  }
-
-  return basePrompt
-    .replace('{claim}', claim)
-    .replace('{topic}', extractTopicFromClaim(claim));
-};

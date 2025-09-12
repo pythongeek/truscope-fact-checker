@@ -1,5 +1,7 @@
 // File: services/verification/promptTemplates.ts
 
+import type { SearchStrategy } from '../../types/verification';
+
 export const VERIFICATION_PROMPTS = {
 
   GOVERNMENT_SOURCE_SIMULATION: `
@@ -125,4 +127,27 @@ For each expert source, provide:
 
 Format as expert opinion citations with qualifications.
   `
+};
+
+export const extractTopicFromClaim = (claim: string): string => {
+  // This is a placeholder. A more sophisticated implementation would use NLP.
+  const words = claim.split(' ');
+  // Find the longest word, assume it is the topic.
+  return words.reduce((a, b) => a.length > b.length ? a : b, '');
+}
+
+export const buildVerificationPrompt = (
+  claim: string,
+  strategy: SearchStrategy
+): string => {
+  const promptKey = (strategy.search_type.toUpperCase() + '_SOURCE_SIMULATION') as keyof typeof VERIFICATION_PROMPTS;
+  const basePrompt = VERIFICATION_PROMPTS[promptKey];
+
+  if (!basePrompt) {
+    throw new Error(`Invalid search strategy type: ${strategy.search_type}`);
+  }
+
+  return basePrompt
+    .replace('{claim}', claim)
+    .replace('{topic}', extractTopicFromClaim(claim));
 };

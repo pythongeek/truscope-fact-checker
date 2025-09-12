@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AnalysisResult } from '../types';
+import type { VerificationResult } from '../types/verification';
+import { SearchOrchestrator } from './verification/searchOrchestrator';
 
 // Simple in-memory cache (consider Redis for production)
 const analysisCache = new Map<string, { result: AnalysisResult; timestamp: number }>();
@@ -238,16 +240,11 @@ ${text}
   }
 };
 
-import { SearchOrchestrator } from './verification/searchOrchestrator';
-import { VerificationResult } from '../types/verification';
-
-// Define a placeholder for the new type
 export interface EnhancedAnalysisResult extends AnalysisResult {
   verification_results: VerificationResult[] | null;
   enhanced_credibility_score?: number;
 }
 
-// Placeholder for a function that doesn't exist yet.
 const calculateEnhancedCredibility = (
   baseScore: number,
   verificationResults: VerificationResult[]
@@ -255,11 +252,11 @@ const calculateEnhancedCredibility = (
   if (!verificationResults || verificationResults.length === 0) {
     return baseScore;
   }
-  const verificationScore = verificationResults.reduce((acc, r) => acc + r.confidence_score, 0) / verificationResults.length;
-  return (baseScore + verificationScore) / 2;
+  const averageVerificationScore = verificationResults.reduce((acc, r) => acc + r.confidence_score, 0) / verificationResults.length;
+  const enhancedScore = (baseScore + averageVerificationScore) / 2;
+  return Math.round(enhancedScore);
 };
 
-// Placeholder for a function that doesn't exist yet.
 const executeGeminiQuery = async (prompt: string): Promise<string> => {
   const apiKey = getApiKey();
   const ai = new GoogleGenerativeAI(apiKey);
@@ -268,7 +265,6 @@ const executeGeminiQuery = async (prompt: string): Promise<string> => {
   return result.response.text();
 };
 
-// Placeholder for a function that doesn't exist yet.
 const parseQueryArray = (result: string): string[] => {
   try {
     const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -277,7 +273,7 @@ const parseQueryArray = (result: string): string[] => {
     }
     return JSON.parse(result);
   } catch (error) {
-    console.error("Failed to parse query array:", error);
+    console.error("Failed to parse query array from AI response:", result);
     return [];
   }
 };
@@ -293,14 +289,22 @@ export const analyzeContentWithVerification = async (
     return { ...baseResult, verification_results: null };
   }
 
-  // Initialize verification orchestrator
   const apiKey = getApiKey();
   const ai = new GoogleGenerativeAI(apiKey);
   const searchOrchestrator = new SearchOrchestrator(ai);
 
-  // Verify each claim with real-time progress
-  const verificationPromises = baseResult.claims.map(async claim => {
-    return await searchOrchestrator.verifyClaimWithSources(claim.claim);
+  const verificationPromises = baseResult.claims.map(async (claim) => {
+    const searchResult = await searchOrchestrator.verifyClaimWithSources(claim.claim);
+    // Map SearchResult to VerificationResult
+    return {
+        claim: searchResult.claim,
+        verification_status: searchResult.isVerified ? 'verified' : 'disputed',
+        confidence_score: searchResult.confidenceScore,
+        evidence_summary: { supporting_evidence: [], contradicting_evidence: [], neutral_evidence: [] },
+        source_analysis: { total_sources: 0, source_distribution: { government: 0, academic: 0, news: 0, factcheck: 0, expert: 0, industry: 0 }, credibility_distribution: { high: 0, medium: 0, low: 0 }, consensus_level: 0, contradiction_level: 0 },
+        verification_methodology: [],
+        last_updated: new Date().toISOString()
+    } as VerificationResult;
   });
 
   const verificationResults = await Promise.all(verificationPromises);
@@ -315,7 +319,6 @@ export const analyzeContentWithVerification = async (
   };
 };
 
-// New function for strategic search query generation
 export const generateStrategicQueries = async (claim: string): Promise<string[]> => {
   const prompt = `
 Generate 8-10 strategic search queries for fact-checking this claim: "${claim}"
