@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import type { AtomicStatement } from '../types/granularity';
 import type { FactCheckResult } from '../types/preCheck';
 import { checkForFactCheck } from '../services/preCheckService';
+import { SearchOrchestrator } from '../services/verification/searchOrchestrator';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import LoadingSpinner from './LoadingSpinner';
 import PreCheckResult from './PreCheckResult';
+import SourceVerification from './SourceVerification';
+import type { SearchResult } from '../types/verification';
 
 interface GranulatedAnalysisProps {
   atomicStatements: AtomicStatement[] | null;
@@ -14,6 +18,14 @@ interface PreCheckState {
   isLoading: boolean;
   error: string | null;
   result: FactCheckResult | null;
+}
+
+interface VerificationState {
+  isLoading: boolean;
+  error: string | null;
+  result: SearchResult | null;
+  progress: number;
+  status: string;
 }
 
 const getEntityTypeColor = (type: string) => {
@@ -35,6 +47,7 @@ const getEntityTypeColor = (type: string) => {
 
 const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatements, isLoading }) => {
   const [preCheckData, setPreCheckData] = useState<Record<number, PreCheckState>>({});
+  const [verificationData, setVerificationData] = useState<Record<number, VerificationState>>({});
 
   const handlePreCheckClick = async (claim: string, index: number) => {
     setPreCheckData(prev => ({
@@ -52,6 +65,50 @@ const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatement
       setPreCheckData(prev => ({
         ...prev,
         [index]: { isLoading: false, error: err instanceof Error ? err.message : 'An unknown error occurred.', result: null }
+      }));
+    }
+  };
+
+  const handleVerifyClick = async (claim: string, index: number) => {
+    const apiKey = localStorage.getItem('gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      // In a real app, you'd probably trigger a modal to ask for the key
+      console.error("API key not found");
+      return;
+    }
+    const geminiClient = new GoogleGenerativeAI(apiKey);
+    const orchestrator = new SearchOrchestrator(geminiClient);
+
+    setVerificationData(prev => ({
+      ...prev,
+      [index]: { isLoading: true, error: null, result: null, progress: 0, status: 'Initializing...' }
+    }));
+
+    try {
+      const result = await orchestrator.verifyClaimWithSources(
+        claim,
+        undefined,
+        (progress, status) => {
+          setVerificationData(prev => ({
+            ...prev,
+            [index]: { ...prev[index], isLoading: true, progress, status }
+          }));
+        }
+      );
+      setVerificationData(prev => ({
+        ...prev,
+        [index]: { isLoading: false, error: null, result, progress: 100, status: 'Complete' }
+      }));
+    } catch (err) {
+      setVerificationData(prev => ({
+        ...prev,
+        [index]: {
+          isLoading: false,
+          error: err instanceof Error ? err.message : 'An unknown error occurred.',
+          result: null,
+          progress: 100,
+          status: 'Error'
+        }
       }));
     }
   };
@@ -77,17 +134,27 @@ const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatement
     <div className="mt-4 space-y-3 pl-6 border-l-2 border-slate-700">
       {atomicStatements.map((item, index) => {
         const preCheckState = preCheckData[index];
+        const verificationState = verificationData[index];
         return (
           <div key={index} className="p-3 rounded-lg bg-slate-800/60">
-            <div className="flex justify-between items-start">
-              <p className="text-slate-300 font-medium flex-1 pr-4">{item.statement}</p>
-              <button
-                onClick={() => handlePreCheckClick(item.statement, index)}
-                disabled={preCheckState?.isLoading}
-                className="px-2 py-1 text-xs font-semibold bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
-              >
-                {preCheckState?.isLoading ? 'Checking...' : 'Pre-Check'}
-              </button>
+            <div className="flex justify-between items-start gap-2">
+              <p className="text-slate-300 font-medium flex-1">{item.statement}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePreCheckClick(item.statement, index)}
+                  disabled={preCheckState?.isLoading || verificationState?.isLoading}
+                  className="px-2 py-1 text-xs font-semibold bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
+                >
+                  {preCheckState?.isLoading ? 'Checking...' : 'Pre-Check'}
+                </button>
+                <button
+                  onClick={() => handleVerifyClick(item.statement, index)}
+                  disabled={verificationState?.isLoading || preCheckState?.isLoading}
+                  className="px-2 py-1 text-xs font-semibold bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors"
+                >
+                  {verificationState?.isLoading ? 'Verifying...' : 'Verify'}
+                </button>
+              </div>
             </div>
             {item.entities.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
@@ -103,6 +170,14 @@ const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatement
               <PreCheckResult
                 result={preCheckState.result}
                 isLoading={preCheckState.isLoading}
+              />
+            )}
+            {verificationState && (
+              <SourceVerification
+                result={verificationState.result}
+                isLoading={verificationState.isLoading}
+                progress={verificationState.progress}
+                status={verificationState.status}
               />
             )}
           </div>

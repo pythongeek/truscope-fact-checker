@@ -1,0 +1,118 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { SearchResult, VerificationContext, SearchStrategy, EvidenceItem, ScoredEvidence } from '../../types/verification';
+import { QueryGenerator } from './queryGenerator';
+import { SourceAggregator } from './sourceAggregator';
+import { CredibilityScorer } from './credibilityScorer';
+
+export class SearchOrchestrator {
+  private queryGenerator: QueryGenerator;
+  private sourceAggregator: SourceAggregator;
+  private credibilityScorer: CredibilityScorer;
+  private cache = new Map<string, SearchResult>();
+
+  constructor(private geminiClient: GoogleGenerativeAI) {
+    this.queryGenerator = new QueryGenerator(geminiClient);
+    this.sourceAggregator = new SourceAggregator(geminiClient);
+    this.credibilityScorer = new CredibilityScorer(geminiClient);
+  }
+
+  async verifyClaimWithSources(
+    claim: string,
+    context?: VerificationContext,
+    onProgress?: (progress: number, status: string) => void
+  ): Promise<SearchResult> {
+    const cachedResult = this.cache.get(claim);
+    if (cachedResult) {
+      onProgress?.(100, "Retrieved from cache");
+      return cachedResult;
+    }
+
+    onProgress?.(10, "Generating search strategies...");
+    const searchStrategies = await this.queryGenerator.generateSearchStrategies(claim, context);
+
+    onProgress?.(30, "Gathering evidence from knowledge base...");
+    const evidenceResults = await Promise.all(
+      searchStrategies.map(strategy => this.sourceAggregator.gatherEvidenceForStrategy(strategy))
+    );
+
+    onProgress?.(60, "Evaluating source credibility...");
+    const scoredResults = await this.credibilityScorer.scoreAllSources(evidenceResults.flat());
+
+    onProgress?.(80, "Synthesizing verification report...");
+    const finalResult = await this.synthesizeResults(claim, scoredResults);
+
+    this.cache.set(claim, finalResult);
+    onProgress?.(100, "Verification complete");
+
+    return finalResult;
+  }
+
+  private async synthesizeResults(claim: string, evidence: ScoredEvidence[]): Promise<SearchResult> {
+    const prompt = this.buildSynthesizePrompt(claim, evidence);
+    const model = this.geminiClient.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    try {
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const responseText = response.text();
+
+      let jsonString = responseText.trim();
+      const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        jsonString = jsonMatch[1];
+      }
+
+      const synthesizedResult = JSON.parse(jsonString);
+      // TODO: Add validation
+      return {
+        ...synthesizedResult,
+        claim,
+        evidence,
+      };
+    } catch (error) {
+      console.error("Error synthesizing results:", error);
+      return {
+        claim,
+        isVerified: false,
+        confidenceScore: 0,
+        summary: "Error synthesizing results.",
+        evidence,
+      };
+    }
+  }
+
+  private buildSynthesizePrompt(claim: string, evidence: ScoredEvidence[]): string {
+    const evidenceString = evidence
+      .filter(item => item.isRelevant && item.credibilityScore > 50)
+      .map(item => `
+        Source: ${item.title} (${item.url})
+        Credibility: ${item.credibilityScore}/100
+        Snippet: ${item.snippet}
+      `).join('\n\n');
+
+    return `
+      You are a senior fact-checking editor AI. Your job is to synthesize the provided evidence to verify a claim.
+
+      Claim to verify: "${claim}"
+
+      Collected Evidence:
+      ${evidenceString}
+
+      Based *only* on the evidence provided, perform the following tasks and return the result as a single JSON object:
+      1. "isVerified": A boolean indicating if the claim is supported by the evidence.
+      2. "confidenceScore": A number from 0 to 100 indicating the confidence in your verification.
+      3. "summary": A concise, neutral summary (2-3 sentences) explaining your conclusion based on the evidence.
+
+      Do not use any external knowledge. Your analysis must be based solely on the provided snippets.
+
+      Example output:
+      {
+        "isVerified": true,
+        "confidenceScore": 95,
+        "summary": "The evidence from multiple credible sources (Wikipedia, History.com, and the official site) consistently states that the Eiffel Tower is made of wrought iron, not cheese. The claim is therefore false."
+      }
+
+      Now, generate the JSON for the claim: "${claim}"
+    `;
+  }
+}
