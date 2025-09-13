@@ -5,11 +5,25 @@ import ClaimsAnalysis from './ClaimsAnalysis';
 import Sources from './Sources';
 import { ClipboardIcon, CheckIcon } from './icons';
 
+/**
+ * Defines the properties for the Dashboard component.
+ */
 interface DashboardProps {
+  /**
+   * The analysis result object to display. If null, a loading state is assumed.
+   */
   result: AnalysisResult | null;
+  /**
+   * A boolean indicating if the analysis is in progress.
+   */
   isLoading: boolean;
 }
 
+/**
+ * A skeleton loader for the summary section of the dashboard.
+ * Displays a pulsing placeholder to indicate that the summary is being loaded.
+ * @returns {JSX.Element} The rendered skeleton component.
+ */
 const SummarySkeleton: React.FC = () => (
     <div className="space-y-3 animate-pulse">
         <div className="h-4 bg-slate-700 rounded w-full"></div>
@@ -18,7 +32,14 @@ const SummarySkeleton: React.FC = () => (
     </div>
 );
 
-
+/**
+ * The main dashboard component for displaying content analysis results.
+ * It features a score card, a tabbed interface for switching between a summary
+ * and a detailed claims breakdown, and a list of consulted sources.
+ *
+ * @param {DashboardProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered dashboard.
+ */
 const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'claims'>('summary');
   const [summaryCopied, setSummaryCopied] = useState<boolean>(false);
@@ -27,6 +48,10 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
   const activeTabStyle = 'bg-slate-800/50 border-slate-700 border-b-transparent text-white';
   const inactiveTabStyle = 'bg-slate-900/60 text-slate-400 hover:bg-slate-800/80 hover:text-slate-200 border-transparent';
 
+  /**
+   * Handles the action of copying the analysis summary to the clipboard.
+   * Updates the UI to provide feedback to the user.
+   */
   const handleCopySummary = () => {
     if (!result?.summary) return;
     navigator.clipboard.writeText(result.summary).then(() => {

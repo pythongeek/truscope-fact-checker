@@ -1,15 +1,45 @@
 import React from 'react';
 import LoadingSpinner from './LoadingSpinner';
 
+/**
+ * Defines the properties for the InputSection component.
+ */
 interface InputSectionProps {
+  /**
+   * The current text content of the input area.
+   */
   inputText: string;
+  /**
+   * A callback function to update the input text.
+   * @param {string} text - The new text.
+   */
   setInputText: (text: string) => void;
+  /**
+   * A callback function to be invoked when the "Analyze" button is clicked.
+   */
   onAnalyze: () => void;
+  /**
+   * A boolean indicating if the main analysis is in progress.
+   */
   isLoading: boolean;
+  /**
+   * A callback function to be invoked when the "Extract Claims" button is clicked.
+   */
   onExtractClaims: () => void;
+  /**
+   * A boolean indicating if claim extraction is in progress.
+   */
   isExtractingClaims: boolean;
 }
 
+/**
+ * A component that provides the main user input interface, including a textarea
+ * for content and buttons to trigger analysis and claim extraction.
+ * It handles disabled states and loading indicators for the buttons.
+ *
+ * @param {InputSectionProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered input section.
+ */
 const InputSection: React.FC<InputSectionProps> = ({ inputText, setInputText, onAnalyze, isLoading, onExtractClaims, isExtractingClaims }) => {
   return (
     <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 shadow-lg">

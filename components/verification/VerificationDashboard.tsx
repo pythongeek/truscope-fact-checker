@@ -6,11 +6,29 @@ import EvidenceTimeline from './EvidenceTimeline';
 import VerificationProgress from './VerificationProgress';
 import SourceBreakdownTable from './SourceBreakdownTable';
 
+/**
+ * Defines the properties for the VerificationDashboard component.
+ */
 interface VerificationDashboardProps {
+  /**
+   * An array of claims (strings) to be verified.
+   */
   claims: string[];
+  /**
+   * A callback function that is invoked when the verification process is complete.
+   * @param {VerificationResult[]} results - The results of the verification for all claims.
+   */
   onVerificationComplete: (results: VerificationResult[]) => void;
 }
 
+/**
+ * A comprehensive dashboard for verifying a list of claims against web sources.
+ * It manages the verification process, displays real-time progress for each claim,
+ * and presents the aggregated results in charts, timelines, and tables upon completion.
+ *
+ * @param {VerificationDashboardProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered verification dashboard.
+ */
 const VerificationDashboard: React.FC<VerificationDashboardProps> = ({
   claims,
   onVerificationComplete
@@ -23,6 +41,11 @@ const VerificationDashboard: React.FC<VerificationDashboardProps> = ({
 
   const orchestrator = React.useMemo(() => new SearchOrchestrator(), []);
 
+  /**
+   * Initiates the verification process for all claims.
+   * It resets the state, calls the search orchestrator for each claim,
+   * updates progress in real-time, and aggregates the results for display.
+   */
   const handleVerifyAll = async () => {
     setIsVerifying(true);
     setVerificationProgress(new Map());

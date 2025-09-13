@@ -1,11 +1,31 @@
 import React from 'react';
 
+/**
+ * Defines the properties for the UsageStats component.
+ */
 interface UsageStatsProps {
+  /**
+   * The number of API requests made today.
+   */
   dailyUsage: number;
+  /**
+   * The total daily API request limit for a shared key.
+   */
   dailyLimit: number;
+  /**
+   * A boolean indicating whether the user is using their own API key.
+   */
   usingUserApiKey: boolean;
 }
 
+/**
+ * A component that displays API usage statistics.
+ * It shows either the unlimited usage status for a personal API key
+ * or the daily usage and limit for a shared API key, including a progress bar.
+ *
+ * @param {UsageStatsProps} props - The properties for the UsageStats component.
+ * @returns {JSX.Element} The rendered usage statistics component.
+ */
 const UsageStats: React.FC<UsageStatsProps> = ({ dailyUsage, dailyLimit, usingUserApiKey }) => {
   if (usingUserApiKey) {
     return (

@@ -2,16 +2,37 @@
 // that shows detailed verification steps with visual progress indicators
 
 import React, { useEffect, useState } from 'react';
-import type { VerificationStep, ProgressUpdate, VerificationResult } from '../../types/verification';
+import type { VerificationStep, VerificationResult } from '../../types/verification';
 import { CheckCircleIcon } from '../icons';
 
+/**
+ * Defines the properties for the VerificationProgress component.
+ */
 interface VerificationProgressProps {
+  /**
+   * The claim text that is being verified.
+   */
   claim: string;
+  /**
+   * The overall progress of the verification, from 0 to 100.
+   */
   progress: number;
+  /**
+   * A string describing the current status of the verification process.
+   */
   status: string;
+  /**
+   * An optional callback function that is called when the verification is complete.
+   * @param {VerificationResult} result - The final result of the verification.
+   */
   onComplete?: (result: VerificationResult) => void;
 }
 
+/**
+ * An array of objects defining the steps in the verification process.
+ * Each step has an ID, a user-friendly label, and a weight that contributes
+ * to the total progress calculation.
+ */
 const VERIFICATION_STEPS: VerificationStep[] = [
   { id: 'analysis', label: 'Analyzing Claim', weight: 10 },
   { id: 'strategy', label: 'Generating Search Strategies', weight: 15 },
@@ -21,11 +42,18 @@ const VERIFICATION_STEPS: VerificationStep[] = [
   { id: 'synthesis', label: 'Synthesizing Verification Report', weight: 10 }
 ];
 
+/**
+ * A component that displays detailed, step-by-step progress for the verification of a single claim.
+ * It features an overall progress bar and a list of individual verification steps,
+ * each with its own status icon and description.
+ *
+ * @param {VerificationProgressProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered verification progress indicator.
+ */
 const VerificationProgress: React.FC<VerificationProgressProps> = ({
   claim,
   progress,
   status,
-  onComplete
 }) => {
   const [currentStep, setCurrentStep] = useState<VerificationStep | null>(null);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
@@ -38,7 +66,7 @@ const VerificationProgress: React.FC<VerificationProgressProps> = ({
 
     for (const step of VERIFICATION_STEPS) {
       cumulativeWeight += step.weight;
-      if (progress <= cumulativeWeight) {
+      if (progress < cumulativeWeight) {
         activeStep = step;
         break;
       }
@@ -55,6 +83,11 @@ const VerificationProgress: React.FC<VerificationProgressProps> = ({
     setCurrentStep(activeStep);
   }, [progress, completedSteps]);
 
+  /**
+   * Returns the appropriate icon for a given verification step based on its status.
+   * @param {VerificationStep} step - The verification step object.
+   * @returns {JSX.Element} A status icon (completed, in-progress, or pending).
+   */
   const getStepIcon = (step: VerificationStep): JSX.Element => {
     if (completedSteps.includes(step.id)) {
       return <CheckCircleIcon className="w-5 h-5 text-green-400" />;
@@ -65,6 +98,11 @@ const VerificationProgress: React.FC<VerificationProgressProps> = ({
     return <div className="w-5 h-5 border-2 border-slate-600 rounded-full" />;
   };
 
+  /**
+   * Determines the status of a verification step (completed, active, or pending).
+   * @param {VerificationStep} step - The verification step object.
+   * @returns {string} The status string.
+   */
   const getStepStatus = (step: VerificationStep): string => {
     if (completedSteps.includes(step.id)) return 'completed';
     if (currentStep?.id === step.id) return 'active';

@@ -3,9 +3,10 @@ import type { User, Article, Claim } from '../types/database';
 
 /**
  * Fetches a user from the database by their email address.
- * Includes comprehensive error handling.
- * @param email The email of the user to retrieve.
- * @returns A promise that resolves to the User object or null if not found.
+ *
+ * @param {string} email - The email of the user to retrieve.
+ * @returns {Promise<User | null>} A promise that resolves to the User object or null if not found.
+ * @throws {Error} If the database query fails.
  */
 export const getUserByEmail = async (email: string): Promise<User | null> => {
   try {
@@ -19,9 +20,10 @@ export const getUserByEmail = async (email: string): Promise<User | null> => {
 
 /**
  * Creates a new article in the database.
- * Includes comprehensive error handling.
- * @param articleData - An object containing the title, content, and url for the new article.
- * @returns A promise that resolves to the newly created Article object.
+ *
+ * @param {Pick<Article, 'title' | 'content' | 'url'>} articleData - An object containing the title, content, and url for the new article.
+ * @returns {Promise<Article>} A promise that resolves to the newly created Article object.
+ * @throws {Error} If the database query fails.
  */
 export const createArticle = async (
   articleData: Pick<Article, 'title' | 'content' | 'url'>
@@ -41,9 +43,10 @@ export const createArticle = async (
 
 /**
  * Retrieves all claims associated with a specific article ID.
- * Includes comprehensive error handling.
- * @param articleId The ID of the article.
- * @returns A promise that resolves to an array of Claim objects.
+ *
+ * @param {number} articleId - The ID of the article.
+ * @returns {Promise<Claim[]>} A promise that resolves to an array of Claim objects.
+ * @throws {Error} If the database query fails.
  */
 export const getClaimsByArticleId = async (articleId: number): Promise<Claim[]> => {
   try {

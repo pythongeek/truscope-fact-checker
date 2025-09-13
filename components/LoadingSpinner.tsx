@@ -1,5 +1,11 @@
 import React from 'react';
 
+/**
+ * A React functional component that renders an animated SVG spinner.
+ * This component is used to indicate a loading state in the application.
+ *
+ * @returns {JSX.Element} The rendered SVG loading spinner.
+ */
 const LoadingSpinner: React.FC = () => {
   return (
     <svg

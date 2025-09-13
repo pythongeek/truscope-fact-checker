@@ -3,14 +3,27 @@ import { executeGeminiQuery } from '../geminiService';
 import { VerificationError } from '../../types/errorHandler';
 import { isSourceCollection } from './validation';
 
+/**
+ * A class responsible for generating a collection of simulated source information
+ * based on a claim and a set of search strategies.
+ */
 export class SourceAggregator {
   constructor() {}
 
+  /**
+   * Generates a collection of simulated sources for a given claim using the Gemini API.
+   * It constructs a detailed prompt asking the AI to simulate finding various types of
+   * sources (primary, academic, news, etc.) relevant to the claim.
+   *
+   * @param {string} claim - The claim to aggregate sources for.
+   * @param {SearchStrategy[]} strategies - The search strategies to guide the source generation.
+   * @returns {Promise<SourceCollection>} A promise that resolves to a collection of categorized source items.
+   * @throws {VerificationError} If the AI returns an invalid response or the query fails.
+   */
   async aggregateSourcesForClaim(
     claim: string,
     strategies: SearchStrategy[]
   ): Promise<SourceCollection> {
-
     const prompt = this.buildPrompt(claim, strategies);
 
     try {
@@ -31,7 +44,6 @@ export class SourceAggregator {
       return sources;
     } catch (error) {
       console.error("Error in SourceAggregator:", error);
-      // Re-throw the error to be handled by the orchestrator
       if (error instanceof VerificationError) {
           throw error;
       }
@@ -39,6 +51,14 @@ export class SourceAggregator {
     }
   }
 
+  /**
+   * Builds the prompt for the Gemini API to generate a collection of simulated sources.
+   *
+   * @private
+   * @param {string} claim - The claim to build the prompt for.
+   * @param {SearchStrategy[]} strategies - The search strategies to include in the prompt.
+   * @returns {string} The complete prompt string.
+   */
   private buildPrompt(claim: string, strategies: SearchStrategy[]): string {
     const strategiesString = strategies.map(s => `- ${s.search_type}: ${s.queries.join(', ')}`).join('\n');
 

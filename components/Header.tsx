@@ -1,11 +1,28 @@
 import React from 'react';
 import { SparklesIcon, KeyIcon } from './icons';
 
+/**
+ * Defines the properties for the Header component.
+ */
 interface HeaderProps {
+  /**
+   * A callback function to be invoked when the API key button is clicked.
+   */
   onApiKeyClick: () => void;
+  /**
+   * A boolean indicating if the user has provided their own API key.
+   */
   hasUserApiKey: boolean;
 }
 
+/**
+ * The main header component for the application.
+ * It displays the application title and a button for managing the API key.
+ * The button's appearance indicates whether a user-provided key is active.
+ *
+ * @param {HeaderProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered header component.
+ */
 const Header: React.FC<HeaderProps> = ({ onApiKeyClick, hasUserApiKey }) => {
   return (
     <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-700/50 sticky top-0 z-10">

@@ -1,10 +1,25 @@
 import React from 'react';
 import type { SynthesizedSourceItem } from '../../types/verification';
 
+/**
+ * Defines the properties for the EvidenceTimeline component.
+ */
 interface EvidenceTimelineProps {
+  /**
+   * An array of synthesized source items to be displayed in the timeline.
+   */
   sources: SynthesizedSourceItem[];
 }
 
+/**
+ * A component that displays a vertical timeline of evidence sources.
+ * Sources are sorted by publication date, with the most recent appearing first.
+ * Each timeline item shows the source's name, publication date, relevant information,
+ * and a link to access the source.
+ *
+ * @param {EvidenceTimelineProps} props - The properties for the EvidenceTimeline component.
+ * @returns {JSX.Element} The rendered evidence timeline.
+ */
 const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ sources }) => {
   if (!sources || sources.length === 0) {
     return <p className="text-slate-400 text-center py-8">No evidence to display.</p>;
@@ -20,6 +35,11 @@ const EvidenceTimeline: React.FC<EvidenceTimelineProps> = ({ sources }) => {
     return dateB - dateA;
   });
 
+  /**
+   * Determines the background color of the timeline dot based on the verification strength.
+   * @param {string} strength - The verification strength category from the source item.
+   * @returns {string} A Tailwind CSS class for the background color.
+   */
   const getStrengthColor = (strength: string) => {
     switch (strength) {
       case 'strong_support': return 'bg-green-500';

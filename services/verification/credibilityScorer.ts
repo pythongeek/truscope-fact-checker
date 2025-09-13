@@ -3,16 +3,33 @@ import { executeGeminiQuery } from '../geminiService';
 import { VerificationError } from '../../types/errorHandler';
 import { isCredibilityScore } from './validation';
 
-// The OverallCredibilityResult type seems to be missing from the types file.
-// I will add it here for now, and consider moving it to types/verification.ts later.
+/**
+ * Represents the result of an overall credibility analysis across multiple sources.
+ */
 export interface OverallCredibilityResult {
+  /**
+   * The average credibility score, rounded to the nearest integer.
+   */
   overallScore: number;
+  /**
+   * The level of consensus among the sources.
+   */
   consensus: 'strong' | 'moderate' | 'weak';
+  /**
+   * A textual analysis of any contradictions found.
+   */
   contradictionAnalysis: string;
 }
 
+/**
+ * A class responsible for evaluating the credibility of information sources.
+ * It uses a criteria-based approach to score sources and can aggregate these scores.
+ */
 export class CredibilityScorer {
-  // Weights are now defined with lowercase keys to match the CredibilityScore type
+  /**
+   * Defines the criteria for credibility scoring and their respective weights.
+   * The sum of weights should ideally be 1.0.
+   */
   public readonly CREDIBILITY_CRITERIA: { [key in keyof CredibilityScore['component_scores']]: number } = {
     source_authority: 0.25,
     editorial_standards: 0.20,
@@ -24,6 +41,14 @@ export class CredibilityScorer {
 
   constructor() {}
 
+  /**
+   * Scores the credibility of a single source item by querying the Gemini API.
+   * It sends a detailed prompt and calculates a weighted overall score from the AI's response.
+   *
+   * @param {SourceItem} source - The source item to be scored.
+   * @returns {Promise<CredibilityScore>} A promise that resolves to the full credibility score object.
+   * @throws {VerificationError} If the AI returns an invalid object or the scoring process fails.
+   */
   async scoreSourceCredibility(source: SourceItem): Promise<CredibilityScore> {
     const prompt = this.buildScoringPrompt(source);
 
@@ -36,10 +61,8 @@ export class CredibilityScorer {
         jsonString = jsonMatch[1];
       }
 
-      // The AI returns an object with component_scores and reasoning
       const partialResult = JSON.parse(jsonString);
 
-      // Calculate the overall score in code for reliability
       let calculatedScore = 0;
       for (const key in this.CREDIBILITY_CRITERIA) {
           const criterion = key as keyof typeof this.CREDIBILITY_CRITERIA;
@@ -47,12 +70,11 @@ export class CredibilityScorer {
           calculatedScore += componentScore * this.CREDIBILITY_CRITERIA[criterion];
       }
 
-      // Assemble the full CredibilityScore object
       const scores: CredibilityScore = {
         component_scores: partialResult.component_scores,
         reasoning: partialResult.reasoning,
         confidence_interval: partialResult.confidence_interval,
-        overall_score: Math.round(calculatedScore), // Round to the nearest integer
+        overall_score: Math.round(calculatedScore),
       };
 
       if (!isCredibilityScore(scores)) {
@@ -62,7 +84,6 @@ export class CredibilityScorer {
       return scores;
     } catch (error) {
       console.error(`Error scoring credibility for source "${source.name}":`, error);
-      // Re-throw the error to be handled by the orchestrator
       if (error instanceof VerificationError) {
           throw error;
       }
@@ -70,6 +91,12 @@ export class CredibilityScorer {
     }
   }
 
+  /**
+   * Calculates an overall credibility score and consensus from a list of individual source scores.
+   *
+   * @param {CredibilityScore[]} scores - An array of credibility scores for multiple sources.
+   * @returns {Promise<OverallCredibilityResult>} A promise that resolves to the aggregated credibility result.
+   */
   async calculateOverallCredibility(scores: CredibilityScore[]): Promise<OverallCredibilityResult> {
     if (scores.length === 0) {
         return {
@@ -78,7 +105,6 @@ export class CredibilityScorer {
             contradictionAnalysis: "No sources to analyze.",
         };
     }
-    // The overall credibility is the average of the reliably calculated scores.
     const overallScore = scores.reduce((acc, score) => acc + score.overall_score, 0) / scores.length;
 
     const consensus = overallScore >= 75 ? 'strong' : overallScore >= 50 ? 'moderate' : 'weak';
@@ -90,6 +116,13 @@ export class CredibilityScorer {
     };
   }
 
+  /**
+   * Builds the prompt for the Gemini API to score a source's credibility.
+   *
+   * @private
+   * @param {SourceItem} source - The source item to build the prompt for.
+   * @returns {string} The complete prompt string.
+   */
   private buildScoringPrompt(source: SourceItem): string {
     return `
       You are an expert source credibility evaluator. Your task is to analyze the provided source information and score it based on a predefined set of criteria.

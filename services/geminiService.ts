@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AnalysisResult } from '../types';
 import type { VerificationResult } from '../types/verification';
-import { SearchOrchestrator } from './verification/searchOrchestrator';
 
 // --- Caching Configuration ---
 const DEFAULT_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -15,9 +14,16 @@ const analysisCache = new Map<string, { result: AnalysisResult; timestamp: numbe
 let dailyUsage = 0;
 let lastResetDate = new Date().toDateString();
 
+/**
+ * The maximum number of daily requests allowed for the shared API key.
+ */
 export const DAILY_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT || '100', 10);
 const SHARED_API_KEY = process.env.GEMINI_API_KEY;
 
+/**
+ * Retrieves the user's API key from local storage.
+ * @returns {string | null} The user's API key, or null if not found or if local storage is inaccessible.
+ */
 const getUserApiKey = (): string | null => {
   try {
     return localStorage.getItem('gemini_api_key');
@@ -26,6 +32,11 @@ const getUserApiKey = (): string | null => {
   }
 };
 
+/**
+ * Determines the appropriate API key to use (user's key takes precedence over shared key).
+ * @returns {string} The API key to be used for the request.
+ * @throws {Error} If no API key (neither user-provided nor shared) is available.
+ */
 const getApiKey = (): string => {
   const userApiKey = getUserApiKey();
   if (userApiKey) {
@@ -39,10 +50,18 @@ const getApiKey = (): string => {
   return SHARED_API_KEY;
 };
 
+/**
+ * Checks if the application is currently using the shared API key.
+ * @returns {boolean} True if the shared API key is being used, false otherwise.
+ */
 const isUsingSharedKey = (): boolean => {
   return !getUserApiKey();
 };
 
+/**
+ * Checks and resets the daily usage limit for the shared API key if a new day has started.
+ * @returns {boolean} True if the daily limit has not been reached, false otherwise.
+ */
 const checkDailyLimit = (): boolean => {
   // Only check limits for shared API key usage
   if (!isUsingSharedKey()) {
@@ -59,29 +78,24 @@ const checkDailyLimit = (): boolean => {
   return dailyUsage < DAILY_LIMIT;
 };
 
-const generateCacheKey = (text: string, apiKeyHash: string): string => {
-  // Create a simple hash of the input text and API key
+/**
+ * Generates a consistent cache key from a given string.
+ * @param {string} text - The input string to hash.
+ * @returns {string} A string representation of the hash.
+ */
+const generateCacheKey = (text: string): string => {
   let hash = 0;
-  const combined = text + apiKeyHash;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32bit integer
   }
   return hash.toString();
 };
 
-const hashApiKey = (apiKey: string): string => {
-  // Create a simple hash of the API key for cache key generation
-  let hash = 0;
-  for (let i = 0; i < Math.min(apiKey.length, 20); i++) {
-    const char = apiKey.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return hash.toString();
-};
-
+/**
+ * Removes expired entries from the in-memory caches.
+ */
 const cleanCaches = (): void => {
   const now = Date.now();
   for (const [key, value] of queryCache.entries()) {
@@ -96,27 +110,31 @@ const cleanCaches = (): void => {
   }
 };
 
+/**
+ * Gets the current daily usage count for the shared API key.
+ * @returns {number} The number of requests made today with the shared key.
+ */
 export const getDailyUsage = (): number => {
-  // Only return usage for shared API key
   if (!isUsingSharedKey()) {
     return 0; // No usage tracking for user's own API key
   }
-
   checkDailyLimit();
   return dailyUsage;
 };
 
 /**
  * Analyzes a piece of content to identify factual claims and assess credibility.
- * Note: This function is separate from the main verification workflow and has its own cache.
+ * This function uses a specific prompt to get a structured JSON response from the AI.
+ *
+ * @param {string} text - The content to analyze.
+ * @returns {Promise<AnalysisResult>} A promise that resolves to the structured analysis result.
+ * @throws {Error} If the AI returns a response in an unexpected format.
  */
 export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
-    // This function remains for other potential uses, but is not part of the main orchestrator flow.
-    checkDailyLimit();
     cleanCaches();
 
+    const cacheKey = generateCacheKey(`analyze:${text}`);
     if (ENABLE_CACHING) {
-        const cacheKey = generateCacheKey(`analyze:${text}`);
         const cached = analysisCache.get(cacheKey);
         if (cached && (Date.now() - cached.timestamp < DEFAULT_CACHE_TTL)) {
             return cached.result;
@@ -135,7 +153,7 @@ export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
     ${text}
     ---`;
 
-    const responseText = await executeGeminiQuery(prompt, { useCache: false }); // Use the core query executor
+    const responseText = await executeGeminiQuery(prompt, { useCache: false });
 
     try {
         let jsonString = responseText.trim();
@@ -146,7 +164,6 @@ export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
         const parsedResult = JSON.parse(jsonString) as AnalysisResult;
 
         if (ENABLE_CACHING) {
-            const cacheKey = generateCacheKey(`analyze:${text}`);
             analysisCache.set(cacheKey, { result: parsedResult, timestamp: Date.now() });
         }
         return parsedResult;
@@ -156,11 +173,26 @@ export const analyzeContent = async (text: string): Promise<AnalysisResult> => {
     }
 };
 
+/**
+ * Extends the base AnalysisResult with verification data.
+ */
 export interface EnhancedAnalysisResult extends AnalysisResult {
+  /**
+   * An array of verification results for the claims.
+   */
   verification_results: VerificationResult[] | null;
+  /**
+   * An optional enhanced credibility score, recalculated based on verification results.
+   */
   enhanced_credibility_score?: number;
 }
 
+/**
+ * Recalculates the credibility score by averaging the base score with verification confidence scores.
+ * @param {number} baseScore - The initial credibility score from the analysis.
+ * @param {VerificationResult[]} verificationResults - The results from the verification process.
+ * @returns {number} The recalculated, rounded credibility score.
+ */
 const calculateEnhancedCredibility = (
   baseScore: number,
   verificationResults: VerificationResult[]
@@ -174,10 +206,13 @@ const calculateEnhancedCredibility = (
 };
 
 /**
- * Executes a query against the Gemini API with centralized caching and error handling.
- * @param prompt The prompt to send to the AI.
- * @param options Optional settings for the query.
- * @returns The text response from the AI.
+ * Executes a query against the Gemini API with centralized caching, rate limiting, and error handling.
+ * @param {string} prompt - The prompt to send to the AI.
+ * @param {object} [options={}] - Optional settings for the query.
+ * @param {boolean} [options.useCache=true] - Whether to use the cache for this query.
+ * @param {number} [options.ttl=DEFAULT_CACHE_TTL] - The cache time-to-live in milliseconds.
+ * @returns {Promise<string>} A promise that resolves to the text response from the AI.
+ * @throws {Error} If the API call fails or returns a specific, handled error (e.g., invalid key, safety violation).
  */
 export const executeGeminiQuery = async (
     prompt: string,
@@ -185,7 +220,9 @@ export const executeGeminiQuery = async (
 ): Promise<string> => {
   const { useCache = true, ttl = DEFAULT_CACHE_TTL } = options;
 
-  checkDailyLimit();
+  if (!checkDailyLimit()) {
+    throw new Error('The daily API request limit for the shared key has been reached.');
+  }
   cleanCaches();
 
   const cacheKey = generateCacheKey(prompt);
@@ -231,6 +268,11 @@ export const executeGeminiQuery = async (
   }
 };
 
+/**
+ * Parses a string that is expected to be a JSON array, potentially wrapped in markdown code blocks.
+ * @param {string} result - The input string from the AI response.
+ * @returns {string[]} An array of strings, or an empty array if parsing fails.
+ */
 const parseQueryArray = (result: string): string[] => {
   try {
     const jsonMatch = result.match(/```(?:json)?\s*([\s\S]*?)\s*```/);

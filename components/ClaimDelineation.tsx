@@ -5,20 +5,58 @@ import { granulateStatements } from '../services/statementGranulator';
 import LoadingSpinner from './LoadingSpinner';
 import GranulatedAnalysis from './GranulatedAnalysis';
 
+/**
+ * Defines the properties for the ClaimDelineation component.
+ */
 interface ClaimDelineationProps {
+  /**
+   * An array of claim objects to display, or null if no analysis has been run.
+   */
   claims: Claim[] | null;
+  /**
+   * A boolean indicating if the claims are currently being extracted.
+   */
   isLoading: boolean;
 }
 
+/**
+ * Defines the state for the granularity analysis of a single claim.
+ */
 interface GranularityState {
+  /**
+   * A boolean indicating if the granulation process is in progress.
+   */
   isLoading: boolean;
+  /**
+   * An error message if the granulation process failed, or null otherwise.
+   */
   error: string | null;
+  /**
+   * An array of atomic statements resulting from the granulation, or null.
+   */
   result: AtomicStatement[] | null;
 }
 
+/**
+ * A component that displays a list of extracted claims.
+ * It differentiates between verifiable claims and opinions, and for verifiable claims,
+ * it provides an option to perform and display a "granulated analysis," which
+ * breaks the claim down into smaller, atomic statements.
+ *
+ * @param {ClaimDelineationProps} props - The properties for the component.
+ * @returns {JSX.Element | null} The rendered list of claims or a loading/empty state.
+ */
 const ClaimDelineation: React.FC<ClaimDelineationProps> = ({ claims, isLoading }) => {
   const [granularityData, setGranularityData] = useState<Record<number, GranularityState>>({});
 
+  /**
+   * Handles the click event to initiate the granulation of a claim.
+   * It sets the loading state, calls the granulation service, and updates
+   * the state with the result or an error message.
+   *
+   * @param {string} claimText - The text of the claim to be granulated.
+   * @param {number} index - The index of the claim in the list.
+   */
   const handleGranulateClick = async (claimText: string, index: number) => {
     setGranularityData(prev => ({
       ...prev,

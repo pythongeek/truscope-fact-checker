@@ -9,6 +9,11 @@ import { VerificationErrorHandler } from './errorHandler';
 import { VerificationError, ErrorHandlingContext } from '../../types/errorHandler';
 import { isSynthesizedResult } from './validation';
 
+/**
+ * The main orchestrator for the claim verification process.
+ * This class coordinates various sub-services to perform a comprehensive,
+ * end-to-end verification of a factual claim.
+ */
 export class SearchOrchestrator {
   private queryGenerator: QueryGenerator;
   private sourceAggregator: SourceAggregator;
@@ -27,6 +32,17 @@ export class SearchOrchestrator {
     this.errorHandler = new VerificationErrorHandler();
   }
 
+  /**
+   * Performs a full, end-to-end verification of a claim.
+   * This process involves generating search strategies, aggregating sources,
+   * and synthesizing a final result, with progress reporting and error handling.
+   *
+   * @param {string} claim - The claim to verify.
+   * @param {VerificationContext} [context] - Optional context for the verification.
+   * @param {(progress: number, status: string) => void} [onProgress] - A callback to report progress.
+   * @returns {Promise<SearchResult>} A promise that resolves to the final search result.
+   * @throws {VerificationError} If the process fails and cannot be recovered.
+   */
   async verifyClaimWithSources(
     claim: string,
     context?: VerificationContext,
@@ -70,42 +86,55 @@ export class SearchOrchestrator {
       );
 
       if (recoveryResult.success && recoveryResult.result) {
-        // If recovery was successful, return a result indicating as much
         return {
           claim,
           isVerified: false,
           confidenceScore: 30,
           summary: recoveryResult.note || 'Verification recovered from an error, but the result may be incomplete.',
           sources: recoveryResult.result.sources || sources,
-        };
+        } as SearchResult;
       } else {
-        // If recovery fails, re-throw a new error that can be caught by the UI
         throw new VerificationError(recoveryResult.warnings?.join(' ') || 'Verification process failed after recovery attempts.');
       }
     }
   }
 
+  /**
+   * Simulates a search across multiple search engines for a given query.
+   * This is a pass-through method to the SearchEngineSimulator.
+   *
+   * @param {string} query - The search query to simulate.
+   * @param {SearchEngine[]} [engines] - An array of engine types to simulate.
+   * @returns {Promise<MultiEngineSearchResult>} A promise that resolves to the aggregated multi-engine search results.
+   */
   async simulateSearch(query: string, engines?: SearchEngine[]): Promise<MultiEngineSearchResult> {
-    // This method doesn't call the AI directly, it calls the simulator which has its own error handling.
     return this.searchEngineSimulator.simulateMultiEngineSearch(query, engines);
   }
 
+  /**
+   * Prioritizes a list of sources based on their relevance and credibility to a claim.
+   * This is a pass-through method to the SourcePrioritizer.
+   *
+   * @param {string} claim - The claim being verified.
+   * @param {SourceItem[]} sources - The list of sources to prioritize.
+   * @param {ClaimContext} [context] - Optional context about the claim.
+   * @returns {Promise<PrioritizedSourceList>} A promise that resolves to the prioritized list of sources.
+   */
   async prioritizeSources(claim: string, sources: SourceItem[], context?: ClaimContext): Promise<PrioritizedSourceList> {
-    // This method also calls a sub-service which has its own error handling.
     return this.sourcePrioritizer.prioritizeSources(claim, sources, context);
   }
 
+  /**
+   * Synthesizes a final verification result from a collection of sources.
+   * @private
+   * @param {string} claim - The claim being verified.
+   * @param {SourceCollection} sources - The collected sources, categorized by type.
+   * @returns {Promise<SearchResult>} A promise that resolves to the final, synthesized search result.
+   */
   private async synthesizeResults(claim: string, sources: SourceCollection): Promise<SearchResult> {
     const prompt = this.buildSynthesizePrompt(claim, sources);
-
     const responseText = await executeGeminiQuery(prompt);
-
-    let jsonString = responseText.trim();
-    const jsonMatch = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (jsonMatch && jsonMatch[1]) {
-      jsonString = jsonMatch[1];
-    }
-
+    const jsonString = responseText.trim().match(/```(?:json)?\s*([\s\S]*?)\s*```/)?.[1] || responseText;
     const synthesizedResult = JSON.parse(jsonString);
 
     if (!isSynthesizedResult(synthesizedResult)) {
@@ -119,6 +148,10 @@ export class SearchOrchestrator {
     };
   }
 
+  /**
+   * Builds the prompt for the Gemini API to synthesize a final result from the collected evidence.
+   * @private
+   */
   private buildSynthesizePrompt(claim: string, sources: SourceCollection): string {
     const evidenceString = Object.entries(sources).map(([sourceType, sourceList]) => {
         if (!sourceList || sourceList.length === 0) return '';
