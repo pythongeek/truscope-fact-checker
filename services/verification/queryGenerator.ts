@@ -3,9 +3,21 @@ import { executeGeminiQuery } from '../geminiService';
 import { VerificationError } from '../../types/errorHandler';
 import { isSearchStrategyArray } from './validation';
 
+/**
+ * A class responsible for generating a set of diverse search strategies for a given claim.
+ * It uses an AI query to brainstorm different angles for verification.
+ */
 export class QueryGenerator {
   constructor() {}
 
+  /**
+   * Generates a list of search strategies for a claim by querying the Gemini API.
+   *
+   * @param {string} claim - The claim to generate search strategies for.
+   * @param {VerificationContext} [context] - Optional context about the verification process.
+   * @returns {Promise<SearchStrategy[]>} A promise that resolves to an array of search strategies.
+   * @throws {VerificationError} If the AI returns an invalid response or the query fails.
+   */
   async generateSearchStrategies(
     claim: string,
     context?: VerificationContext
@@ -30,7 +42,6 @@ export class QueryGenerator {
       return strategies;
     } catch (error) {
       console.error("Error in QueryGenerator:", error);
-      // Re-throw the error to be handled by the orchestrator
       if (error instanceof VerificationError) {
           throw error;
       }
@@ -38,8 +49,15 @@ export class QueryGenerator {
     }
   }
 
+  /**
+   * Builds the prompt for the Gemini API to generate search strategies.
+   *
+   * @private
+   * @param {string} claim - The claim to build the prompt for.
+   * @param {VerificationContext} [context] - Optional context (currently unused, for future enhancement).
+   * @returns {string} The complete prompt string.
+   */
   private buildPrompt(claim: string, context?: VerificationContext): string {
-    // Note: The context object is not used yet, but is here for future enhancements.
     return `
       You are an expert fact-checker creating a series of strategic search queries. For the following claim, generate 5-7 different search strategies to comprehensively verify it from multiple angles.
 

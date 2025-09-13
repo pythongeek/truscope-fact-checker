@@ -1,10 +1,19 @@
 import type { SearchStrategy, SourceCollection, CredibilityScore, SearchResult, SourceItem } from '../../types/verification';
 
-// A simple helper to check if an object is a plain object
+/**
+ * A simple type guard to check if a value is a non-array object.
+ * @param obj - The value to check.
+ * @returns {obj is Record<string, unknown>} True if the value is a plain object.
+ */
 function isObject(obj: any): obj is Record<string, unknown> {
     return obj !== null && typeof obj === 'object' && !Array.isArray(obj);
 }
 
+/**
+ * Type guard to check if an object conforms to the SearchStrategy interface.
+ * @param {any} obj - The object to validate.
+ * @returns {obj is SearchStrategy} True if the object is a valid SearchStrategy.
+ */
 export function isSearchStrategy(obj: any): obj is SearchStrategy {
     return (
         isObject(obj) &&
@@ -16,10 +25,21 @@ export function isSearchStrategy(obj: any): obj is SearchStrategy {
     );
 }
 
+/**
+ * Type guard to check if an object is an array of SearchStrategy objects.
+ * @param {any} obj - The object to validate.
+ * @returns {obj is SearchStrategy[]} True if the object is a valid array of SearchStrategy.
+ */
 export function isSearchStrategyArray(obj: any): obj is SearchStrategy[] {
     return Array.isArray(obj) && obj.every(isSearchStrategy);
 }
 
+/**
+ * Type guard to check if an object conforms to the SourceItem interface.
+ * @private
+ * @param {any} obj - The object to validate.
+ * @returns {obj is SourceItem} True if the object is a valid SourceItem.
+ */
 function isSourceItem(obj: any): obj is SourceItem {
     return (
         isObject(obj) &&
@@ -32,6 +52,11 @@ function isSourceItem(obj: any): obj is SourceItem {
     );
 }
 
+/**
+ * Type guard to check if an object conforms to the SourceCollection interface.
+ * @param {any} obj - The object to validate.
+ * @returns {obj is SourceCollection} True if the object is a valid SourceCollection.
+ */
 export function isSourceCollection(obj: any): obj is SourceCollection {
     if (!isObject(obj)) return false;
     // Check that each property is an array of source items
@@ -40,6 +65,11 @@ export function isSourceCollection(obj: any): obj is SourceCollection {
     );
 }
 
+/**
+ * Type guard to check if an object conforms to the CredibilityScore interface.
+ * @param {any} obj - The object to validate.
+ * @returns {obj is CredibilityScore} True if the object is a valid CredibilityScore.
+ */
 export function isCredibilityScore(obj: any): obj is CredibilityScore {
     return (
         isObject(obj) &&
@@ -51,6 +81,11 @@ export function isCredibilityScore(obj: any): obj is CredibilityScore {
     );
 }
 
+/**
+ * Type guard to check if an object conforms to the core properties of a synthesized SearchResult.
+ * @param {any} obj - The object to validate.
+ * @returns {obj is Pick<SearchResult, 'isVerified' | 'confidenceScore' | 'summary'>} True if the object is a valid partial SearchResult.
+ */
 export function isSynthesizedResult(obj: any): obj is Pick<SearchResult, 'isVerified' | 'confidenceScore' | 'summary'> {
     return (
         isObject(obj) &&

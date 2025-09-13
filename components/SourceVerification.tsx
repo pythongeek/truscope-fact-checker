@@ -1,25 +1,60 @@
 import React from 'react';
-import type { SearchResult, ScoredEvidence } from '../types/verification';
+import type { SearchResult } from '../types/verification';
 import LoadingSpinner from './LoadingSpinner';
 
+/**
+ * Defines the properties for the SourceVerification component.
+ */
 interface SourceVerificationProps {
+  /**
+   * The search result object containing verification details.
+   * If null, the component will render nothing unless isLoading is true.
+   */
   result: SearchResult | null;
+  /**
+   * If true, the component will display a loading state with a progress bar.
+   */
   isLoading: boolean;
+  /**
+   * The current progress of the verification process (0-100).
+   */
   progress: number;
+  /**
+   * A status message to display during the loading process.
+   */
   status: string;
 }
 
+/**
+ * Determines the color for the verification verdict text based on verification status and confidence.
+ * @param {boolean} isVerified - Whether the claim is verified.
+ * @param {number} confidence - The confidence score of the verification.
+ * @returns {string} A Tailwind CSS class for the text color.
+ */
 const getVerdictColor = (isVerified: boolean, confidence: number) => {
   if (confidence < 50) return 'text-yellow-400';
   return isVerified ? 'text-green-400' : 'text-red-400';
 };
 
+/**
+ * Determines the border color for an evidence item based on its credibility score.
+ * @param {number} score - The credibility score of the evidence.
+ * @returns {string} A Tailwind CSS class for the border color.
+ */
 const getCredibilityColor = (score: number) => {
   if (score > 80) return 'border-green-500';
   if (score > 60) return 'border-yellow-500';
   return 'border-red-500';
 };
 
+/**
+ * A component that displays the results of a source verification check for a single claim.
+ * It shows a loading indicator during verification and then presents a report including
+ * a verdict, summary, and a list of evidence that was considered.
+ *
+ * @param {SourceVerificationProps} props - The properties for the SourceVerification component.
+ * @returns {JSX.Element | null} The rendered source verification report, loading state, or null.
+ */
 const SourceVerification: React.FC<SourceVerificationProps> = ({ result, isLoading, progress, status }) => {
   if (isLoading) {
     return (

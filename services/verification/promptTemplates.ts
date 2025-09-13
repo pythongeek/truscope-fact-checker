@@ -1,9 +1,14 @@
-// File: services/verification/promptTemplates.ts
-
 import type { SearchStrategy } from '../../types/verification';
 
+/**
+ * A collection of detailed prompt templates for the Gemini AI.
+ * Each prompt is designed to simulate a search query to a specific type of information source
+ * (e.g., government, academic, news), guiding the AI to generate realistic and structured responses.
+ */
 export const VERIFICATION_PROMPTS = {
-
+  /**
+   * Prompt for simulating a search of government and official sources.
+   */
   GOVERNMENT_SOURCE_SIMULATION: `
 You are accessing government and official sources for fact verification.
 Using your knowledge of official government data, regulatory filings, and public records:
@@ -28,6 +33,9 @@ For each source, provide:
 Format as realistic government source citations with specific details.
   `,
 
+  /**
+   * Prompt for simulating a search of academic and research sources.
+   */
   ACADEMIC_SOURCE_SIMULATION: `
 You are accessing academic and research sources for fact verification.
 Using your knowledge of scientific literature and academic research:
@@ -53,6 +61,9 @@ For each source, provide:
 Format as proper academic citations with DOI/PMID where applicable.
   `,
 
+  /**
+   * Prompt for simulating a search of major news sources.
+   */
   NEWS_VERIFICATION_SIMULATION: `
 You are accessing major news sources for fact verification.
 Using your knowledge of news reporting and journalism:
@@ -77,6 +88,9 @@ For each source, provide:
 Format as journalism citations with publication details.
   `,
 
+  /**
+   * Prompt for simulating a search of established fact-checking organizations.
+   */
   FACT_CHECK_ORGANIZATION_SIMULATION: `
 You are accessing established fact-checking organizations.
 Using your knowledge of professional fact-checking:
@@ -102,6 +116,9 @@ For each fact-check, provide:
 Format as fact-checker citations with ratings and methodology.
   `,
 
+  /**
+   * Prompt for simulating the gathering of expert opinions.
+   */
   EXPERT_OPINION_SIMULATION: `
 You are gathering expert opinions and analysis for fact verification.
 Using your knowledge of subject matter experts:
@@ -129,6 +146,14 @@ Format as expert opinion citations with qualifications.
   `
 };
 
+/**
+ * **[Placeholder]** Extracts the main topic from a claim.
+ * This is a simplistic implementation and should be replaced with a more
+ * sophisticated NLP-based approach for better accuracy.
+ *
+ * @param {string} claim - The claim text.
+ * @returns {string} The presumed topic of the claim.
+ */
 export const extractTopicFromClaim = (claim: string): string => {
   // This is a placeholder. A more sophisticated implementation would use NLP.
   const words = claim.split(' ');
@@ -136,6 +161,15 @@ export const extractTopicFromClaim = (claim: string): string => {
   return words.reduce((a, b) => a.length > b.length ? a : b, '');
 }
 
+/**
+ * Builds a complete verification prompt by selecting a template based on the
+ * search strategy and populating it with the claim and topic.
+ *
+ * @param {string} claim - The claim to be verified.
+ * @param {SearchStrategy} strategy - The search strategy, which determines the prompt template to use.
+ * @returns {string} The fully constructed prompt to be sent to the AI.
+ * @throws {Error} If the search strategy type is invalid.
+ */
 export const buildVerificationPrompt = (
   claim: string,
   strategy: SearchStrategy

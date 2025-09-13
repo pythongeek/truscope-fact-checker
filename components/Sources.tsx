@@ -2,10 +2,23 @@ import React from 'react';
 import type { Source } from '../types';
 import { LinkIcon } from './icons';
 
+/**
+ * Defines the properties for the Sources component.
+ */
 interface SourcesProps {
+  /**
+   * An array of source objects to be displayed.
+   */
   sources: Source[];
 }
 
+/**
+ * A component that displays a list of sources that were consulted for an analysis.
+ * Each source is rendered as a clickable link.
+ *
+ * @param {SourcesProps} props - The properties for the Sources component.
+ * @returns {JSX.Element} The rendered list of sources.
+ */
 const Sources: React.FC<SourcesProps> = ({ sources }) => {
   return (
     <div className="bg-slate-800/50 rounded-xl p-6 border border-slate-700 animate-slide-in-up" style={{animationDelay: '0.3s'}}>

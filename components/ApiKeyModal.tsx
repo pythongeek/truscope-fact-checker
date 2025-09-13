@@ -1,14 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { XCircleIcon, EyeIcon, EyeSlashIcon, KeyIcon } from './icons';
 
+/**
+ * Defines the properties for the ApiKeyModal component.
+ */
 interface ApiKeyModalProps {
+  /**
+   * If true, the modal will be displayed.
+   */
   isOpen: boolean;
+  /**
+   * A callback function to be invoked when the modal is closed.
+   */
   onClose: () => void;
+  /**
+   * A callback function to be invoked when a valid API key is saved.
+   * @param {string} apiKey - The validated API key.
+   */
   onSave: (apiKey: string) => void;
+  /**
+   * A callback function to be invoked when the user chooses to clear the existing API key.
+   */
   onClear: () => void;
+  /**
+   * A boolean indicating if an API key is already stored in the application.
+   */
   hasExistingKey: boolean;
 }
 
+/**
+ * A modal component that allows users to enter, validate, and save their
+ * Google Gemini API key. It provides instructions, input validation,
+ * and secure local storage of the key.
+ *
+ * @param {ApiKeyModalProps} props - The properties for the component.
+ * @returns {JSX.Element | null} The rendered modal or null if it is not open.
+ */
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   isOpen,
   onClose,
@@ -20,7 +47,6 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [showApiKey, setShowApiKey] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -32,6 +58,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     }
   }, [isOpen, hasExistingKey]);
 
+  /**
+   * Handles changes to the API key input field.
+   * @param {React.ChangeEvent<HTMLInputElement>} e - The input change event.
+   */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isEditing) {
       setIsEditing(true);
@@ -39,11 +69,20 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setApiKey(e.target.value);
   };
 
+  /**
+   * Performs basic validation on the format of a Gemini API key.
+   * @param {string} key - The API key to validate.
+   * @returns {boolean} True if the key format is potentially valid.
+   */
   const validateApiKey = (key: string): boolean => {
     // Basic validation for Gemini API key format
     return key.startsWith('AIza') && key.length >= 35;
   };
 
+  /**
+   * Handles the save action. It trims the key, performs local and remote validation,
+   * and calls the onSave callback if successful.
+   */
   const handleSave = async () => {
     const trimmedKey = apiKey.trim();
 
@@ -82,6 +121,9 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     }
   };
 
+  /**
+   * Handles the clear action, calling the onClear callback and closing the modal.
+   */
   const handleClear = () => {
     onClear();
     setApiKey('');

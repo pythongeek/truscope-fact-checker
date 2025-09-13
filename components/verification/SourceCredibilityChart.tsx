@@ -4,11 +4,31 @@
 import React, { useMemo } from 'react';
 import type { SourceAnalysis } from '../../types/verification';
 
+/**
+ * Defines the properties for the SourceCredibilityChart component.
+ */
 interface SourceCredibilityChartProps {
+  /**
+   * An array of source analysis objects, each containing credibility distribution data.
+   */
   sources: SourceAnalysis[];
 }
 
+/**
+ * A component that visualizes the aggregate credibility of a set of sources.
+ * It displays a stacked bar chart showing the distribution of high, medium,
+ * and low credibility sources, along with a corresponding legend.
+ *
+ * @param {SourceCredibilityChartProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered credibility chart.
+ */
 const SourceCredibilityChart: React.FC<SourceCredibilityChartProps> = ({ sources }) => {
+  /**
+   * A memoized calculation that aggregates credibility data from all sources.
+   * It computes the percentage of high, medium, and low credibility sources.
+   * @returns {{high_percentage: number, medium_percentage: number, low_percentage: number} | null}
+   * An object with the credibility percentages, or null if no source data is available.
+   */
   const aggregateCredibility = useMemo(() => {
     if (!sources || !sources.length) return null;
 

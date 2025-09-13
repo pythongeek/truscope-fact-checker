@@ -13,6 +13,10 @@ let lastResetDate = new Date().toDateString();
 const DAILY_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT || '100', 10);
 const SHARED_API_KEY = process.env.GEMINI_API_KEY;
 
+/**
+ * Retrieves the user's API key from local storage.
+ * @returns {string | null} The user's API key, or null if not found.
+ */
 const getUserApiKey = (): string | null => {
   try {
     return localStorage.getItem('gemini_api_key');
@@ -21,6 +25,11 @@ const getUserApiKey = (): string | null => {
   }
 };
 
+/**
+ * Determines the appropriate API key to use.
+ * @returns {string} The API key for the request.
+ * @throws {Error} If no API key is available.
+ */
 const getApiKey = (): string => {
   const userApiKey = getUserApiKey();
   if (userApiKey) {
@@ -34,14 +43,21 @@ const getApiKey = (): string => {
   return SHARED_API_KEY;
 };
 
+/**
+ * Checks if the service is using the shared API key.
+ * @returns {boolean} True if using the shared key.
+ */
 const isUsingSharedKey = (): boolean => {
   return !getUserApiKey();
 };
 
+/**
+ * Checks and resets the daily usage limit for the shared API key.
+ * @returns {boolean} True if the limit has not been reached.
+ */
 const checkDailyLimit = (): boolean => {
-  // Only check limits for shared API key usage
   if (!isUsingSharedKey()) {
-    return true; // No limits for user's own API key
+    return true;
   }
 
   const today = new Date().toDateString();
@@ -54,8 +70,13 @@ const checkDailyLimit = (): boolean => {
   return dailyUsage < DAILY_LIMIT;
 };
 
+/**
+ * Generates a consistent cache key from the input text and a hash of the API key.
+ * @param {string} text - The input text.
+ * @param {string} apiKeyHash - A hash of the API key being used.
+ * @returns {string} A string to use as a cache key.
+ */
 const generateCacheKey = (text: string, apiKeyHash: string): string => {
-  // Create a simple hash of the input text and API key
   let hash = 0;
   const combined = text + apiKeyHash;
   for (let i = 0; i < combined.length; i++) {
@@ -66,8 +87,12 @@ const generateCacheKey = (text: string, apiKeyHash: string): string => {
   return hash.toString();
 };
 
+/**
+ * Creates a simple hash of an API key for use in cache key generation.
+ * @param {string} apiKey - The API key to hash.
+ * @returns {string} A string representation of the hash.
+ */
 const hashApiKey = (apiKey: string): string => {
-  // Create a simple hash of the API key for cache key generation
   let hash = 0;
   for (let i = 0; i < Math.min(apiKey.length, 20); i++) {
     const char = apiKey.charCodeAt(i);
@@ -77,6 +102,9 @@ const hashApiKey = (apiKey: string): string => {
   return hash.toString();
 };
 
+/**
+ * Removes expired entries from the granularity analysis cache.
+ */
 const cleanCache = (): void => {
   const now = Date.now();
   for (const [key, value] of analysisCache.entries()) {
@@ -86,6 +114,14 @@ const cleanCache = (): void => {
   }
 };
 
+/**
+ * Breaks down a complex factual claim into its simplest, atomic statements
+ * and performs Named Entity Recognition (NER) on each.
+ *
+ * @param {string} text - The factual claim to granulate.
+ * @returns {Promise<GranularityAnalysisResult>} A promise that resolves to the structured result of the granularity analysis.
+ * @throws {Error} If the input text is invalid, the API call fails, or the response is malformed.
+ */
 export const granulateStatements = async (text: string): Promise<GranularityAnalysisResult> => {
   let apiKey: string;
 
@@ -97,27 +133,22 @@ export const granulateStatements = async (text: string): Promise<GranularityAnal
 
   const usingSharedKey = isUsingSharedKey();
 
-  // Check daily limit only for shared API key
   if (usingSharedKey && !checkDailyLimit()) {
     throw new Error('Daily API usage limit reached. Please add your own API key for unlimited usage or try again tomorrow.');
   }
 
-  // Clean old cache entries
   cleanCache();
 
-  // Check cache first
   if (ENABLE_CACHING) {
     const apiKeyHash = hashApiKey(apiKey);
     const cacheKey = generateCacheKey(text, apiKeyHash);
     const cachedResult = analysisCache.get(cacheKey);
 
     if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_TTL) {
-      console.log('Returning cached result');
       return cachedResult.result;
     }
   }
 
-  // Input validation
   if (!text.trim()) {
     throw new Error('Please provide text to analyze.');
   }
@@ -132,7 +163,7 @@ export const granulateStatements = async (text: string): Promise<GranularityAnal
 
 Provide the output as a single, valid JSON object. Do not include any text, markdown formatting like \`\`\`json, or any explanations outside of this JSON object. The JSON object must contain an array named "atomicStatements". Each item in the array should represent an atomic statement and contain the following keys:
 -   "statement": a string representing the atomic statement.
--   "entities": an array of objects, where each object represents an identified entity and has "text" and "type" keys.
+-   "entities": an array of objects, where each object represents an identified entity and has "text" and "type"keys.
 
 Example:
 Claim: "The CEO of ACME Inc., John Doe, announced on Tuesday that the new factory in Springfield, which was part of the 'Sunrise Project' event, will open next month."
@@ -181,7 +212,6 @@ ${text}
 ---`;
 
   try {
-    // Increment usage counter only for shared API key
     if (usingSharedKey) {
       dailyUsage++;
     }
@@ -224,7 +254,6 @@ ${text}
       throw new Error('The AI returned a response in an unexpected format. Please try again or rephrase your text.');
     }
 
-    // Validate the structure
     if (
       !Array.isArray(parsedResult.atomicStatements) ||
       !parsedResult.atomicStatements.every((s: any) =>
@@ -238,7 +267,6 @@ ${text}
 
     const finalResult = parsedResult as GranularityAnalysisResult;
 
-    // Cache the result
     if (ENABLE_CACHING) {
       const apiKeyHash = hashApiKey(apiKey);
       const cacheKey = generateCacheKey(text, apiKeyHash);
@@ -253,7 +281,6 @@ ${text}
   } catch (error) {
     console.error("Error calling Gemini API:", error);
 
-    // Handle specific error types
     if (error instanceof Error) {
       if (error.message.includes('API key not valid') || error.message.includes('API_KEY_INVALID')) {
         throw new Error('Invalid API key. Please check your API key and try again.');

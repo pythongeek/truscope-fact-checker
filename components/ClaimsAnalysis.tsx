@@ -3,11 +3,26 @@ import type { Claim } from '../types';
 import { ClaimStatus } from '../types';
 import { CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ChevronDownIcon } from './icons';
 
+/**
+ * Defines the properties for the ClaimsAnalysis component.
+ */
 interface ClaimsAnalysisProps {
+  /**
+   * An array of claim objects to be analyzed and displayed.
+   */
   claims: Claim[];
+  /**
+   * If true, the component will render a loading skeleton.
+   * @default false
+   */
   isLoading?: boolean;
 }
 
+/**
+* A skeleton loader for the ClaimsAnalysis component.
+* Displays a pulsing placeholder to indicate that the claims are being loaded.
+* @returns {JSX.Element} The rendered skeleton component.
+*/
 const ClaimsAnalysisSkeleton: React.FC = () => (
   <div className="space-y-4">
     {[...Array(3)].map((_, index) => (
@@ -26,7 +41,12 @@ const ClaimsAnalysisSkeleton: React.FC = () => (
   </div>
 );
 
-
+/**
+ * Returns the visual elements (icon, color, text style) for a given claim status.
+ *
+ * @param {ClaimStatus} status - The verification status of the claim.
+ * @returns {{icon: JSX.Element, color: string, text: string}} An object containing the icon component and Tailwind CSS classes.
+ */
 const getStatusVisuals = (status: ClaimStatus) => {
   switch (status) {
     case ClaimStatus.VERIFIED:
@@ -56,9 +76,21 @@ const getStatusVisuals = (status: ClaimStatus) => {
   }
 };
 
+/**
+ * A component that displays a detailed analysis of a list of claims.
+ * Each claim is presented with its verification status, and a collapsible
+ * section provides a more detailed explanation.
+ *
+ * @param {ClaimsAnalysisProps} props - The properties for the component.
+ * @returns {JSX.Element} The rendered list of claim analyses or a skeleton loader.
+ */
 const ClaimsAnalysis: React.FC<ClaimsAnalysisProps> = ({ claims, isLoading = false }) => {
   const [expandedClaims, setExpandedClaims] = useState<Record<number, boolean>>({});
 
+  /**
+   * Toggles the expanded/collapsed state of a claim's explanation section.
+   * @param {number} index - The index of the claim to toggle.
+   */
   const handleToggle = (index: number) => {
     setExpandedClaims(prev => ({ ...prev, [index]: !prev[index] }));
   };

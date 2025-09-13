@@ -12,58 +12,74 @@ import ClaimDelineation from './components/ClaimDelineation';
 import VerificationDashboard from './components/verification/VerificationDashboard';
 import type { VerificationResult } from './types/verification';
 
-const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
-const MAX_REQUESTS_PER_WINDOW = parseInt(process.env.MAX_REQUESTS_PER_WINDOW || '3', 10);
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 5; // 5 requests per minute
 
+/**
+ * The main application component. It orchestrates the entire user interface,
+ * manages application state, and handles interactions between various sub-components.
+ *
+ * @returns {JSX.Element} The rendered App component.
+ */
 const App: React.FC = () => {
+  // State for the main analysis result
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  // State for the extracted claims result
   const [claimAnalysisResult, setClaimAnalysisResult] = useState<Claim[] | null>(null);
+  // Loading state for the main analysis
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Loading state for claim extraction
   const [isExtractingClaims, setIsExtractingClaims] = useState<boolean>(false);
+  // General error message state
   const [error, setError] = useState<string | null>(null);
+  // The user's input text
   const [inputText, setInputText] = useState<string>('');
+  // Timestamps of recent requests for rate limiting
   const [requestTimes, setRequestTimes] = useState<number[]>([]);
   const lastRequestRef = useRef<number>(0);
+  // Daily usage count for the shared API key
   const [dailyUsage, setDailyUsage] = useState<number>(0);
+  // Visibility state for the API key modal
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  // State to track if the user has set their own API key
   const [hasUserApiKey, setHasUserApiKey] = useState<boolean>(false);
+  // Visibility state for the verification dashboard
   const [showVerificationDashboard, setShowVerificationDashboard] = useState<boolean>(false);
+  // State to hold the results of the verification process
   const [verificationResults, setVerificationResults] = useState<VerificationResult[]>([]);
 
   useEffect(() => {
     setDailyUsage(getDailyUsage());
-    // Check if user has set their own API key
     const userApiKey = localStorage.getItem('gemini_api_key');
     setHasUserApiKey(!!userApiKey);
   }, []);
 
+  /**
+   * A callback function that checks if the user has exceeded the request rate limit.
+   * It prevents spamming the API by enforcing a maximum number of requests per minute.
+   *
+   * @returns {boolean} True if the request is allowed, false otherwise.
+   */
   const checkRateLimit = useCallback((): boolean => {
     const now = Date.now();
-
-    // Check if minimum time between requests has passed (e.g., 10 seconds)
-    if (now - lastRequestRef.current < 10000) {
+    if (now - lastRequestRef.current < 10000) { // 10-second cool-down
       setError('Please wait at least 10 seconds between requests.');
       return false;
     }
-
-    // Filter recent requests within the time window
-    const recentRequests = requestTimes.filter(
-      time => now - time < RATE_LIMIT_WINDOW
-    );
-
+    const recentRequests = requestTimes.filter(time => now - time < RATE_LIMIT_WINDOW);
     if (recentRequests.length >= MAX_REQUESTS_PER_WINDOW) {
       setError(`Rate limit exceeded. You can make ${MAX_REQUESTS_PER_WINDOW} requests per minute.`);
       return false;
     }
-
     return true;
   }, [requestTimes]);
 
+  /**
+   * A callback function to handle the main "Analyze" action.
+   * It performs rate limiting and input validation before calling the analysis service.
+   */
   const handleAnalyze = useCallback(async () => {
-    if (!checkRateLimit()) {
-      return;
-    }
-
+    if (!checkRateLimit()) return;
     if (!inputText.trim()) {
       setError('Please enter some text to analyze.');
       return;
@@ -79,7 +95,7 @@ const App: React.FC = () => {
     try {
       const result = await analyzeContent(inputText);
       setAnalysisResult(result);
-      setDailyUsage(getDailyUsage()); // Update usage after successful analysis
+      setDailyUsage(getDailyUsage());
     } catch (err) {
       if (err instanceof Error && err.message.includes('API key')) {
         setShowApiKeyModal(true);
@@ -91,11 +107,12 @@ const App: React.FC = () => {
     }
   }, [inputText, checkRateLimit]);
 
+  /**
+   * A callback function to handle the "Extract Claims" action.
+   * It performs rate limiting and input validation before calling the claim extraction service.
+   */
   const handleExtractClaims = useCallback(async () => {
-    if (!checkRateLimit()) {
-      return;
-    }
-
+    if (!checkRateLimit()) return;
     if (!inputText.trim()) {
       setError('Please enter some text to analyze.');
       return;
@@ -122,6 +139,10 @@ const App: React.FC = () => {
     }
   }, [inputText, checkRateLimit]);
 
+  /**
+   * A callback function that saves a new API key to local storage and updates the app state.
+   * @param {string} apiKey - The API key to save.
+   */
   const handleApiKeySaved = (apiKey: string) => {
     localStorage.setItem('gemini_api_key', apiKey);
     setHasUserApiKey(true);
@@ -129,6 +150,9 @@ const App: React.FC = () => {
     setError(null);
   };
 
+  /**
+   * A callback function that removes the user's API key from local storage.
+   */
   const handleClearApiKey = () => {
     localStorage.removeItem('gemini_api_key');
     setHasUserApiKey(false);

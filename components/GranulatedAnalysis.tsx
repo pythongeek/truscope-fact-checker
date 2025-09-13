@@ -9,17 +9,32 @@ import PreCheckResult from './PreCheckResult';
 import SourceVerification from './SourceVerification';
 import type { SearchResult } from '../types/verification';
 
+/**
+ * Defines the properties for the GranulatedAnalysis component.
+ */
 interface GranulatedAnalysisProps {
+  /**
+   * An array of atomic statements to be analyzed, or null.
+   */
   atomicStatements: AtomicStatement[] | null;
+  /**
+   * A boolean indicating if the parent granulation process is in progress.
+   */
   isLoading: boolean;
 }
 
+/**
+ * Defines the state for the pre-check analysis of a single atomic statement.
+ */
 interface PreCheckState {
   isLoading: boolean;
   error: string | null;
   result: FactCheckResult | null;
 }
 
+/**
+ * Defines the state for the deep verification of a single atomic statement.
+ */
 interface VerificationState {
   isLoading: boolean;
   error: string | null;
@@ -28,6 +43,11 @@ interface VerificationState {
   status: string;
 }
 
+/**
+ * Returns a Tailwind CSS class string for styling a named entity tag based on its type.
+ * @param {string} type - The type of the named entity (e.g., 'PERSON', 'ORGANIZATION').
+ * @returns {string} A string of CSS classes for styling.
+ */
 const getEntityTypeColor = (type: string) => {
   switch (type) {
     case 'PERSON':
@@ -45,10 +65,23 @@ const getEntityTypeColor = (type: string) => {
   }
 };
 
+/**
+ * A component that displays a detailed analysis of granulated, atomic statements.
+ * For each statement, it shows extracted named entities and provides buttons to
+ * perform a "Pre-Check" for existing fact-checks and a full "Verification" against sources.
+ *
+ * @param {GranulatedAnalysisProps} props - The properties for the component.
+ * @returns {JSX.Element | null} The rendered analysis of atomic statements.
+ */
 const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatements, isLoading }) => {
   const [preCheckData, setPreCheckData] = useState<Record<number, PreCheckState>>({});
   const [verificationData, setVerificationData] = useState<Record<number, VerificationState>>({});
 
+  /**
+   * Handles the click event to initiate a pre-check for an atomic statement.
+   * @param {string} claim - The statement to check.
+   * @param {number} index - The index of the statement in the list.
+   */
   const handlePreCheckClick = async (claim: string, index: number) => {
     setPreCheckData(prev => ({
       ...prev,
@@ -69,6 +102,11 @@ const GranulatedAnalysis: React.FC<GranulatedAnalysisProps> = ({ atomicStatement
     }
   };
 
+  /**
+   * Handles the click event to initiate a full verification for an atomic statement.
+   * @param {string} claim - The statement to verify.
+   * @param {number} index - The index of the statement in the list.
+   */
   const handleVerifyClick = async (claim: string, index: number) => {
     const apiKey = localStorage.getItem('gemini_api_key') || import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {

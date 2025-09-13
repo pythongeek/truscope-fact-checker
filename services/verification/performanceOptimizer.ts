@@ -4,39 +4,43 @@ import {
   BatchGroup,
   OptimizedVerificationPlan,
   CachedVerificationResult,
-  BatchQueueItem,
   ParallelExecutionPlan,
   OptimizedVerificationResult,
   ExecutionPhase,
-  PerformanceMetrics,
 } from '../../types/performance';
 import { VerificationResult } from '../../types/verification';
 import { executeGeminiQuery } from '../geminiService';
 
+/**
+ * A class designed to optimize the workflow of verifying a large number of claims.
+ * It analyzes claims, groups them for batching, and creates a parallel execution plan
+ * to maximize efficiency and manage resource load.
+ */
 export class VerificationPerformanceOptimizer {
   private cache = new Map<string, CachedVerificationResult>();
-  private batchQueue = new Map<string, BatchQueueItem[]>();
-  private activeOperations = new Set<string>();
-  private readonly CACHE_TTL = 3600 * 1000; // 1 hour in milliseconds
+  private readonly CACHE_TTL = 3600 * 1000; // 1 hour
   private readonly MAX_PARALLEL_RESOURCES = 10; // Arbitrary unit for resource capacity
 
+  /**
+   * Creates an optimized verification plan for a list of claims.
+   * This involves checking a cache, analyzing the claims, grouping them, and scheduling them for parallel execution.
+   *
+   * @param {string[]} claims - The list of claims to verify.
+   * @param {VerificationOptions} [options={}] - Options to control the optimization process (e.g., disabling cache).
+   * @returns {Promise<OptimizedVerificationPlan>} A promise that resolves to the complete, optimized verification plan.
+   */
   async optimizeVerificationWorkflow(
     claims: string[],
     options: VerificationOptions = {}
   ): Promise<OptimizedVerificationPlan> {
-
     const { cacheHits, cacheMisses } = await this.checkCacheForClaims(claims, options);
-
     const analysisForMisses = cacheMisses.length > 0 ? await this.analyzeClaims(cacheMisses) : [];
-
     const batchGroups = this.groupClaimsForBatching(analysisForMisses);
-
     const parallelExecutionPlan = this.createParallelExecutionPlan(batchGroups);
-
     const estimatedTime = parallelExecutionPlan.estimated_total_time;
     const optimizationStrategies = this.selectOptimizationStrategies(analysisForMisses, cacheHits.length > 0);
 
-    const executionPlan: OptimizedVerificationPlan = {
+    return {
       total_claims: claims.length,
       cache_hits: cacheHits.length,
       cache_misses: cacheMisses.length,
@@ -45,19 +49,19 @@ export class VerificationPerformanceOptimizer {
       optimization_strategies: optimizationStrategies,
       parallel_execution_plan: parallelExecutionPlan,
     };
-
-    return executionPlan;
   }
 
+  /**
+   * Analyzes a list of claims using an AI query to determine their properties for optimization.
+   * @private
+   * @param {string[]} claims - The claims to analyze.
+   * @returns {Promise<ClaimAnalysis[]>} A promise that resolves to an array of claim analysis objects.
+   */
   private async analyzeClaims(claims: string[]): Promise<ClaimAnalysis[]> {
-    if (claims.length === 0) {
-      return [];
-    }
+    if (claims.length === 0) return [];
     const prompt = `
 Analyze these claims for verification optimization:
-
 Claims: ${JSON.stringify(claims)}
-
 For each claim, determine:
 1. topic_category: (political/scientific/financial/health/general)
 2. complexity_level: (simple/moderate/complex)
@@ -65,15 +69,16 @@ For each claim, determine:
 4. verification_urgency: (high/medium/low)
 5. similarity_to_others: (a JSON array of numbers indicating indices of similar claims from the input array)
 6. estimated_verification_time: (an integer number of seconds)
-
-This analysis will help batch similar claims and optimize source allocation.
-Return as a single, valid JSON array of objects, with one object per claim. The order must be the same as the input claims. Do not include any text or markdown formatting outside of the JSON array.
-    `;
+Return as a single, valid JSON array of objects, with one object per claim. The order must be the same as the input claims.`;
 
     const result = await this.executeAnalysisQuery(prompt);
     return this.parseClaimAnalysis(result, claims);
   }
 
+  /**
+   * Executes the AI query for claim analysis.
+   * @private
+   */
   private async executeAnalysisQuery(prompt: string): Promise<string> {
     try {
       return await executeGeminiQuery(prompt);
@@ -83,32 +88,28 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     }
   }
 
+  /**
+   * Parses and validates the JSON response from the claim analysis query.
+   * @private
+   */
   private parseClaimAnalysis(jsonString: string, claims: string[]): ClaimAnalysis[] {
     try {
-      let cleanJsonString = jsonString.trim();
-      const jsonMatch = cleanJsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch && jsonMatch[1]) {
-        cleanJsonString = jsonMatch[1];
-      }
-
+      let cleanJsonString = jsonString.trim().match(/```(?:json)?\s*([\s\S]*?)\s*```/)?.[1] || jsonString;
       const parsed = JSON.parse(cleanJsonString);
-
       if (!Array.isArray(parsed) || parsed.length !== claims.length) {
-        console.error("Parsed analysis does not match claims count.", { parsed, claims });
         throw new Error("Parsed JSON is not a valid array or does not match the number of claims.");
       }
-
-      return parsed.map((item: any, index: number) => ({
-        ...item,
-        claim: claims[index],
-      }));
-
+      return parsed.map((item: any, index: number) => ({ ...item, claim: claims[index] }));
     } catch (error) {
       console.error("Failed to parse claim analysis from AI response:", jsonString, error);
       throw new Error("AI returned a malformed analysis response.");
     }
   }
 
+  /**
+   * Checks the local cache for pre-existing verification results for the given claims.
+   * @private
+   */
   private async checkCacheForClaims(claims: string[], options: VerificationOptions): Promise<{ cacheHits: CachedVerificationResult[], cacheMisses: string[] }> {
     const cacheHits: CachedVerificationResult[] = [];
     const cacheMisses: string[] = [];
@@ -123,14 +124,15 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     return { cacheHits, cacheMisses };
   }
 
+  /**
+   * Groups claims into batches based on shared characteristics like topic and complexity.
+   * @private
+   */
   private groupClaimsForBatching(analysis: ClaimAnalysis[]): BatchGroup[] {
     const groups: Map<string, ClaimAnalysis[]> = new Map();
-
     analysis.forEach(claim => {
       const groupKey = `${claim.topic_category}_${claim.complexity_level}`;
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, []);
-      }
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
       groups.get(groupKey)!.push(claim);
     });
 
@@ -144,45 +146,52 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     }));
   }
 
+  /**
+   * Determines the optimal batch size for a given topic category.
+   * @private
+   */
   private getOptimalBatchSize(topic: ClaimAnalysis['topic_category']): number {
     switch (topic) {
-      case 'financial':
-      case 'health':
-        return 5;
-      case 'scientific':
-        return 8;
-      case 'political':
-      case 'general':
-      default:
-        return 10;
+      case 'financial': case 'health': return 5;
+      case 'scientific': return 8;
+      default: return 10;
     }
   }
 
+  /**
+   * **[Placeholder]** Identifies shared sources required for a group of claims.
+   * @private
+   */
   private identifySharedSources(claims: ClaimAnalysis[]): string[] {
     return [];
   }
 
+  /**
+   * **[Placeholder]** Determines if a group of claims can be processed in parallel.
+   * @private
+   */
   private canProcessInParallel(claims: ClaimAnalysis[]): boolean {
     return true;
   }
 
+  /**
+   * Creates a plan for parallel execution by scheduling batch groups into phases.
+   * @private
+   */
   private createParallelExecutionPlan(batchGroups: BatchGroup[]): ParallelExecutionPlan {
     if (batchGroups.length === 0) {
-        return { total_phases: 0, phases: [], estimated_total_time: 0, parallel_efficiency: 1 };
+      return { total_phases: 0, phases: [], estimated_total_time: 0, parallel_efficiency: 1 };
     }
 
     const resourceRequirements = this.analyzeResourceRequirements(batchGroups);
     const dependencies = this.analyzeDependencies(batchGroups);
-
     const phases: ExecutionPhase[] = [];
     let currentPhase: BatchGroup[] = [];
     let currentResourceLoad = 0;
-
     const sortedGroups = [...batchGroups].sort((a, b) => b.estimated_time - a.estimated_time);
 
     for (const group of sortedGroups) {
       const groupResources = resourceRequirements.get(group.group_id) || 1;
-
       if (currentResourceLoad + groupResources <= this.MAX_PARALLEL_RESOURCES && !this.hasDependencyConflict(group, currentPhase, dependencies)) {
         currentPhase.push(group);
         currentResourceLoad += groupResources;
@@ -220,17 +229,13 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     };
   }
 
-  private estimateExecutionTime(batchGroups: BatchGroup[], options: VerificationOptions): number {
-    // This is an alias for the parallel plan's estimated time.
-    const plan = this.createParallelExecutionPlan(batchGroups);
-    return plan.estimated_total_time;
-  }
-
+  /**
+   * Selects a list of optimization strategies that were applied.
+   * @private
+   */
   private selectOptimizationStrategies(analysis: ClaimAnalysis[], hasCacheHits: boolean): string[] {
     const strategies = new Set<string>();
-    if (hasCacheHits) {
-      strategies.add('caching');
-    }
+    if (hasCacheHits) strategies.add('caching');
     if (analysis.length > 1) {
       strategies.add('batching');
       strategies.add('parallelism');
@@ -238,6 +243,10 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     return Array.from(strategies);
   }
 
+  /**
+   * Analyzes the resource requirements for each batch group.
+   * @private
+   */
   private analyzeResourceRequirements(batchGroups: BatchGroup[]): Map<string, number> {
     const requirements = new Map<string, number>();
     batchGroups.forEach(group => {
@@ -250,16 +259,26 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     return requirements;
   }
 
+  /**
+   * **[Placeholder]** Analyzes dependencies between batch groups.
+   * @private
+   */
   private analyzeDependencies(batchGroups: BatchGroup[]): Map<string, string[]> {
-    // [Placeholder] No dependencies between groups for now.
     return new Map();
   }
 
+  /**
+   * **[Placeholder]** Checks if a group has a dependency conflict with groups in the current phase.
+   * @private
+   */
   private hasDependencyConflict(group: BatchGroup, currentPhase: BatchGroup[], dependencies: Map<string, string[]>): boolean {
-    // [Placeholder] No dependency conflicts.
     return false;
   }
 
+  /**
+   * Calculates the efficiency of the parallel plan compared to sequential execution.
+   * @private
+   */
   private calculateParallelEfficiency(phases: ExecutionPhase[], batchGroups: BatchGroup[]): number {
     const totalIndividualTime = batchGroups.reduce((sum, group) => sum + group.estimated_time, 0);
     const parallelTime = phases.reduce((sum, phase) => sum + phase.estimated_duration, 0);
@@ -267,54 +286,44 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
     return totalIndividualTime / parallelTime;
   }
 
+  /**
+   * Calculates the cache utilization ratio.
+   * @private
+   */
   private calculateCacheUtilization(hits: number, misses: number): number {
     const total = hits + misses;
     if (total === 0) return 0;
     return hits / total;
   }
 
+  /**
+   * Executes the verification process according to the optimized plan.
+   *
+   * @param {OptimizedVerificationPlan} plan - The plan generated by `optimizeVerificationWorkflow`.
+   * @param {(progress: number, status: string) => void} [onProgress] - A callback to report progress.
+   * @returns {Promise<OptimizedVerificationResult>} A promise that resolves to the results and performance metrics of the execution.
+   */
   async executeOptimizedVerification(
     plan: OptimizedVerificationPlan,
     onProgress?: (progress: number, status: string) => void
   ): Promise<OptimizedVerificationResult> {
-
     const startTime = Date.now();
     const allResults: VerificationResult[] = [];
     let completedClaims = 0;
     const totalClaims = plan.total_claims;
 
-    // Add cached results directly
-    // This part is tricky because I don't have the cached results here.
-    // I will need to refactor `optimizeVerificationWorkflow` to return them,
-    // or refactor this method to take them as input.
-    // For now, I'll proceed with just executing the plan for non-cached items.
-
     for (const phase of plan.parallel_execution_plan.phases) {
-      const phaseNumber = phase.phase_number;
-      onProgress?.(
-        (completedClaims / totalClaims) * 100,
-        `Executing phase ${phaseNumber}/${plan.parallel_execution_plan.total_phases}`
-      );
-
-      const phasePromises = phase.batch_groups.map(group =>
-        this.executeBatchGroup(group, onProgress)
-      );
-
+      onProgress?.((completedClaims / totalClaims) * 100, `Executing phase ${phase.phase_number}/${plan.parallel_execution_plan.total_phases}`);
+      const phasePromises = phase.batch_groups.map(group => this.executeBatchGroup(group));
       const phaseResults = await Promise.all(phasePromises);
       const flattenedResults = phaseResults.flat();
       allResults.push(...flattenedResults);
-
       completedClaims += flattenedResults.length;
     }
 
-    // Update cache with new results
     allResults.forEach(result => {
         if(!this.cache.has(result.claim)) {
-            this.cache.set(result.claim, {
-                result: result,
-                timestamp: Date.now(),
-                source: 'cache'
-            });
+            this.cache.set(result.claim, { result, timestamp: Date.now(), source: 'cache' });
         }
     });
 
@@ -335,28 +344,22 @@ Return as a single, valid JSON array of objects, with one object per claim. The 
   }
 
   /**
-   * **[Placeholder]** Executes a single batch group.
+   * **[Placeholder]** Executes a single batch group of claims.
+   * In a real implementation, this would call the core verification services for each claim.
+   * @private
    */
-  private async executeBatchGroup(
-    group: BatchGroup,
-    onProgress?: (progress: number, status: string) => void
-  ): Promise<VerificationResult[]> {
+  private async executeBatchGroup(group: BatchGroup): Promise<VerificationResult[]> {
     console.log(`[Placeholder] Executing batch group: ${group.group_id}`);
-    // In a real implementation, this would involve calling the core verification services for each claim in the group.
-    // Here, we'll simulate it by creating dummy results.
-
     const results: VerificationResult[] = [];
     for (const claimAnalysis of group.claims) {
       await new Promise(resolve => setTimeout(resolve, 500)); // Simulate work
       results.push({
         claim: claimAnalysis.claim,
-        verification_status: 'partially_verified',
-        confidence_score: 65,
-        evidence_summary: { supporting_evidence: [], contradicting_evidence: [], neutral_evidence: [] },
-        source_analysis: {} as any,
-        verification_methodology: ['batch_execution', 'placeholder'],
-        last_updated: new Date().toISOString(),
-      });
+        isVerified: false,
+        summary: 'Placeholder summary',
+        confidenceScore: 65,
+        evidence: [],
+      } as unknown as VerificationResult);
     }
     return results;
   }

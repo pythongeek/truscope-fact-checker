@@ -1,6 +1,6 @@
-// AI CODING INSTRUCTION: Define comprehensive types for the verification system
-// These interfaces should support all verification workflows and data structures
-
+/**
+ * Defines a strategic approach for searching for evidence related to a claim.
+ */
 export interface SearchStrategy {
   search_type: 'primary' | 'academic' | 'news' | 'expert' | 'historical' | 'counter' | 'recent';
   queries: string[];
@@ -9,12 +9,18 @@ export interface SearchStrategy {
   priority: number;
 }
 
+/**
+ * Represents the type of an information source.
+ */
 export interface SourceType {
   category: 'government' | 'academic' | 'news' | 'factcheck' | 'expert' | 'industry';
   subcategory?: string;
   credibility_baseline: number;
 }
 
+/**
+ * Represents a single piece of source material to be analyzed.
+ */
 export interface SourceItem {
   name: string;
   type: SourceType;
@@ -30,6 +36,9 @@ export interface SourceItem {
   };
 }
 
+/**
+ * Represents a detailed credibility score for a source, broken down by criteria.
+ */
 export interface CredibilityScore {
   overall_score: number;
   component_scores: {
@@ -46,6 +55,9 @@ export interface CredibilityScore {
   confidence_interval: [number, number];
 }
 
+/**
+ * Represents a piece of evidence extracted from a source, linked to a claim.
+ */
 export interface EvidenceItem {
   claim_support: 'strong_support' | 'weak_support' | 'neutral' | 'weak_contradiction' | 'strong_contradiction';
   evidence_text: string;
@@ -54,6 +66,9 @@ export interface EvidenceItem {
   extraction_confidence: number;
 }
 
+/**
+ * Represents the complete result of a verification process for a single claim.
+ */
 export interface VerificationResult {
   claim: string;
   verification_status: 'verified' | 'partially_verified' | 'disputed' | 'unverifiable';
@@ -68,6 +83,9 @@ export interface VerificationResult {
   last_updated: string;
 }
 
+/**
+ * Represents a high-level analysis of all sources used for a verification.
+ */
 export interface SourceAnalysis {
   total_sources: number;
   source_distribution: {
@@ -78,16 +96,25 @@ export interface SourceAnalysis {
     medium: number;  // 60-79
     low: number;     // 0-59
   };
-  consensus_level: number; // 0-100, how much sources agree
-  contradiction_level: number; // 0-100, how much sources disagree
+  consensus_level: number;
+  contradiction_level: number;
 }
 
+/**
+ * Represents the primary subject matter domain of a claim.
+ */
 export type ClaimDomain = 'political' | 'scientific' | 'financial' | 'health' | 'general';
 
+/**
+ * Defines a set of weights for different source categories within a specific claim domain.
+ */
 export type DomainWeights = {
   [key in SourceType['category']]?: number;
 };
 
+/**
+ * Represents contextual information about a claim that can guide the verification process.
+ */
 export interface ClaimContext {
   user_profile?: 'novice' | 'expert';
   verification_goal?: 'quick_check' | 'deep_dive';
@@ -95,6 +122,9 @@ export interface ClaimContext {
   language?: string;
 }
 
+/**
+ * Represents the output of the source prioritization process.
+ */
 export interface PrioritizedSourceList {
   prioritized_sources: {
     source: SourceItem;
@@ -109,8 +139,14 @@ export interface PrioritizedSourceList {
   prioritization_reasoning: string;
 }
 
+/**
+ * Represents the different types of search engines that can be simulated.
+ */
 export type SearchEngine = 'google' | 'bing' | 'scholarly' | 'news' | 'government';
 
+/**
+ * Represents a simulated search result from Google.
+ */
 export interface GoogleSearchResult {
   title: string;
   url: string;
@@ -121,6 +157,9 @@ export interface GoogleSearchResult {
   authority_score: number;
 }
 
+/**
+ * Represents a simulated search result from a scholarly search engine.
+ */
 export interface ScholarlySearchResult {
   title: string;
   authors: string[];
@@ -133,6 +172,9 @@ export interface ScholarlySearchResult {
   peer_reviewed: boolean;
 }
 
+/**
+ * Represents a simulated search result from a news search engine.
+ */
 export interface NewsSearchResult {
   title: string;
   source: string;
@@ -144,8 +186,14 @@ export interface NewsSearchResult {
   credibility_score: number;
 }
 
+/**
+ * A union type for any possible simulated search result.
+ */
 export type SimulatedSearchResult = GoogleSearchResult | ScholarlySearchResult | NewsSearchResult;
 
+/**
+ * Represents the complete results from a single simulated engine search.
+ */
 export interface EngineSearchResult {
   engine: SearchEngine;
   query: string;
@@ -155,6 +203,9 @@ export interface EngineSearchResult {
   unique_domains: string[];
 }
 
+/**
+ * Represents metrics about the consensus between multiple search engine results.
+ */
 export interface ConsensusMetrics {
   domain_consensus: number;
   content_consensus: number;
@@ -162,6 +213,9 @@ export interface ConsensusMetrics {
   overall_consensus: number;
 }
 
+/**
+ * Represents the aggregated results from a multi-engine simulated search.
+ */
 export interface MultiEngineSearchResult {
   query: string;
   engines_searched: SearchEngine[];
@@ -170,12 +224,18 @@ export interface MultiEngineSearchResult {
   diversity_metrics: any;
 }
 
+/**
+ * Represents a single step in the verification progress indicator.
+ */
 export interface VerificationStep {
   id: string;
   label: string;
   weight: number;
 }
 
+/**
+ * Represents a progress update during the verification process.
+ */
 export interface ProgressUpdate {
   step: string;
   progress: number;
@@ -183,6 +243,10 @@ export interface ProgressUpdate {
   details?: string;
 }
 
+/**
+ * Represents a single source item after it has been synthesized for final display.
+ * This is a simplified version of SourceItem.
+ */
 export interface SynthesizedSourceItem {
   source_name: string;
   access_url: string;
@@ -192,14 +256,21 @@ export interface SynthesizedSourceItem {
   relevant_information: string;
 }
 
+/**
+ * Represents a collection of synthesized sources, categorized by type.
+ */
 export interface SourceCollection {
   [key: string]: SynthesizedSourceItem[];
 }
 
+/**
+ * Represents the final, synthesized result of a search and verification process.
+ */
 export interface SearchResult {
   claim: string;
-  isVerified: boolean;
+  isVerified: boolean | null;
   confidenceScore: number;
   summary: string;
   sources: SourceCollection;
+  source_analysis?: SourceAnalysis;
 }

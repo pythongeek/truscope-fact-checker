@@ -1,10 +1,24 @@
 import React from 'react';
 import type { SynthesizedSourceItem } from '../../types/verification';
 
+/**
+ * Defines the properties for the SourceBreakdownTable component.
+ */
 interface SourceBreakdownTableProps {
+  /**
+   * An array of synthesized source items to be displayed in the table.
+   */
   sources: SynthesizedSourceItem[];
 }
 
+/**
+ * A component that displays a detailed table of verification sources.
+ * The table includes columns for the source name, its credibility score,
+ * the verification finding (strength), and the relevant information extracted.
+ *
+ * @param {SourceBreakdownTableProps} props - The properties for the SourceBreakdownTable component.
+ * @returns {JSX.Element | null} The rendered table of sources, or null if no sources are provided.
+ */
 const SourceBreakdownTable: React.FC<SourceBreakdownTableProps> = ({ sources }) => {
   if (!sources || sources.length === 0) {
     return null; // Don't render anything if there are no sources
