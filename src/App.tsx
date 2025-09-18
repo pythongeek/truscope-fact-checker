@@ -56,7 +56,11 @@ const App: React.FC = () => {
         try {
             let report: FactCheckReport;
             if (method === 'newsdata') {
-                const newsArticles = await fetchNewsData(inputText);
+                // First, extract keywords to create a concise query
+                const normalizationResult = await runFactCheckOrchestrator(inputText, 'gemini-only');
+                const keywords = normalizationResult.searchEvidence?.query || inputText;
+
+                const newsArticles = await fetchNewsData(keywords);
                 report = {
                     final_verdict: newsArticles.length > 0
                         ? `Found ${newsArticles.length} recent news article(s) related to the topic.`
@@ -78,11 +82,14 @@ const App: React.FC = () => {
                     metadata: {
                         method_used: "Recent News Coverage",
                         processing_time_ms: Date.now() - startTime,
-                        apis_used: ["newsdata.io"],
+                        apis_used: ["newsdata.io", "gemini"],
                         sources_consulted: { total: newsArticles.length, high_credibility: 0, conflicting: 0 },
                         warnings: newsArticles.length === 0 ? ['No articles were identified.'] : [],
                     },
-                    searchEvidence: undefined,
+                    searchEvidence: {
+                        query: keywords,
+                        results: [],
+                    },
                 };
             } else {
                 report = await runFactCheckOrchestrator(inputText, method);
