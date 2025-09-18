@@ -311,13 +311,19 @@ export const runFactCheckOrchestrator = async (
 export const fetchNewsData = async (query: string): Promise<NewsArticle[]> => {
     try {
         const apiKey = getNewsDataApiKey();
-        const apiUrl = `https://newsdata.io/api/1/news?apikey=${apiKey}&q=${encodeURIComponent(query)}`;
+        // Truncate query to a safe length for the free tier (max 100 chars)
+        const truncatedQuery = query.substring(0, 90);
+        const apiUrl = `https://newsdata.io/api/1/latest?apikey=${apiKey}&q=${encodeURIComponent(truncatedQuery)}`;
 
         const response = await fetch(apiUrl);
 
         if (!response.ok) {
             const errorData = await response.json();
             console.error("newsdata.io API Error:", errorData);
+            // Provide a more specific error for the known query length issue
+            if (response.status === 422 && errorData.results?.message?.includes("length")) {
+                 throw new Error("Analysis Failed: The claim is too long for the newsdata.io plan. Please use a shorter query.");
+            }
             throw new Error(`newsdata.io API failed with status ${response.status}: ${errorData.results?.message || 'Unknown error'}`);
         }
 
@@ -339,7 +345,7 @@ export const fetchNewsData = async (query: string): Promise<NewsArticle[]> => {
 
     } catch (error) {
         console.error("Error fetching news data:", error);
-        if (error instanceof Error && error.message.includes("API key")) {
+        if (error instanceof Error && (error.message.includes("API key") || error.message.startsWith("Analysis Failed"))) {
             throw error;
         }
         throw new Error("Failed to fetch articles from newsdata.io API. Please check your API key in Settings.");
