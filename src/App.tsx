@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import InputSection, { AnalysisMethod } from './components/InputSection';
-import Dashboard from './components/Dashboard';
+import EnhancedDashboard from './components/EnhancedDashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import { FactCheckReport } from './types/factCheck';
@@ -129,7 +129,7 @@ const App: React.FC = () => {
                                             Clear Results
                                         </button>
                                     </div>
-                                    <Dashboard result={result} />
+                                    <EnhancedDashboard result={result} originalText={currentClaimText} />
                                 </div>
                             )}
 
