@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheckIcon } from './icons';
 
-export type AnalysisMethod = 'gemini-only' | 'google-ai' | 'hybrid' | 'newsdata';
+export type AnalysisMethod = 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented' | 'newsdata';
 
 interface InputSectionProps {
     inputText: string;
@@ -11,7 +11,7 @@ interface InputSectionProps {
 }
 
 const InputSection: React.FC<InputSectionProps> = ({ inputText, onTextChange, onAnalyze, isLoading }) => {
-    const [selectedMethod, setSelectedMethod] = useState<AnalysisMethod>('hybrid');
+    const [selectedMethod, setSelectedMethod] = useState<AnalysisMethod>('citation-augmented');
 
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl shadow-lg">
@@ -35,6 +35,7 @@ const InputSection: React.FC<InputSectionProps> = ({ inputText, onTextChange, on
                         disabled={isLoading}
                         className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors w-full sm:w-auto"
                     >
+                        <option value="citation-augmented">Citation-Augmented Analysis (Recommended)</option>
                         <option value="hybrid">Comprehensive Analysis</option>
                         <option value="google-ai">Tool-Based Verification</option>
                         <option value="newsdata">Recent News Coverage</option>
