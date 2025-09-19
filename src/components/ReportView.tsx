@@ -5,7 +5,7 @@ import ScoreBreakdown from './ScoreBreakdown';
 import EvidenceTable from './EvidenceTable';
 import MethodologyView from './MethodologyView';
 import SearchResults from './SearchResults';
-import ColorCodedText from './ColorCodedText';
+import ColorCodedText from './ColorCodedText.tsx';
 
 interface ReportViewProps {
     report: FactCheckReport;
