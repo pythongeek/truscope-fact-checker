@@ -29,7 +29,7 @@ const MetricBar: React.FC<{ metric: ScoreMetric }> = ({ metric }) => {
 };
 
 
-const ScoreBreakdown: React.FC<{ breakdown: ScoreBreakdownType }> = ({ breakdown }) => {
+const ScoreBreakdown: React.FC<{ breakdown: ScoreBreakdownType, reasoning?: string }> = ({ breakdown, reasoning }) => {
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl space-y-6">
             <div>
@@ -43,6 +43,12 @@ const ScoreBreakdown: React.FC<{ breakdown: ScoreBreakdownType }> = ({ breakdown
                     <MetricBar key={metric.name} metric={metric} />
                 ))}
             </div>
+            {reasoning && (
+                <div className="border-t border-slate-700/50 pt-4">
+                    <h4 className="text-md font-semibold text-slate-200 mb-2">AI Reasoning</h4>
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap">{reasoning}</p>
+                </div>
+            )}
             {breakdown.confidence_intervals && (
                 <div className="text-center text-sm text-slate-300 border-t border-slate-700/50 pt-4">
                     Confidence Interval: 
