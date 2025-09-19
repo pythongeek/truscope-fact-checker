@@ -2,8 +2,9 @@
 > truscope-ai-fact-checking-dashboard@0.0.0 dev
 > vite
 
+Port 5173 is in use, trying another one...
 
-  VITE v6.3.6  ready in 411 ms
+  VITE v6.3.6  ready in 670 ms
 
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   http://localhost:5174/
   ➜  Network: use --host to expose
