@@ -53,7 +53,7 @@ interface DashboardProps {
     result: FactCheckReport;
 }
 
-type Tab = 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results';
+type Tab = 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis';
 
 // A compact ScoreCircle component to replace the old ScoreCard, integrated directly into the dashboard header.
 const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
@@ -99,9 +99,17 @@ const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ result }) => {
-    const [activeTab, setActiveTab] = useState<Tab>('Evidence');
+    const [activeTab, setActiveTab] = useState<Tab>(() => {
+        // Default to Original Text Analysis if available, otherwise Evidence
+        return result.originalTextSegments && result.originalTextSegments.length > 0
+            ? 'Original Text Analysis'
+            : 'Evidence';
+    });
 
-    const TABS: Tab[] = ['Evidence', 'Breakdown', 'Methodology', 'Search Results'];
+    // Show Original Text Analysis tab only if segments are available
+    const availableTabs: Tab[] = result.originalTextSegments && result.originalTextSegments.length > 0
+        ? ['Original Text Analysis', 'Evidence', 'Breakdown', 'Methodology', 'Search Results']
+        : ['Evidence', 'Breakdown', 'Methodology', 'Search Results'];
 
     return (
         <div className="space-y-6">
@@ -112,12 +120,12 @@ const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             </div>
 
             {/* Tab Navigation */}
-            <nav className="flex items-center gap-2 p-1 bg-slate-800/50 rounded-lg">
-                {TABS.map(tab => (
+            <nav className="flex items-center gap-2 p-1 bg-slate-800/50 rounded-lg overflow-x-auto">
+                {availableTabs.map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`flex-1 px-4 py-2 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                        className={`flex-shrink-0 px-4 py-2 text-sm font-semibold rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                             activeTab === tab 
                                 ? 'bg-indigo-600 text-white shadow-md' 
                                 : 'text-slate-300 hover:bg-slate-700/50'
