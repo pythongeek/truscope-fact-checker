@@ -60,6 +60,7 @@ export interface FactCheckMetadata {
 }
 
 export interface FactCheckReport {
+    originalText: string;
     final_verdict: string;
     final_score: number; // 0-100
     score_breakdown: ScoreBreakdown;

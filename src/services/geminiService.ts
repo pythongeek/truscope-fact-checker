@@ -4,6 +4,7 @@ import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
 import { search } from './webSearch';
+import { enhancedFactCheck } from './textAnalysisService';
 
 // AI Client Setup
 const getAiClient = () => {
@@ -442,22 +443,23 @@ export const runFactCheckOrchestrator = async (
 
         switch (method) {
             case 'gemini-only':
-                report = await runGeminiOnlyCheck(normalizedClaim, context);
+                report = await enhancedFactCheck(claimText, method, () => runGeminiOnlyCheck(normalizedClaim, context));
                 break;
             case 'google-ai':
-                report = await runGoogleSearchAndAiCheck(normalizedClaim, context);
+                report = await enhancedFactCheck(claimText, method, () => runGoogleSearchAndAiCheck(normalizedClaim, context));
                 break;
             case 'hybrid':
-                report = await runHybridCheck(normalizedClaim, context);
+                report = await enhancedFactCheck(claimText, method, () => runHybridCheck(normalizedClaim, context));
                 break;
             case 'citation-augmented':
-                report = await runCitationAugmentedCheck(normalizedClaim, context);
+                report = await enhancedFactCheck(claimText, method, () => runCitationAugmentedCheck(normalizedClaim, context));
                 break;
             default:
                 throw new Error(`Unsupported analysis method: ${method}`);
         }
 
         report.metadata.processing_time_ms = Date.now() - startTime;
+        report.originalText = claimText;
         
         // Store the successful result in the cache
         factCheckCache.set(cacheKey, report);

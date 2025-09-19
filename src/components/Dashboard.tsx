@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 // FIX: Updated import path for FactCheckReport.
 import { FactCheckReport } from '../types/factCheck';
 import ReportView from './ReportView';
-import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon } from './icons';
+import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon, PencilSquareIcon } from './icons';
+import AutoEditor from './AutoEditor';
 
 // A new, self-contained component to visually represent the final verdict.
 interface VerdictDisplayProps {
@@ -105,6 +106,7 @@ const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             ? 'Original Text Analysis'
             : 'Evidence';
     });
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
 
     // Show Original Text Analysis tab only if segments are available
     const availableTabs: Tab[] = result.originalTextSegments && result.originalTextSegments.length > 0
@@ -117,6 +119,13 @@ const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             <div className="bg-slate-800/50 p-6 rounded-2xl flex items-center gap-6">
                  <ScoreCircle score={result.final_score} />
                  <VerdictDisplay verdict={result.final_verdict} score={result.final_score} />
+                 <button
+                    onClick={() => setIsEditorOpen(true)}
+                    className="ml-auto bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                >
+                    <PencilSquareIcon className="w-5 h-5" />
+                    <span>Auto-Edit Content</span>
+                </button>
             </div>
 
             {/* Tab Navigation */}
@@ -141,6 +150,13 @@ const Dashboard: React.FC<DashboardProps> = ({ result }) => {
             <div className="min-h-[200px]">
                 <ReportView report={result} activeTab={activeTab} />
             </div>
+
+            <AutoEditor
+                isOpen={isEditorOpen}
+                onClose={() => setIsEditorOpen(false)}
+                originalText={result.originalText}
+                factCheckReport={result}
+            />
         </div>
     );
 };
