@@ -1,3 +1,4 @@
+// src/services/textAnalysisService.ts
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey } from './apiKeyService';
 import { Segment } from '../types/factCheck';
@@ -136,7 +137,7 @@ export const analyzeTextSegments = async (
         console.error("Error analyzing text segments:", error);
 
         // Fallback: create basic segmentation
-        const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+        const sentences = text.match(/[^\.!?]+[\.!?]+/g) || [text];
         const fallbackSegments: Segment[] = sentences.map(sentence => ({
             text: sentence.trim(),
             score: 50, // Neutral score
@@ -207,28 +208,5 @@ export const rewriteContent = async (
     }
 };
 
-/**
- * Enhanced fact-check method that ensures text segmentation is always included
- */
-export const enhancedFactCheck = async (
-    originalText: string,
-    method: string,
-    factCheckFunction: () => Promise<any>
-): Promise<any> => {
-    try {
-        // Run the original fact-check
-        const factCheckResult = await factCheckFunction();
-
-        // Ensure we have text segments
-        if (!factCheckResult.originalTextSegments || factCheckResult.originalTextSegments.length === 0) {
-            console.log("No text segments found, generating them...");
-            const segmentAnalysis = await analyzeTextSegments(originalText, factCheckResult, method);
-            factCheckResult.originalTextSegments = segmentAnalysis.segments;
-        }
-
-        return factCheckResult;
-    } catch (error) {
-        console.error("Error in enhanced fact-check:", error);
-        throw error;
-    }
-};
+// Note: enhancedFactCheck function removed - this functionality is now handled
+// directly in the updated geminiService.ts via the ensureTextSegments function,
