@@ -1,5 +1,11 @@
 import { GoogleSearchResult } from '../types';
 
+export interface Segment {
+    text: string;
+    score: number;
+    color: 'green' | 'yellow' | 'red' | 'default';
+}
+
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
@@ -45,6 +51,8 @@ export interface FactCheckReport {
     evidence: EvidenceItem[];
     metadata: FactCheckMetadata;
     searchEvidence?: SearchEvidence;
+    originalTextSegments?: Segment[];
+    reasoning?: string;
 }
 
 

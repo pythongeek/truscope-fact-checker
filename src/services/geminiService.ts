@@ -1,8 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FactCheckReport, ClaimNormalization } from '../types/factCheck';
 import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
-import { NewsArticle } from "../types";
+import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
+import { search } from './webSearch';
+
+interface PreliminaryAnalysis {
+    preliminaryVerdict: string;
+    preliminaryScore: number;
+    claims: {
+        claim: string;
+        justification: string;
+        searchQuery: string;
+    }[];
+    textSegments: {
+        text: string;
+        score: number;
+    }[];
+}
 
 // AI Client Setup
 const getAiClient = () => {
@@ -139,6 +154,38 @@ const factCheckReportSchema = {
     required: ['final_verdict', 'final_score', 'score_breakdown', 'evidence', 'metadata']
 };
 
+const preliminaryAnalysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        preliminaryVerdict: { type: Type.STRING, description: "The preliminary verdict on the claim." },
+        preliminaryScore: { type: Type.INTEGER, description: "A preliminary score (0-100)." },
+        claims: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    claim: { type: Type.STRING, description: "The extracted sub-claim to verify." },
+                    justification: { type: Type.STRING, description: "Justification for why this claim needs checking." },
+                    searchQuery: { type: Type.STRING, description: "A targeted search query for this claim." },
+                },
+                required: ['claim', 'justification', 'searchQuery']
+            }
+        },
+        textSegments: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    text: { type: Type.STRING, description: "A segment of the original text." },
+                    score: { type: Type.INTEGER, description: "A preliminary score for this segment (0-100)." },
+                },
+                required: ['text', 'score']
+            }
+        }
+    },
+    required: ['preliminaryVerdict', 'preliminaryScore', 'claims', 'textSegments']
+};
+
 // --- Orchestration Steps ---
 
 // 1. Normalize Claim
@@ -249,10 +296,108 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
     return JSON.parse(jsonString) as FactCheckReport;
 };
 
+const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
+    const ai = getAiClient();
+
+    // --- 1. Preliminary Analysis ---
+    const preliminaryAnalysisPrompt = `
+        You are a fact-checking AI assistant. Analyze the following text and provide a preliminary analysis.
+        Text: "${normalizedClaim.normalized_claim}"
+        ${context ? `Context: "${context}"` : ''}
+
+        Your task is to:
+        1. Break down the text into verifiable claims.
+        2. For each claim, provide a brief justification for why it needs checking.
+        3. For each claim, generate a targeted Google search query to find verifying or disproving evidence. The query should be specific, e.g., using 'site:' operators for credible sources.
+        4. Break down the original text into segments and assign a preliminary score (0-100) indicating your initial confidence in each segment's factuality based on your internal knowledge.
+        5. Provide a preliminary overall verdict and score for the entire text.
+
+        Respond ONLY with a JSON object in the following format:
+        {
+          "preliminaryVerdict": "string",
+          "preliminaryScore": "number",
+          "claims": [
+            {
+              "claim": "string",
+              "justification": "string",
+              "searchQuery": "string"
+            }
+          ],
+          "textSegments": [
+            {
+              "text": "string",
+              "score": "number" // 0-100
+            }
+          ]
+        }
+    `;
+
+    const result = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: preliminaryAnalysisPrompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: preliminaryAnalysisSchema,
+        },
+    });
+    const jsonString = result.text.trim();
+    const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
+
+    // --- 2. External Evidence Gathering ---
+    const searchPromises = preliminaryAnalysis.claims.map(claim => search(claim.searchQuery, 5));
+    const searchResultsByClaim = await Promise.all(searchPromises);
+    const allSearchResults = searchResultsByClaim.flat();
+
+    // Deduplicate results based on the link to avoid redundancy
+    const uniqueResults = new Map<string, GoogleSearchResult>();
+    for (const result of allSearchResults) {
+        if (result && result.link && !uniqueResults.has(result.link)) {
+            uniqueResults.set(result.link, result);
+        }
+    }
+    const searchResults = Array.from(uniqueResults.values());
+
+
+    // --- 3. Final Analysis ---
+    const finalAnalysisPrompt = `
+        You are TruScope AI, an advanced fact-checking engine.
+        You have performed a preliminary analysis on a claim and have gathered external evidence from web searches.
+        Your task is to synthesize your internal knowledge (from the preliminary analysis) with the external evidence to produce a final, comprehensive FactCheckReport.
+
+        **Preliminary Analysis:**
+        ${JSON.stringify(preliminaryAnalysis)}
+
+        **External Evidence (Search Results):**
+        ${JSON.stringify(searchResults)}
+
+        Based on all this information, construct a final FactCheckReport. The report must be thorough and objective.
+        Pay close attention to the \`reasoning\` and \`originalTextSegments\` fields.
+        The \`reasoning\` should explain how the external evidence confirmed, contradicted, or clarified your initial assessment.
+        The \`originalTextSegments\` should be the same as the \`textSegments\` from the preliminary analysis, but with the scores updated based on the new evidence and a \`color\` property added ('green', 'yellow', 'red', 'default') based on the final score.
+
+        Respond ONLY with a valid JSON object as a string that conforms to this TypeScript interface:
+        ${FACT_CHECK_REPORT_TYPE_DEFINITION}
+        And remember to fill out the \`originalTextSegments\` and \`reasoning\` fields in the final report.
+    `;
+
+    const finalResult = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: finalAnalysisPrompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: factCheckReportSchema,
+        },
+    });
+    const finalJsonString = finalResult.text.trim();
+    const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
+
+    return finalReport;
+};
+
 // --- Main Orchestrator ---
 export const runFactCheckOrchestrator = async (
     claimText: string,
-    method: 'gemini-only' | 'google-ai' | 'hybrid',
+    method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented',
     context?: string
 ): Promise<FactCheckReport> => {
     const cacheKey = `${method}::${claimText.trim().toLowerCase()}`;
@@ -284,6 +429,9 @@ export const runFactCheckOrchestrator = async (
                 break;
             case 'hybrid':
                 report = await runHybridCheck(normalizedClaim, context);
+                break;
+            case 'citation-augmented':
+                report = await runCitationAugmentedCheck(normalizedClaim, context);
                 break;
             default:
                 throw new Error(`Unsupported analysis method: ${method}`);
