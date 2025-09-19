@@ -1,5 +1,20 @@
 import { GoogleSearchResult } from '../types';
 
+// New interface for preliminary analysis from AI
+export interface PreliminaryAnalysis {
+    preliminaryVerdict: string;
+    preliminaryScore: number;
+    claims: {
+        claim: string;
+        justification: string;
+        searchQuery: string;
+    }[];
+    textSegments: {
+        text: string;
+        score: number;
+    }[];
+}
+
 export interface Segment {
     text: string;
     score: number;
@@ -51,10 +66,9 @@ export interface FactCheckReport {
     evidence: EvidenceItem[];
     metadata: FactCheckMetadata;
     searchEvidence?: SearchEvidence;
-    originalTextSegments?: Segment[];
-    reasoning?: string;
+    originalTextSegments?: Segment[]; // NEW: Color-coded text segments
+    reasoning?: string; // NEW: AI's explanation for the verdict
 }
-
 
 // --- New Types for Backend Logic & Orchestration ---
 
@@ -84,7 +98,6 @@ export interface HistoryEntry {
     claimText: string;
     report: FactCheckReport;
 }
-
 
 // Represents the structured, detailed analysis from the core AI model
 export interface GeminiAnalysis {
