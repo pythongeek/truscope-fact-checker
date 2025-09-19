@@ -1,6 +1,7 @@
 import React from 'react';
 // FIX: Corrected import path for types and aliased ScoreBreakdown to avoid naming conflict.
 import { ScoreBreakdown as ScoreBreakdownType, ScoreMetric } from '../types/factCheck';
+import { LightBulbIcon } from './icons';
 
 const MetricBar: React.FC<{ metric: ScoreMetric }> = ({ metric }) => {
     const { name, score, description } = metric;
@@ -28,7 +29,6 @@ const MetricBar: React.FC<{ metric: ScoreMetric }> = ({ metric }) => {
     );
 };
 
-
 const ScoreBreakdown: React.FC<{ breakdown: ScoreBreakdownType, reasoning?: string }> = ({ breakdown, reasoning }) => {
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl space-y-6">
@@ -38,21 +38,36 @@ const ScoreBreakdown: React.FC<{ breakdown: ScoreBreakdownType, reasoning?: stri
                     Formula: <span className="font-mono text-indigo-300">{breakdown.final_score_formula}</span>
                 </p>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {breakdown.metrics.map(metric => (
                     <MetricBar key={metric.name} metric={metric} />
                 ))}
             </div>
+
             {reasoning && (
-                <div className="border-t border-slate-700/50 pt-4">
-                    <h4 className="text-md font-semibold text-slate-200 mb-2">AI Reasoning</h4>
-                    <p className="text-sm text-slate-300 whitespace-pre-wrap">{reasoning}</p>
+                <div className="border-t border-slate-700/50 pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                        <LightBulbIcon className="w-6 h-6 text-indigo-400" />
+                        <h4 className="text-lg font-semibold text-slate-100">AI Analysis & Reasoning</h4>
+                    </div>
+                    <div className="bg-slate-800/40 p-4 rounded-lg border-l-4 border-indigo-500">
+                        <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{reasoning}</p>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2">
+                        This explanation shows how external evidence was evaluated against the original claim.
+                    </p>
                 </div>
             )}
+
             {breakdown.confidence_intervals && (
                 <div className="text-center text-sm text-slate-300 border-t border-slate-700/50 pt-4">
-                    Confidence Interval: 
-                    <strong className="text-slate-200"> {breakdown.confidence_intervals.lower_bound} - {breakdown.confidence_intervals.upper_bound}</strong>
+                    <div className="inline-flex items-center gap-2">
+                        <span>Confidence Interval:</span>
+                        <strong className="text-slate-200 bg-slate-700/50 px-2 py-1 rounded">
+                            {breakdown.confidence_intervals.lower_bound} - {breakdown.confidence_intervals.upper_bound}
+                        </strong>
+                    </div>
                 </div>
             )}
         </div>
