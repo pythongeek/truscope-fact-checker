@@ -75,6 +75,7 @@ const EvidenceTable: React.FC<{ evidence: EvidenceItem[] }> = ({ evidence }) => 
         const lowercasedFilter = filter.toLowerCase();
         
         return [...evidence]
+            .filter(item => item.publisher !== 'Internal Knowledge Base')
             .filter(item => 
                 item.quote.toLowerCase().includes(lowercasedFilter) ||
                 item.publisher.toLowerCase().includes(lowercasedFilter)
