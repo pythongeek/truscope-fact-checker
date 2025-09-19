@@ -65,7 +65,7 @@ const MOCK_SEARCH_DATA: GoogleSearchResult[] = [
  * @param maxResults The maximum number of results to return.
  * @returns A promise that resolves to an array of search results.
  */
-async function webSearch(query: string, maxResults: number): Promise<GoogleSearchResult[]> {
+export async function search(query: string, maxResults: number): Promise<GoogleSearchResult[]> {
     try {
         const apiKey = getSearchApiKey();
         const searchId = getSearchId();
@@ -135,7 +135,7 @@ export async function executeMultiStrategySearch(claim: string, keywords: string
 
     const queriesToRun = Array.from(searchQueries);
     // Fetch a small number of results per query to get a broad sample
-    const searchPromises = queriesToRun.map(query => webSearch(query, 3));
+    const searchPromises = queriesToRun.map(query => search(query, 3));
 
     try {
         const resultsByStrategy = await Promise.all(searchPromises);
