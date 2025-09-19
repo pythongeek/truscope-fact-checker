@@ -1,23 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FactCheckReport, ClaimNormalization } from '../types/factCheck';
+import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '../types/factCheck';
 import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
 import { search } from './webSearch';
-
-interface PreliminaryAnalysis {
-    preliminaryVerdict: string;
-    preliminaryScore: number;
-    claims: {
-        claim: string;
-        justification: string;
-        searchQuery: string;
-    }[];
-    textSegments: {
-        text: string;
-        score: number;
-    }[];
-}
 
 // AI Client Setup
 const getAiClient = () => {
@@ -58,6 +44,12 @@ interface FactCheckReport {
         query: string;
         results: { title: string; link: string; snippet: string; source: string; }[];
     };
+    originalTextSegments?: {
+        text: string;
+        score: number;
+        color: 'green' | 'yellow' | 'red' | 'default';
+    }[];
+    reasoning?: string;
 }
 `;
 
@@ -149,7 +141,21 @@ const factCheckReportSchema = {
                 }
             },
             required: ['query', 'results']
-        }
+        },
+        originalTextSegments: {
+            type: Type.ARRAY,
+            nullable: true,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    text: { type: Type.STRING },
+                    score: { type: Type.INTEGER },
+                    color: { type: Type.STRING, enum: ['green', 'yellow', 'red', 'default'] }
+                },
+                required: ['text', 'score', 'color']
+            }
+        },
+        reasoning: { type: Type.STRING, nullable: true, description: "AI's explanation for the verdict." }
     },
     required: ['final_verdict', 'final_score', 'score_breakdown', 'evidence', 'metadata']
 };
@@ -296,6 +302,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
     return JSON.parse(jsonString) as FactCheckReport;
 };
 
+// NEW: Citation-Augmented Core Analysis Method
 const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
     const ai = getAiClient();
 
@@ -308,28 +315,17 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         Your task is to:
         1. Break down the text into verifiable claims.
         2. For each claim, provide a brief justification for why it needs checking.
-        3. For each claim, generate a targeted Google search query to find verifying or disproving evidence. The query should be specific, e.g., using 'site:' operators for credible sources.
+        3. For each claim, generate a targeted Google search query to find verifying or disproving evidence. The query should be specific, focusing on credible sources like fact-checking sites, government domains, or established news outlets.
         4. Break down the original text into segments and assign a preliminary score (0-100) indicating your initial confidence in each segment's factuality based on your internal knowledge.
         5. Provide a preliminary overall verdict and score for the entire text.
 
-        Respond ONLY with a JSON object in the following format:
-        {
-          "preliminaryVerdict": "string",
-          "preliminaryScore": "number",
-          "claims": [
-            {
-              "claim": "string",
-              "justification": "string",
-              "searchQuery": "string"
-            }
-          ],
-          "textSegments": [
-            {
-              "text": "string",
-              "score": "number" // 0-100
-            }
-          ]
-        }
+        Focus on generating high-quality, targeted search queries that will find authoritative sources. Use tactics like:
+        - site:factcheck.org OR site:politifact.com OR site:snopes.com for fact-checking sites
+        - site:gov for government sources
+        - site:reuters.com OR site:apnews.com for news verification
+        - Including specific terms like "fact check", "verified", "debunked" when appropriate
+
+        Respond ONLY with a JSON object in the following format.
     `;
 
     const result = await ai.models.generateContent({
@@ -344,6 +340,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
 
     // --- 2. External Evidence Gathering ---
+    console.log("Starting targeted searches for verification...");
     const searchPromises = preliminaryAnalysis.claims.map(claim => search(claim.searchQuery, 5));
     const searchResultsByClaim = await Promise.all(searchPromises);
     const allSearchResults = searchResultsByClaim.flat();
@@ -357,6 +354,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     }
     const searchResults = Array.from(uniqueResults.values());
 
+    console.log(`Found ${searchResults.length} unique external sources for verification.`);
 
     // --- 3. Final Analysis ---
     const finalAnalysisPrompt = `
@@ -364,20 +362,29 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         You have performed a preliminary analysis on a claim and have gathered external evidence from web searches.
         Your task is to synthesize your internal knowledge (from the preliminary analysis) with the external evidence to produce a final, comprehensive FactCheckReport.
 
+        **Original Claim:** "${normalizedClaim.normalized_claim}"
+
         **Preliminary Analysis:**
-        ${JSON.stringify(preliminaryAnalysis)}
+        ${JSON.stringify(preliminaryAnalysis, null, 2)}
 
         **External Evidence (Search Results):**
-        ${JSON.stringify(searchResults)}
+        ${JSON.stringify(searchResults, null, 2)}
 
         Based on all this information, construct a final FactCheckReport. The report must be thorough and objective.
-        Pay close attention to the \`reasoning\` and \`originalTextSegments\` fields.
-        The \`reasoning\` should explain how the external evidence confirmed, contradicted, or clarified your initial assessment.
-        The \`originalTextSegments\` should be the same as the \`textSegments\` from the preliminary analysis, but with the scores updated based on the new evidence and a \`color\` property added ('green', 'yellow', 'red', 'default') based on the final score.
 
-        Respond ONLY with a valid JSON object as a string that conforms to this TypeScript interface:
-        ${FACT_CHECK_REPORT_TYPE_DEFINITION}
-        And remember to fill out the \`originalTextSegments\` and \`reasoning\` fields in the final report.
+        **CRITICAL REQUIREMENTS:**
+        1. **reasoning**: Provide a detailed explanation of how the external evidence confirmed, contradicted, or clarified your initial assessment. Be specific about which sources supported or contradicted the claim.
+
+        2. **originalTextSegments**: Transform the textSegments from the preliminary analysis into color-coded segments:
+           - Use the same text segments from preliminary analysis
+           - Update scores based on the external evidence found
+           - Assign colors based on final scores: 75-100 = 'green', 40-74 = 'yellow', 0-39 = 'red'
+
+        3. **evidence**: ONLY include evidence from the external search results. Do not include "Internal Knowledge Base" entries. Each evidence item should reference a specific search result with a real URL.
+
+        4. **metadata.warnings**: If search results were limited or contradictory, add appropriate warnings.
+
+        Respond ONLY with a valid JSON object that conforms to the FactCheckReport schema.
     `;
 
     const finalResult = await ai.models.generateContent({
@@ -390,6 +397,19 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     });
     const finalJsonString = finalResult.text.trim();
     const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
+
+    // Ensure searchEvidence is populated with the actual search results
+    if (searchResults.length > 0) {
+        finalReport.searchEvidence = {
+            query: preliminaryAnalysis.claims[0]?.searchQuery || normalizedClaim.normalized_claim,
+            results: searchResults.map(result => ({
+                title: result.title,
+                link: result.link,
+                snippet: result.snippet,
+                source: result.source
+            }))
+        };
+    }
 
     return finalReport;
 };
@@ -412,7 +432,7 @@ export const runFactCheckOrchestrator = async (
             }
         };
     }
-     console.log(`[Cache] Miss for key: ${cacheKey}`);
+    console.log(`[Cache] Miss for key: ${cacheKey}`);
 
     try {
         const startTime = Date.now();
