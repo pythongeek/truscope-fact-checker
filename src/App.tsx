@@ -1,210 +1,162 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
 import InputSection, { AnalysisMethod } from './components/InputSection';
+import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
-import { runFactCheckOrchestrator, fetchNewsData } from './services/geminiService';
-import { areAllKeysProvided } from './services/apiKeyService';
-import { saveReportToHistory } from './services/historyService';
-import { trackFactCheckUsage } from './utils/tracking';
-import { AnalysisError } from './types';
-import { FactCheckReport } from './types/factCheck';
-import { LightBulbIcon, ExportIcon } from './components/icons';
 import SettingsModal from './components/SettingsModal';
-import { handleExport, ExportFormat } from './utils/export';
+import { FactCheckReport } from './types/factCheck';
+import { runFactCheckOrchestrator } from './services/geminiService';
+import { saveReportToHistory } from './services/historyService';
 
-
-const LoadingSpinner: React.FC = () => (
-    <div className="flex flex-col items-center justify-center h-full text-center">
-        <svg className="animate-spin h-12 w-12 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <h2 className="mt-4 text-xl font-semibold text-slate-200">Analyzing Content...</h2>
-        <p className="text-slate-300 mt-1">Our AI is running a deep analysis. This may take a moment.</p>
-    </div>
-);
-
-type AppView = 'checker' | 'history';
+type View = 'checker' | 'history';
 
 const App: React.FC = () => {
-    const [inputText, setInputText] = useState<string>('');
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [error, setError] = useState<AnalysisError | null>(null);
-    const [analysisResult, setAnalysisResult] = useState<FactCheckReport | null>(null);
-    const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-    const [currentView, setCurrentView] = useState<AppView>('checker');
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
+    const [currentView, setCurrentView] = useState<View>('checker');
+    const [inputText, setInputText] = useState('');
+    const [result, setResult] = useState<FactCheckReport | null>(null);
+    const [currentClaimText, setCurrentClaimText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    const handleAnalyze = useCallback(async (method: AnalysisMethod) => {
+    const handleAnalyze = async (method: AnalysisMethod) => {
         if (!inputText.trim()) {
-            setError({ message: 'Please enter some content to analyze.' });
-            return;
-        }
-
-        if (!areAllKeysProvided()) {
-            setError({ message: 'One or more API keys are missing. Please complete the configuration in the Settings panel.' });
+            setError('Please enter some text to analyze.');
             return;
         }
 
         setIsLoading(true);
         setError(null);
-        setAnalysisResult(null);
-        const startTime = Date.now();
+        setResult(null);
 
         try {
-            let report: FactCheckReport;
-            if (method === 'newsdata') {
-                const newsArticles = await fetchNewsData(inputText);
-                report = {
-                    final_verdict: newsArticles.length > 0
-                        ? `Found ${newsArticles.length} recent news article(s) related to the topic.`
-                        : "No recent news articles found for the given topic.",
-                    final_score: 50, // Neutral score
-                    evidence: newsArticles.map((article, index) => ({
-                        id: `news-${index}`,
-                        publisher: article.source,
-                        url: article.link,
-                        quote: article.title,
-                        score: 65,
-                        type: 'news' as 'news',
-                    })),
-                    score_breakdown: {
-                        final_score_formula: "Not applicable for News Coverage mode.",
-                        metrics: [],
-                        confidence_intervals: { lower_bound: 45, upper_bound: 55 }
-                    },
-                    metadata: {
-                        method_used: "Recent News Coverage",
-                        processing_time_ms: Date.now() - startTime,
-                        apis_used: ["newsdata.io"],
-                        sources_consulted: { total: newsArticles.length, high_credibility: 0, conflicting: 0 },
-                        warnings: newsArticles.length === 0 ? ['No articles were identified.'] : [],
-                    },
-                    searchEvidence: undefined,
-                };
-            } else {
-                report = await runFactCheckOrchestrator(inputText, method);
-            }
-            setAnalysisResult(report);
-            saveReportToHistory(inputText, report);
-            trackFactCheckUsage(report); // Track performance and usage metrics
+            // Map the AnalysisMethod to the expected service method names
+            const serviceMethod = method === 'newsdata' ? 'citation-augmented' : method;
 
-        } catch (err: unknown) {
-            if (err instanceof Error) {
-                setError({ message: err.message });
-            } else {
-                setError({ message: 'An unknown error occurred.' });
+            const report = await runFactCheckOrchestrator(
+                inputText,
+                serviceMethod as 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented'
+            );
+
+            setResult(report);
+            setCurrentClaimText(inputText);
+            saveReportToHistory(inputText, report);
+
+            // Show success message for Citation-Augmented method
+            if (method === 'citation-augmented' && report.evidence.length > 0) {
+                console.log(`✅ Citation-Augmented Analysis completed with ${report.evidence.length} external sources verified.`);
             }
+
+        } catch (err) {
+            console.error('Analysis failed:', err);
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred during analysis.');
         } finally {
             setIsLoading(false);
         }
-    }, [inputText]);
+    };
 
     const handleSelectReport = (report: FactCheckReport, claimText: string) => {
-        setAnalysisResult(report);
-        setInputText(claimText);
+        setResult(report);
+        setCurrentClaimText(claimText);
         setCurrentView('checker');
+    };
+
+    const handleClearResults = () => {
+        setResult(null);
+        setCurrentClaimText('');
+        setInputText('');
         setError(null);
-    };
-    
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-                setIsExportMenuOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    const onExport = (format: ExportFormat) => {
-        if (analysisResult) {
-            handleExport(analysisResult, format);
-        }
-        setIsExportMenuOpen(false);
-    };
-
-    const renderMainContent = () => {
-        if (currentView === 'history') {
-            return <HistoryView onSelectReport={handleSelectReport} />;
-        }
-        return (
-            <>
-                <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-3xl font-bold text-slate-100">Fact-Checker Dashboard</h2>
-                        <p className="text-slate-300 mt-1">Analyze content to uncover insights and verify claims.</p>
-                    </div>
-                    {analysisResult && !isLoading && (
-                        <div className="relative" ref={exportMenuRef}>
-                            <button
-                                onClick={() => setIsExportMenuOpen(prev => !prev)}
-                                className="flex items-center gap-2 px-4 py-2 font-semibold text-slate-200 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors"
-                                aria-haspopup="true"
-                                aria-expanded={isExportMenuOpen}
-                            >
-                                <ExportIcon className="w-5 h-5" />
-                                Export Analysis
-                            </button>
-                            {isExportMenuOpen && (
-                                <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-10">
-                                    <div className="p-2">
-                                        <p className="px-2 py-1 text-xs font-semibold text-slate-300">Export Options</p>
-                                        <button onClick={() => onExport('json-full')} className="w-full text-left px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-700/80 rounded">Full Report (JSON)</button>
-                                        <button onClick={() => onExport('json-summary')} className="w-full text-left px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-700/80 rounded">Summary (JSON)</button>
-                                        <button onClick={() => onExport('csv-evidence')} className="w-full text-left px-2 py-1.5 text-sm text-slate-200 hover:bg-slate-700/80 rounded">Evidence (CSV)</button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </header>
-                <InputSection
-                    inputText={inputText}
-                    onTextChange={setInputText}
-                    onAnalyze={handleAnalyze}
-                    isLoading={isLoading}
-                />
-                <div className="mt-6">
-                    {isLoading && <LoadingSpinner />}
-                    {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-4 rounded-lg text-center">
-                            <h3 className="font-semibold">Analysis Failed</h3>
-                            <p className="text-sm">{error.message}</p>
-                        </div>
-                    )}
-                    {analysisResult && <Dashboard result={analysisResult} />}
-                    {!isLoading && !analysisResult && !error && (
-                        <div className="text-center py-10 bg-slate-800/30 rounded-2xl">
-                             <LightBulbIcon className="w-12 h-12 mx-auto text-slate-500" />
-                            <h3 className="mt-4 text-xl font-semibold text-slate-200">Ready for Analysis</h3>
-                            <p className="mt-1 text-slate-300">Enter text above and click "Verify Claims" to begin.</p>
-                        </div>
-                    )}
-                </div>
-            </>
-        );
     };
 
     return (
-        <div className="min-h-screen flex bg-slate-900">
-            <Sidebar 
-                onSettingsClick={() => setIsSettingsModalOpen(true)}
-                currentView={currentView}
-                onNavigate={setCurrentView} 
-            />
-            <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <div className="max-w-4xl mx-auto">
-                    {renderMainContent()}
-                </div>
-            </main>
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100">
+            <div className="flex">
+                <Sidebar
+                    onSettingsClick={() => setIsSettingsOpen(true)}
+                    currentView={currentView}
+                    onNavigate={setCurrentView}
+                />
+
+                <main className="flex-1 p-6 overflow-hidden">
+                    {currentView === 'checker' ? (
+                        <div className="max-w-6xl mx-auto space-y-8">
+                            <header className="text-center">
+                                <h1 className="text-4xl font-bold text-slate-100 mb-2">
+                                    Fact-Checker Dashboard
+                                </h1>
+                                <p className="text-slate-300 max-w-2xl mx-auto">
+                                    Analyze content to uncover insights and verify claims with our advanced
+                                    Citation-Augmented Analysis powered by external source verification.
+                                </p>
+                            </header>
+
+                            <InputSection
+                                inputText={inputText}
+                                onTextChange={setInputText}
+                                onAnalyze={handleAnalyze}
+                                isLoading={isLoading}
+                            />
+
+                            {error && (
+                                <div className="bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div>
+                                            <h4 className="font-semibold mb-1">Analysis Error</h4>
+                                            <p className="text-sm">{error}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {result && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-slate-100">Analysis Results</h2>
+                                            {currentClaimText && (
+                                                <p className="text-slate-400 text-sm mt-1">
+                                                    Original claim: "{currentClaimText.length > 100 ? currentClaimText.slice(0, 100) + '...' : currentClaimText}"
+                                                </p>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={handleClearResults}
+                                            className="px-4 py-2 text-sm text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors"
+                                        >
+                                            Clear Results
+                                        </button>
+                                    </div>
+                                    <Dashboard result={result} />
+                                </div>
+                            )}
+
+                            {!result && !isLoading && !error && (
+                                <div className="text-center py-16 text-slate-400">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <h3 className="text-xl font-semibold text-slate-300 mb-2">Ready to Analyze</h3>
+                                    <p className="max-w-md mx-auto">
+                                        Enter a claim or statement above and select an analysis method to get started.
+                                        The Citation-Augmented method is recommended for the most verifiable results.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="max-w-6xl mx-auto">
+                            <HistoryView onSelectReport={handleSelectReport} />
+                        </div>
+                    )}
+                </main>
+            </div>
+
             <SettingsModal 
-                isOpen={isSettingsModalOpen} 
-                onClose={() => setIsSettingsModalOpen(false)} 
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
             />
         </div>
     );
