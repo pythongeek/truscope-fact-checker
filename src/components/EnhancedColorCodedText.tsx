@@ -65,7 +65,7 @@ const EnhancedColorCodedText: React.FC<EnhancedColorCodedTextProps> = ({
                 </div>
                 <h3 className="text-lg font-semibold text-slate-300">No Text Analysis Available</h3>
                 <p className="text-slate-400 max-w-md mx-auto">
-                    Text analysis with color-coding is only available with enhanced analysis methods.
+                    Text analysis with color-coding is being generated. Please wait a moment...
                 </p>
             </div>
         );
@@ -73,7 +73,6 @@ const EnhancedColorCodedText: React.FC<EnhancedColorCodedTextProps> = ({
 
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl space-y-6">
-            {/* Header Section */}
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-lg font-semibold text-slate-100 mb-2">Original Text Analysis</h3>
