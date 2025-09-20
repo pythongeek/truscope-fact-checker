@@ -2,6 +2,7 @@ import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/cor
 import { AdvancedEvidence } from '../types/enhancedFactCheck';
 import { getGeminiApiKey } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
+import { parseAIResponse } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
   private ai: GoogleGenAI;
@@ -9,10 +10,6 @@ export class IntelligentCorrector {
   constructor() {
     // Reverting to the user's original constructor pattern
     this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-  }
-
-  private cleanJsonString(text: string): string {
-    return text.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
   }
 
   async analyzeForCorrections(
@@ -60,7 +57,7 @@ export class IntelligentCorrector {
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
-      const response = JSON.parse(this.cleanJsonString(result.text.trim()));
+      const response = parseAIResponse(result.text);
 
       return {
         totalIssues: response.issues.length,
@@ -139,7 +136,7 @@ export class IntelligentCorrector {
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
-      const response = JSON.parse(this.cleanJsonString(result.text.trim()));
+      const response = parseAIResponse(result.text);
 
       return {
         id: `correction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
