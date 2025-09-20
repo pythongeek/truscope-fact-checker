@@ -22,7 +22,9 @@ describe('EnhancedFactCheckService Integration', () => {
       totalIssues: 1,
       issues: [{ type: 'factual_error', severity: 'high', description: 'Test issue', originalText: 'flat', startIndex: 12, endIndex: 16, confidence: 95 }],
       overallAccuracy: 25,
-      recommendedAction: 'major_revision'
+      recommendedAction: 'major_revision',
+      issuesByType: { factual_error: 1, misleading_context: 0, outdated_info: 0, missing_context: 0, unsupported_claim: 0 },
+      issuesBySeverity: { low: 0, medium: 0, high: 1, critical: 0 }
     });
     vi.mocked(IntelligentCorrector.prototype).generateSmartCorrections.mockResolvedValue([
       { id: 'corr-1', correctedStatement: 'The Earth is round.', originalStatement: 'The Earth is flat', specificIssues: [], correctInformation: '', supportingSources: [], confidence: 95, alternativePhrasings: [], correctionReasoning: '' }
@@ -37,7 +39,7 @@ describe('EnhancedFactCheckService Integration', () => {
       originalText: 'The Earth is flat',
       final_verdict: 'Test',
       final_score: 50,
-      evidence: [{ id: 'ev-1', quote: 'Some evidence', publisher: 'test', score: 50, type: 'news' }],
+      evidence: [{ id: 'ev-1', quote: 'Some evidence', publisher: 'test', score: 50, type: 'news', url: 'http://example.com' }],
       metadata: {
         method_used: 'test',
         processing_time_ms: 0,
@@ -75,7 +77,9 @@ describe('EnhancedFactCheckService Integration', () => {
       totalIssues: 0,
       issues: [],
       overallAccuracy: 100,
-      recommendedAction: 'minor_edits'
+      recommendedAction: 'minor_edits',
+      issuesByType: { factual_error: 0, misleading_context: 0, outdated_info: 0, missing_context: 0, unsupported_claim: 0 },
+      issuesBySeverity: { low: 0, medium: 0, high: 0, critical: 0 }
     });
 
     const mockReport: FactCheckReport = {
