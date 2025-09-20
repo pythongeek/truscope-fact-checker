@@ -69,6 +69,7 @@ export interface FactCheckReport {
     searchEvidence?: SearchEvidence;
     originalTextSegments?: Segment[]; // NEW: Color-coded text segments
     reasoning?: string; // NEW: AI's explanation for the verdict
+    enhanced_claim_text: string;
 }
 
 // --- New Types for Backend Logic & Orchestration ---

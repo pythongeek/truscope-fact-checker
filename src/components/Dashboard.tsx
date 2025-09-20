@@ -54,7 +54,7 @@ interface DashboardProps {
     result: FactCheckReport;
 }
 
-type Tab = 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis';
+type Tab = 'Overview' | 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis';
 
 // A compact ScoreCircle component to replace the old ScoreCard, integrated directly into the dashboard header.
 const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
@@ -100,18 +100,16 @@ const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ result }) => {
-    const [activeTab, setActiveTab] = useState<Tab>(() => {
-        // Default to Original Text Analysis if available, otherwise Evidence
-        return result.originalTextSegments && result.originalTextSegments.length > 0
-            ? 'Original Text Analysis'
-            : 'Evidence';
-    });
+    const [activeTab, setActiveTab] = useState<Tab>('Overview');
     const [isEditorOpen, setIsEditorOpen] = useState(false);
 
     // Show Original Text Analysis tab only if segments are available
-    const availableTabs: Tab[] = result.originalTextSegments && result.originalTextSegments.length > 0
-        ? ['Original Text Analysis', 'Evidence', 'Breakdown', 'Methodology', 'Search Results']
-        : ['Evidence', 'Breakdown', 'Methodology', 'Search Results'];
+    const availableTabs: Tab[] = ['Overview'];
+    if (result.originalTextSegments && result.originalTextSegments.length > 0) {
+        availableTabs.push('Original Text Analysis');
+    }
+    availableTabs.push('Evidence', 'Breakdown', 'Methodology', 'Search Results');
+
 
     return (
         <div className="space-y-6">
