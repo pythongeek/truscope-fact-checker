@@ -29,4 +29,5 @@ export interface CorrectionAnalysis {
   issuesBySeverity: Record<DetectedIssue['severity'], number>;
   overallAccuracy: number; // 0-100
   recommendedAction: 'minor_edits' | 'major_revision' | 'complete_rewrite' | 'verification_needed';
+  issues: DetectedIssue[];
 }

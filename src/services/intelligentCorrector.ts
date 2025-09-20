@@ -67,7 +67,8 @@ export class IntelligentCorrector {
         issuesByType: this.categorizeByType(response.issues),
         issuesBySeverity: this.categorizeBySeverity(response.issues),
         overallAccuracy: response.overallAccuracy,
-        recommendedAction: response.recommendedAction
+        recommendedAction: response.recommendedAction,
+        issues: response.issues || []
       };
     } catch (error) {
       console.error('Error analyzing corrections:', error);
