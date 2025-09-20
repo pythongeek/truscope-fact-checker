@@ -1,86 +1,196 @@
+// services/enhancedFactCheckService.ts
 import { FactCheckReport } from '../types/factCheck';
-import { MultiSourceVerifier } from './multiSourceVerifier';
-import { AdvancedEvidenceScorer } from './advancedScoring';
-import { IntelligentCorrector } from './intelligentCorrector';
-import { SmartCorrection, CorrectionAnalysis } from '../types/corrections';
+import { parseAndValidateFactCheckResponse } from '../utils/jsonParser';
+import { getGeminiApiKey } from './apiKeyService';
+import { GoogleGenAI } from "@google/genai";
 
 export class EnhancedFactCheckService {
-  private multiSourceVerifier: MultiSourceVerifier;
-  private evidenceScorer: AdvancedEvidenceScorer;
-  private intelligentCorrector: IntelligentCorrector;
+  private ai: GoogleGenAI;
 
   constructor() {
-    this.multiSourceVerifier = new MultiSourceVerifier();
-    this.evidenceScorer = new AdvancedEvidenceScorer();
-    this.intelligentCorrector = new IntelligentCorrector();
+    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
   }
 
-  async enhanceFactCheckReport(
-    baseReport: FactCheckReport,
-    originalText: string
-  ): Promise<{
-    enhancedReport: FactCheckReport;
-    corrections: SmartCorrection[];
-    correctionAnalysis: CorrectionAnalysis;
-  }> {
+  private async callGeminiAPI(prompt: string): Promise<string> {
+    const result = await this.ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+    });
+    return result.text;
+  }
+
+  private async enhancedFactCheck(text: string, method: string): Promise<FactCheckReport> {
+    const startTime = performance.now();
     try {
-      // 1. Get additional sources
-      const additionalSources = await this.multiSourceVerifier
-        .verifyWithMultipleSources(originalText);
+      // Build your prompt for the AI model
+      const prompt = this.buildFactCheckPrompt(text, method);
 
-      // 2. Enhance evidence with advanced scoring
-      const enhancedEvidence = baseReport.evidence.map(evidence =>
-        this.evidenceScorer.enhanceEvidenceWithMetadata(evidence)
-      );
+      // Get raw response from AI model
+      const rawResponse = await this.callGeminiAPI(prompt);
 
-      // 3. Add evidence from additional sources
-      const allEvidence = [
-        ...enhancedEvidence,
-        ...additionalSources.flatMap(source => source.results)
-      ];
+      // Parse and validate the response using the robust parser
+      const parsedResponse = parseAndValidateFactCheckResponse(rawResponse);
 
-      // 4. Analyze for corrections
-      const correctionAnalysis = await this.intelligentCorrector
-        .analyzeForCorrections(originalText, allEvidence);
-
-      // 5. Generate smart corrections if issues found
-      const corrections = correctionAnalysis.totalIssues > 0
-        ? await this.intelligentCorrector.generateSmartCorrections(
-            originalText,
-            correctionAnalysis.issues, // Correctly passing the issues
-            allEvidence
-          )
-        : [];
-
-      // 6. Update the report with enhanced data
+      // Add metadata and processing information
       const enhancedReport: FactCheckReport = {
-        ...baseReport,
-        evidence: allEvidence,
+        ...parsedResponse,
+        originalText: text,
         metadata: {
-          ...baseReport.metadata,
-          sources_consulted: {
-            total: allEvidence.length,
-            high_credibility: allEvidence.filter(e => e.score > 80).length,
-            conflicting: allEvidence.filter(e => e.contradictsClaim).length
+          ...parsedResponse.metadata,
+          method_used: method,
+          processing_time_ms: performance.now() - startTime,
+          apis_used: ['gemini'],
+          sources_consulted: parsedResponse.metadata?.sources_consulted || {
+            total: 0,
+            high_credibility: 0,
+            conflicting: 0
           },
-          warnings: [
-            ...baseReport.metadata.warnings,
-            ...(additionalSources.length === 0 ? ['Limited external source verification'] : [])
-          ]
-        },
-        // Add new fields for corrections
-        correctionAnalysis,
-        availableCorrections: corrections.length
+          warnings: parsedResponse.metadata?.warnings || []
+        }
       };
 
-      return {
-        enhancedReport,
-        corrections,
-        correctionAnalysis
-      };
+      return enhancedReport;
     } catch (error) {
-      console.error('Error enhancing fact-check report:', error);
-      throw new Error('Failed to enhance fact-check report');
+      console.error('Error in enhanced fact-check:', error);
+
+      // Re-throw with more context
+      if (error instanceof SyntaxError) {
+        throw new Error('The AI model returned an invalid JSON structure. This may be a temporary issue.');
+      }
+
+      throw error;
     }
+  }
+
+  private buildFactCheckPrompt(text: string, method: string): string {
+    return `
+Please analyze the following text for factual accuracy and return a JSON response with the exact structure specified.
+
+Text to analyze: "${text}"
+
+Method: ${method}
+
+IMPORTANT: Your response must be valid JSON only. Do not wrap it in markdown code blocks or add any explanatory text.
+
+Required JSON structure:
+{
+  "final_verdict": "string (e.g., 'Mostly True', 'False', 'Mixed', etc.)",
+  "final_score": number (0-100),
+  "reasoning": "string explaining the analysis",
+  "score_breakdown": {
+    "final_score_formula": "string describing how the score was calculated",
+    "metrics": [
+      {
+        "name": "string",
+        "score": number (0-100),
+        "description": "string"
+      }
+    ],
+    "confidence_intervals": {
+      "lower_bound": number,
+      "upper_bound": number
+    }
+  },
+  "evidence": [
+    {
+      "id": "string",
+      "quote": "string",
+      "publisher": "string",
+      "score": number (0-100),
+      "url": "string or null"
+    }
+  ],
+  "metadata": {
+    "method_used": "${method}",
+    "processing_time_ms": 0,
+    "apis_used": ["gemini"],
+    "sources_consulted": {
+      "total": number,
+      "high_credibility": number,
+      "conflicting": number
+    },
+    "warnings": []
+  },
+  "searchEvidence": {
+    "query": "string",
+    "results": []
+  },
+  "originalTextSegments": [],
+  "enhanced_claim_text": ""
+}
+
+Return only the JSON object, no additional text or formatting.`;
+  }
+
+  // Updated orchestration method with better error handling
+  async orchestrateFactCheck(text: string, method: string): Promise<FactCheckReport> {
+    try {
+      console.log(`Starting fact-check orchestration with method '${method}'`);
+
+      const result = await this.enhancedFactCheck(text, method);
+
+      console.log('Fact-check orchestration completed successfully');
+      return result;
+
+    } catch (error) {
+      console.error(`Error during fact-check orchestration with method '${method}':`, error);
+
+      // Provide more specific error messages
+      if (error instanceof SyntaxError && error.message.includes('JSON')) {
+        throw new Error('The AI service returned an improperly formatted response. Please try again.');
+      }
+
+      if (error.message.includes('invalid JSON structure')) {
+        throw new Error('Analysis failed: The AI model returned an invalid response format. This may be a temporary issue.');
+      }
+
+      // For network or API errors
+      if (error.message.includes('fetch') || error.message.includes('network')) {
+        throw new Error('Network error: Unable to connect to the fact-checking service. Please check your internet connection and try again.');
+      }
+
+      // For API key issues
+      if (error.message.includes('API key') || error.message.includes('unauthorized')) {
+        throw new Error('Authentication error: Please check your API keys in Settings.');
+      }
+
+      // Generic fallback
+      throw new Error(`Analysis failed: ${error.message}`);
+    }
+  }
+
+  // Helper method to retry failed requests with exponential backoff
+  private async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+
+        // Don't retry on validation errors or permanent failures
+        if (error.message.includes('API key') ||
+            error.message.includes('unauthorized') ||
+            error.message.includes('invalid JSON structure')) {
+          throw error;
+        }
+
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Exponential backoff with jitter
+        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+        console.log(`Attempt ${attempt} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw lastError;
   }
 }
