@@ -19,10 +19,13 @@ const ReportView: React.FC<ReportViewProps> = ({ report, activeTab }) => {
             return (
                 <div className="space-y-6">
                   <ScoreBreakdown breakdown={report.score_breakdown} reasoning={report.reasoning} />
-                  <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                    <h3 className="text-lg font-semibold text-slate-100 mb-3">Enhanced Claim Analysis</h3>
-                    <EnhancedClaimAnalysis text={report.enhanced_claim_text} />
-                  </div>
+                  {/* Only show Enhanced Claim Analysis if enhanced_claim_text exists and is not empty */}
+                  {report.enhanced_claim_text && report.enhanced_claim_text.trim() && (
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-100 mb-3">Enhanced Claim Analysis</h3>
+                      <EnhancedClaimAnalysis text={report.enhanced_claim_text} />
+                    </div>
+                  )}
                 </div>
               );
         case 'Evidence':
