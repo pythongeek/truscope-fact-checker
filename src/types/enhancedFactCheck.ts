@@ -15,7 +15,7 @@ export interface AdvancedEvidence extends EvidenceItem {
 }
 
 export interface MultiSourceResult {
-  source: 'politifact' | 'snopes' | 'factcheck' | 'reuters' | 'ap' | 'pubmed' | 'scholar';
+  source: 'politifact' | 'snopes' | 'factcheck' | 'reuters' | 'ap' | 'pubmed' | 'scholar' | 'wikipedia' | 'arxiv' | 'googleNews';
   available: boolean;
   results: AdvancedEvidence[];
   error?: string;

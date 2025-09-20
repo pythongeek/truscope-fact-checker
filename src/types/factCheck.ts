@@ -45,6 +45,7 @@ export interface EvidenceItem {
     quote: string;
     score: number; // 0-100 reliability score
     type: 'claim' | 'news' | 'search_result';
+    publishedDate?: string;
 }
 
 export interface FactCheckMetadata {
