@@ -72,19 +72,29 @@ const EvidenceTable: React.FC<{ evidence: EvidenceItem[] }> = ({ evidence }) => 
     };
     
     const filteredAndSortedEvidence = useMemo(() => {
+        if (!Array.isArray(evidence)) {
+            return [];
+        }
+
         const lowercasedFilter = filter.toLowerCase();
-        
-        return [...evidence]
-            .filter(item => item.publisher !== 'Internal Knowledge Base')
-            .filter(item => 
-                item.quote.toLowerCase().includes(lowercasedFilter) ||
-                item.publisher.toLowerCase().includes(lowercasedFilter)
-            )
-            .sort((a, b) => {
-                if (a[sortKey] < b[sortKey]) return sortOrder === 'asc' ? -1 : 1;
-                if (a[sortKey] > b[sortKey]) return sortOrder === 'asc' ? 1 : -1;
-                return 0;
+
+        const filtered = evidence
+            .filter(item => item && item.publisher !== 'Internal Knowledge Base')
+            .filter(item => {
+                const quote = item.quote || '';
+                const publisher = item.publisher || '';
+                return quote.toLowerCase().includes(lowercasedFilter) ||
+                       publisher.toLowerCase().includes(lowercasedFilter);
             });
+
+        return filtered.sort((a, b) => {
+            const valA = a[sortKey] || '';
+            const valB = b[sortKey] || '';
+
+            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
     }, [evidence, sortKey, sortOrder, filter]);
 
     if (evidence.length === 0) {

@@ -4,6 +4,7 @@ import { FactCheckReport } from '../types/factCheck';
 import ReportView from './ReportView';
 import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon, PencilSquareIcon } from './icons';
 import AutoEditor from './AutoEditor';
+import DashboardSkeleton from './DashboardSkeleton';
 
 // A new, self-contained component to visually represent the final verdict.
 interface VerdictDisplayProps {
@@ -51,7 +52,8 @@ const VerdictDisplay: React.FC<VerdictDisplayProps> = ({ verdict, score }) => {
 };
 
 interface DashboardProps {
-    result: FactCheckReport;
+    result: FactCheckReport | null;
+    isLoading: boolean;
 }
 
 type Tab = 'Overview' | 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis';
@@ -99,9 +101,26 @@ const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
     );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ result }) => {
+const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
     const [activeTab, setActiveTab] = useState<Tab>('Overview');
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+    if (isLoading) {
+        return <DashboardSkeleton />;
+    }
+
+    if (!result) {
+        return null;
+    }
+
+    // Add a final sanity check for essential data before rendering
+    if (!result.final_verdict || !result.score_breakdown || !result.evidence) {
+        return (
+            <div className="text-center py-10 text-slate-400">
+                <p>Error: Incomplete analysis report received. Please try again.</p>
+            </div>
+        );
+    }
 
     // Show Original Text Analysis tab only if segments are available
     const availableTabs: Tab[] = ['Overview'];
