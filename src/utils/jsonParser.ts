@@ -9,63 +9,36 @@ export function parseAIResponse(responseText: string): any {
     throw new Error('Invalid response: empty or non-string input');
   }
 
-  // Remove leading/trailing whitespace
-  let cleanedResponse = responseText.trim();
+  // Use a more reliable method to find the JSON content using regex
+  // This looks for content starting with `{` and ending with `}`
+  const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/i);
 
-  // Remove markdown code block formatting if present
-  if (cleanedResponse.startsWith('```json') || cleanedResponse.startsWith('```')) {
-    // Find the opening code block
-    const firstBlockStart = cleanedResponse.indexOf('```');
-    const firstLineEnd = cleanedResponse.indexOf('\n', firstBlockStart);
+  let cleanedResponse;
 
-    // Find the closing code block
-    const lastBlockStart = cleanedResponse.lastIndexOf('```');
-
-    if (firstBlockStart !== -1 && lastBlockStart !== -1 && firstBlockStart !== lastBlockStart) {
-      // Extract content between code blocks
-      cleanedResponse = cleanedResponse.substring(firstLineEnd + 1, lastBlockStart).trim();
-    } else if (firstBlockStart !== -1) {
-      // Handle single code block marker
-      cleanedResponse = cleanedResponse.substring(firstLineEnd + 1).trim();
+  if (jsonMatch && jsonMatch[1]) {
+    // If a markdown code block is found, use its content
+    cleanedResponse = jsonMatch[1];
+  } else {
+    // If no markdown block is found, try to find a standalone JSON object
+    const standaloneJsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (standaloneJsonMatch && standaloneJsonMatch[0]) {
+      cleanedResponse = standaloneJsonMatch[0];
+    } else {
+      // If no JSON object is found, try to clean the raw response
+      cleanedResponse = responseText
+        .replace(/^Here's the.*?:\s*/i, '')
+        .replace(/^Response:\s*/i, '')
+        .replace(/^JSON:\s*/i, '')
+        .trim();
     }
   }
 
-  // Remove any remaining markdown artifacts
-  cleanedResponse = cleanedResponse
-    .replace(/^```json\s*/i, '')  // Remove opening json code block
-    .replace(/^```\s*/i, '')      // Remove opening code block
-    .replace(/```\s*$/i, '')      // Remove closing code block
-    .trim();
-
-  // Additional cleaning for common AI response artifacts
-  cleanedResponse = cleanedResponse
-    .replace(/^Here's the.*?:\s*/i, '')  // Remove "Here's the response:" type prefixes
-    .replace(/^Response:\s*/i, '')       // Remove "Response:" prefix
-    .replace(/^JSON:\s*/i, '')           // Remove "JSON:" prefix
-    .trim();
-
   try {
     return JSON.parse(cleanedResponse);
-  } catch (initialError) {
-    // If parsing fails, try to extract JSON from within the text
-    const jsonMatches = cleanedResponse.match(/\{[\s\S]*\}/);
-    if (jsonMatches && jsonMatches[0]) {
-      try {
-        return JSON.parse(jsonMatches[0]);
-      } catch (secondaryError) {
-        console.error('JSON parsing failed. Original response:', responseText);
-        console.error('Cleaned response:', cleanedResponse);
-        console.error('Initial error:', initialError);
-        console.error('Secondary error:', secondaryError);
-
-        throw new Error('The AI model returned an invalid JSON structure. This may be a temporary issue.');
-      }
-    }
-
-    // If all else fails, throw the original error with context
+  } catch (parseError) {
     console.error('JSON parsing failed. Original response:', responseText);
     console.error('Cleaned response:', cleanedResponse);
-    console.error('Parse error:', initialError);
+    console.error('Parse error:', parseError);
 
     throw new Error('The AI model returned an invalid JSON structure. This may be a temporary issue.');
   }
