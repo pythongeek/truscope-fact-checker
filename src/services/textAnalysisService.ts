@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey } from './apiKeyService';
 import { Segment } from '../types/factCheck';
+import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export interface TextSegmentAnalysis {
     segments: Segment[];
@@ -128,7 +129,7 @@ export const analyzeTextSegments = async (
             },
         });
 
-        const analysis = JSON.parse(result.text.trim()) as TextSegmentAnalysis;
+        const analysis = parseAIJsonResponse(result.text) as TextSegmentAnalysis;
         analysis.analysisMethod = method;
 
         return analysis;
@@ -200,7 +201,7 @@ export const rewriteContent = async (
             },
         });
 
-        return JSON.parse(result.text.trim()) as ContentRewrite;
+        return parseAIJsonResponse(result.text) as ContentRewrite;
     } catch (error) {
         console.error("Error rewriting content:", error);
         throw new Error("Failed to rewrite content. Please try again.");
