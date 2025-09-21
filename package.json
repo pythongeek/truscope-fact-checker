@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite-node server.ts",
     "build": "tsc && vite build",
     "test": "vitest",
     "preview": "vite preview",
@@ -13,10 +13,13 @@
   "dependencies": {
     "@google/genai": "^1.19.0",
     "@vercel/blob": "^2.0.0",
+    "express": "^5.1.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "vite-express": "^0.21.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/ui": "^3.2.4",
@@ -26,6 +29,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
+    "vite-node": "^3.2.4",
     "vitest": "^3.2.4"
   }
 }
