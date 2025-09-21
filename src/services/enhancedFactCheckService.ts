@@ -1,6 +1,6 @@
 // services/enhancedFactCheckService.ts
 import { FactCheckReport } from '../types/factCheck';
-import { parseAndValidateFactCheckResponse } from '../utils/jsonParser';
+import { parseAIJsonResponse } from '../utils/jsonParser';
 import { getGeminiApiKey } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -29,7 +29,7 @@ export class EnhancedFactCheckService {
       const rawResponse = await this.callGeminiAPI(prompt);
 
       // Parse and validate the response using the robust parser
-      const parsedResponse = parseAndValidateFactCheckResponse(rawResponse);
+      const parsedResponse = parseAIJsonResponse(rawResponse);
 
       // Add metadata and processing information
       const enhancedReport: FactCheckReport = {
