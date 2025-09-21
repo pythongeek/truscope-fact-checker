@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import Sidebar from './components/Sidebar';
 import InputSection, { AnalysisMethod } from './components/InputSection';
 import Dashboard from './components/Dashboard';
@@ -7,10 +7,57 @@ import SettingsModal from './components/SettingsModal';
 import { FactCheckReport } from './types/factCheck';
 import { runFactCheckOrchestrator } from './services/geminiService';
 import { saveReportToHistory } from './services/historyService';
+import { parseAIJsonResponse } from './utils/jsonParser'; // Added import
+
+// Initialize the global JSON fix on app startup
+function initializeGlobalJsonFix() {
+  // Store the original JSON.parse method
+  const originalJsonParse = JSON.parse;
+
+  // Override JSON.parse globally to handle AI response parsing
+  (JSON as any).parse = function(text: string, reviver?: (key: string, value: any) => any): any {
+    try {
+      // Try the original JSON.parse first
+      return originalJsonParse.call(this, text, reviver);
+    } catch (error) {
+      // If original fails and the text looks like it might be an AI response
+      if (typeof text === 'string' && (
+        text.includes('```') ||
+        text.includes('final_verdict') ||
+        text.includes('score_breakdown') ||
+        text.includes('enhanced_claim_text') ||
+        text.trim().startsWith('```json') ||
+        (text.includes('{') && text.includes('}') && text.includes('`'))
+      )) {
+        try {
+          console.warn('[JSON Fix] Standard JSON.parse failed, attempting robust AI response parsing');
+          const result = parseAIJsonResponse(text);
+          console.log('[JSON Fix] Successfully parsed AI response');
+          return result;
+        } catch (robustError) {
+          console.error('[JSON Fix] Robust parsing also failed:', robustError);
+          console.error('[JSON Fix] Original text sample:', text.substring(0, 200));
+          // If robust parsing also fails, throw the original error
+          throw error;
+        }
+      }
+      // For non-AI responses, throw the original error
+      throw error;
+    }
+  };
+
+  console.log('[JSON Fix] Global JSON parser override initialized for AI responses');
+}
+
 
 type View = 'checker' | 'history';
 
 const App: React.FC = () => {
+    // Add the useEffect hook to initialize the fix
+    useEffect(() => {
+        initializeGlobalJsonFix();
+    }, []);
+
     const [currentView, setCurrentView] = useState<View>('checker');
     const [inputText, setInputText] = useState('');
     const [result, setResult] = useState<FactCheckReport | null>(null);
