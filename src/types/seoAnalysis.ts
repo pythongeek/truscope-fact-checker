@@ -1,3 +1,4 @@
+// Basic SEO Analysis Types
 export interface SEOAnalysis {
   overallScore: number;
   keywordAnalysis: KeywordAnalysis;
@@ -17,6 +18,13 @@ export interface KeywordAnalysis {
   missingKeywords: string[];
 }
 
+export interface KeywordDensityMetric {
+  keyword: string;
+  count: number;
+  density: number;
+  isTarget: boolean;
+}
+
 export interface ReadabilityMetrics {
   fleschScore: number;
   fleschKincaidGrade: number;
@@ -26,24 +34,12 @@ export interface ReadabilityMetrics {
   readingTime: number;
 }
 
-export interface SchemaMarkupSuggestion {
-  type: 'ClaimReview' | 'Article' | 'NewsArticle' | 'FAQPage' | 'Organization';
-  jsonLd: string;
-  explanation: string;
-  priority: 'high' | 'medium' | 'low';
-}
-
 export interface ContentStructure {
   hasHeadings: boolean;
   headingCount: number;
   hasBulletPoints: boolean;
   hasNumberedLists: boolean;
   headingStructure: HeadingStructureAnalysis;
-  paragraphCount: number;
-  averageParagraphLength: number;
-  hasIntroduction: boolean;
-  hasConclusion: boolean;
-  contentFlow: 'excellent' | 'good' | 'needs-improvement' | 'poor';
 }
 
 export interface HeadingStructureAnalysis {
@@ -51,20 +47,18 @@ export interface HeadingStructureAnalysis {
   hasH2: boolean;
   hasH3: boolean;
   properHierarchy: boolean;
-  h1Count: number;
-  h2Count: number;
-  h3Count: number;
-  headingDistribution: 'balanced' | 'top-heavy' | 'bottom-heavy' | 'unbalanced';
+}
+
+export interface SchemaMarkupSuggestion {
+  type: 'ClaimReview' | 'Article' | 'NewsArticle' | 'FAQPage' | 'Organization' | 'BlogPosting';
+  jsonLd: string;
+  explanation: string;
+  priority: 'high' | 'medium' | 'low';
 }
 
 export interface MetaOptimization {
   title: MetaElement;
   description: MetaElement;
-  keywords?: MetaElement;
-  ogTitle?: MetaElement;
-  ogDescription?: MetaElement;
-  twitterTitle?: MetaElement;
-  twitterDescription?: MetaElement;
 }
 
 export interface MetaElement {
@@ -72,93 +66,232 @@ export interface MetaElement {
   optimized: string;
   length: number;
   recommendations: string[];
-  score: number; // 0-100
-  issues: string[];
 }
 
 export interface LinkAnalysis {
   internal: InternalLinkOpportunity[];
   external: ExternalLinkOpportunity[];
   recommendations: string[];
-  totalLinks: number;
-  internalLinkRatio: number;
-  externalLinkRatio: number;
-  brokenLinks: string[];
-  anchorTextAnalysis: AnchorTextAnalysis;
 }
 
 export interface InternalLinkOpportunity {
   anchor: string;
   suggestedUrl: string;
   relevanceScore: number;
-  context: string;
-  priority: 'high' | 'medium' | 'low';
-  reasoning: string;
 }
 
 export interface ExternalLinkOpportunity {
   anchor: string;
   suggestedDomain: string;
   relevanceScore: number;
-  authorityScore: number;
-  context: string;
-  reasoning: string;
-}
-
-export interface AnchorTextAnalysis {
-  overOptimized: boolean;
-  keywordStuffing: boolean;
-  naturalDistribution: boolean;
-  brandedAnchors: number;
-  exactMatchAnchors: number;
-  partialMatchAnchors: number;
-  genericAnchors: number;
 }
 
 export interface SEORecommendation {
-  type: 'keyword' | 'readability' | 'structure' | 'meta' | 'links' | 'images' | 'performance' | 'schema';
+  type: 'keyword' | 'readability' | 'structure' | 'meta' | 'links';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;
-  impact: 'high' | 'medium' | 'low';
-  effort: 'low' | 'medium' | 'high';
-  category: 'technical' | 'content' | 'optimization';
-  implementationSteps: string[];
-  expectedResults: string;
-  timeframe: 'immediate' | 'short-term' | 'long-term';
+  action: string;
+  expectedImpact: 'high' | 'medium' | 'low';
 }
 
-export interface KeywordDensityMetric {
+// Advanced SEO Types
+export interface ContentOutline {
+  title: string;
+  metaDescription: string;
+  headings: HeadingStructure;
+  keywordDistribution: KeywordDistribution;
+  internalLinkSuggestions: InternalLinkPlan;
+  contentLength: ContentLengthRecommendation;
+  faqSection: FAQQuestion[];
+}
+
+export interface HeadingStructure {
+  h1: string;
+  h2Sections: string[];
+  h3Subsections: { [key: string]: string[] };
+}
+
+export interface KeywordDistribution {
+  primary: KeywordPlacement;
+  secondary: KeywordPlacement[];
+  lsi: KeywordPlacement[];
+}
+
+export interface KeywordPlacement {
   keyword: string;
-  count: number;
-  density: number; // percentage
-  isTarget: boolean;
-  position: 'title' | 'headings' | 'body' | 'meta' | 'alt-text';
-  proximity: number; // average distance between keyword occurrences
-  semanticVariations: string[];
-  competitorDensity?: number;
-  optimalRange: {
-    min: number;
-    max: number;
-  };
+  targetDensity: number;
+  placements: string[];
 }
 
-// Additional supporting types
-export interface ImageOptimization {
-  totalImages: number;
-  missingAltText: number;
-  oversizedImages: number;
-  unoptimizedFormats: number;
+export interface InternalLinkPlan {
+  contextualLinks: LinkSuggestion[];
+  navigationLinks: LinkSuggestion[];
+  footerLinks: LinkSuggestion[];
+}
+
+export interface LinkSuggestion {
+  anchorText: string;
+  suggestedUrl: string;
+  placement: string;
+  relevanceScore: number;
+}
+
+export interface ContentLengthRecommendation {
+  minWords: number;
+  optimalWords: number;
+  maxWords: number;
+  reasoning: string;
+}
+
+export interface FAQQuestion {
+  question: string;
+  suggestedAnswer: string;
+  searchVolume: number;
+  difficulty: 'low' | 'medium' | 'high';
+}
+
+// Competitor Analysis Types
+export interface CompetitorAnalysis {
+  averageContentLength: number;
+  commonKeywords: KeywordFrequency[];
+  headingPatterns: HeadingPattern[];
+  contentGaps: ContentGap[];
   recommendations: string[];
 }
 
-export interface TechnicalSEO {
-  pageSpeed: number;
-  mobileOptimization: number;
-  crawlability: number;
-  indexability: number;
-  httpsSecure: boolean;
-  canonicalTags: boolean;
-  robotsTxt: boolean;
-  sitemapPresent: boolean;
+export interface CompetitorPageAnalysis {
+  url: string;
+  title: string;
+  metaDescription: string;
+  contentLength: number;
+  headingCount: number;
+  keywords: string[];
+  internalLinks: number;
+  externalLinks: number;
+  images: number;
+}
+
+export interface KeywordFrequency {
+  keyword: string;
+  frequency: number;
+}
+
+export interface HeadingPattern {
+  pattern: string;
+  frequency: number;
+  effectiveness: 'high' | 'medium' | 'low';
+}
+
+export interface ContentGap {
+  topic: string;
+  opportunity: 'high' | 'medium' | 'low';
+  reason: string;
+}
+
+// Technical SEO Audit Types
+export interface TechnicalSEOAudit {
+  pageTitleOptimization: SEOAuditResult;
+  metaDescriptionOptimization: SEOAuditResult;
+  headingStructure: SEOAuditResult;
+  imageOptimization: SEOAuditResult;
+  internalLinking: SEOAuditResult;
+  schemaMarkup: SEOAuditResult;
+  mobileOptimization: SEOAuditResult;
+  pageSpeedFactors: SEOAuditResult;
+}
+
+export interface SEOAuditResult {
+  status: 'good' | 'needs-improvement' | 'critical' | 'missing';
+  score: number;
+  issues: string[];
+  recommendations: string[];
+}
+
+// Content Planning Types
+export interface ContentPlan {
+  topic: string;
+  targetKeywords: string[];
+  contentType: 'blog-post' | 'guide' | 'tutorial' | 'review' | 'comparison';
+  outline: ContentOutline;
+  competitorAnalysis: CompetitorAnalysis;
+  seoStrategy: SEOStrategy;
+}
+
+export interface SEOStrategy {
+  primaryGoal: 'traffic' | 'conversions' | 'brand-awareness' | 'authority';
+  targetAudience: string;
+  contentPillars: string[];
+  distributionChannels: string[];
+  successMetrics: string[];
+}
+
+// Performance Reporting Types
+export interface ContentPerformanceReport {
+    summary: {
+      seoHealthScore: number;
+      totalViews: number;
+      averagePosition: number;
+      totalConversions: number;
+    };
+    keyMetrics: {
+      engagement: {
+        bounceRate: number;
+        timeOnPage: number;
+        socialShares: number;
+        backlinks: number;
+        engagementScore: number;
+      };
+      trafficSources: { name: string; value: number; color: string; }[];
+      rankings: {
+        totalKeywords: number;
+        improved: number;
+        declined: number;
+        stable: number;
+        topKeywords: {
+          keyword: string;
+          searchVolume: number;
+          difficulty: number;
+          position: number;
+          previousPosition: number;
+        }[];
+      };
+    };
+    trafficTrend: { date: string; traffic: number; conversions: number; }[];
+    recommendations: {
+      type: 'keyword' | 'readability' | 'structure' | 'meta' | 'links';
+      priority: 'high' | 'medium' | 'low';
+      title: string;
+      description: string;
+      action: string;
+      expectedImpact: 'high' | 'medium' | 'low';
+    }[];
+    opportunityAnalysis: {
+      quickWins: {
+        keyword: string;
+        currentPosition: number;
+        searchVolume: number;
+        difficulty: number;
+        estimatedTrafficGain: number;
+      }[];
+      longTermOpportunities: {
+        keyword: string;
+        currentPosition: number;
+        searchVolume: number;
+        difficulty: number;
+        estimatedTrafficGain: number;
+      }[];
+      contentGaps: string[];
+    };
+    competitorComparison: {
+      averageTraffic: number;
+      averagePosition: number;
+      averageBacklinks: number;
+      topCompetitors: {
+        domain: string;
+        traffic: number;
+        position: number;
+        backlinks: number;
+      }[];
+    };
 }
