@@ -3,8 +3,8 @@ import { ShieldCheckIcon } from './icons';
 
 interface SidebarProps {
     onSettingsClick: () => void;
-    currentView: 'checker' | 'history' | 'trending';
-    onNavigate: (view: 'checker' | 'history' | 'trending') => void;
+    currentView: 'checker' | 'history' | 'trending' | 'optimizer';
+    onNavigate: (view: 'checker' | 'history' | 'trending' | 'optimizer') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, currentView, onNavigate }) => {
@@ -50,6 +50,20 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, currentView, onNavig
                 >
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7.014A8.003 8.003 0 0112 3c1.398 0 2.743.57 3.657 1.514C18.343 6.229 19 8.828 19 11c0 3-1.5 5-2.343 4.657z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14a3 3 0 100-6 3 3 0 000 6z" /></svg>
                     Trending
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onNavigate('optimizer')}
+                    className={`flex items-center gap-3 px-4 py-2 rounded-lg font-semibold text-left transition-colors ${
+                        currentView === 'optimizer'
+                        ? 'text-slate-100 bg-slate-700/50'
+                        : 'text-slate-300 hover:text-slate-200 hover:bg-slate-800'
+                    }`}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    Content Optimizer
                 </button>
                 <button
                     type="button"

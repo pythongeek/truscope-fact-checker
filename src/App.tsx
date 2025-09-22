@@ -51,7 +51,10 @@ function initializeGlobalJsonFix() {
 }
 
 
-type View = 'checker' | 'history' | 'trending';
+import ContentOptimizer from './components/ContentOptimizer';
+import { ContentPlan } from './types/seoAnalysis';
+
+type View = 'checker' | 'history' | 'trending' | 'optimizer';
 
 const App: React.FC = () => {
     // Add the useEffect hook to initialize the fix
@@ -116,6 +119,112 @@ const App: React.FC = () => {
         setError(null);
     };
 
+    const handleOptimizedContent = (content: string, plan: ContentPlan) => {
+        console.log('Optimized Content:', content);
+        console.log('Content Plan:', plan);
+        // For now, just log the output. In a real app, you might update state or navigate.
+        alert('Content optimization applied! Check the console for details.');
+    };
+
+    const renderContent = () => {
+        switch (currentView) {
+            case 'checker':
+                return (
+                    <div className="max-w-6xl mx-auto space-y-8">
+                        <header className="text-center">
+                            <h1 className="text-4xl font-bold text-slate-100 mb-2">
+                                Fact-Checker Dashboard
+                            </h1>
+                            <p className="text-slate-300 max-w-2xl mx-auto">
+                                Analyze content to uncover insights and verify claims with our advanced
+                                Citation-Augmented Analysis powered by external source verification.
+                            </p>
+                        </header>
+
+                        <InputSection
+                            inputText={inputText}
+                            onTextChange={setInputText}
+                            onAnalyze={handleAnalyze}
+                            isLoading={isLoading}
+                        />
+
+                        {error && (
+                            <div className="bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 rounded-lg">
+                                <div className="flex items-start gap-3">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <div>
+                                        <h4 className="font-semibold mb-1">Analysis Error</h4>
+                                        <p className="text-sm">{error}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {result && (
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-100">Analysis Results</h2>
+                                        {currentClaimText && (
+                                            <p className="text-slate-400 text-sm mt-1">
+                                                Original claim: "{currentClaimText.length > 100 ? currentClaimText.slice(0, 100) + '...' : currentClaimText}"
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={handleClearResults}
+                                        className="px-4 py-2 text-sm text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors"
+                                    >
+                                        Clear Results
+                                    </button>
+                                </div>
+                                <Dashboard result={result} isLoading={isLoading} />
+                            </div>
+                        )}
+
+                        {!result && !isLoading && !error && (
+                            <div className="text-center py-16 text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <h3 className="text-xl font-semibold text-slate-300 mb-2">Ready to Analyze</h3>
+                                <p className="max-w-md mx-auto">
+                                    Enter a claim or statement above and select an analysis method to get started.
+                                    The Citation-Augmented method is recommended for the most verifiable results.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                );
+            case 'history':
+                return (
+                    <div className="max-w-6xl mx-auto">
+                        <HistoryView onSelectReport={handleSelectReport} />
+                    </div>
+                );
+            case 'optimizer':
+                return (
+                    <div className="max-w-6xl mx-auto">
+                        <ContentOptimizer
+                            originalContent={inputText}
+                            factCheckReport={result || undefined}
+                            onOptimizedContent={handleOptimizedContent}
+                        />
+                    </div>
+                );
+            case 'trending':
+                return (
+                    <div className="max-w-6xl mx-auto">
+                        <TrendingMisinformation />
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100">
             <div className="flex">
@@ -126,87 +235,11 @@ const App: React.FC = () => {
                 />
 
                 <main className="flex-1 p-6 overflow-hidden">
-                    {currentView === 'checker' ? (
-                        <div className="max-w-6xl mx-auto space-y-8">
-                            <header className="text-center">
-                                <h1 className="text-4xl font-bold text-slate-100 mb-2">
-                                    Fact-Checker Dashboard
-                                </h1>
-                                <p className="text-slate-300 max-w-2xl mx-auto">
-                                    Analyze content to uncover insights and verify claims with our advanced
-                                    Citation-Augmented Analysis powered by external source verification.
-                                </p>
-                            </header>
-
-                            <InputSection
-                                inputText={inputText}
-                                onTextChange={setInputText}
-                                onAnalyze={handleAnalyze}
-                                isLoading={isLoading}
-                            />
-
-                            {error && (
-                                <div className="bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 rounded-lg">
-                                    <div className="flex items-start gap-3">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <div>
-                                            <h4 className="font-semibold mb-1">Analysis Error</h4>
-                                            <p className="text-sm">{error}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {result && (
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-slate-100">Analysis Results</h2>
-                                            {currentClaimText && (
-                                                <p className="text-slate-400 text-sm mt-1">
-                                                    Original claim: "{currentClaimText.length > 100 ? currentClaimText.slice(0, 100) + '...' : currentClaimText}"
-                                                </p>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={handleClearResults}
-                                            className="px-4 py-2 text-sm text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors"
-                                        >
-                                            Clear Results
-                                        </button>
-                                    </div>
-                                    <Dashboard result={result} isLoading={isLoading} />
-                                </div>
-                            )}
-
-                            {!result && !isLoading && !error && (
-                                <div className="text-center py-16 text-slate-400">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <h3 className="text-xl font-semibold text-slate-300 mb-2">Ready to Analyze</h3>
-                                    <p className="max-w-md mx-auto">
-                                        Enter a claim or statement above and select an analysis method to get started.
-                                        The Citation-Augmented method is recommended for the most verifiable results.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    ) : currentView === 'history' ? (
-                        <div className="max-w-6xl mx-auto">
-                            <HistoryView onSelectReport={handleSelectReport} />
-                        </div>
-                    ) : (
-                        <div className="max-w-6xl mx-auto">
-                            <TrendingMisinformation />
-                        </div>
-                    )}
+                    {renderContent()}
                 </main>
             </div>
 
-            <SettingsModal 
+            <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
             />
