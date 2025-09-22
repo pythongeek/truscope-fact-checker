@@ -176,7 +176,7 @@ const App: React.FC = () => {
                                             Clear Results
                                         </button>
                                     </div>
-                                    <Dashboard result={result} />
+                                    <Dashboard result={result} isLoading={isLoading} />
                                 </div>
                             )}
 
