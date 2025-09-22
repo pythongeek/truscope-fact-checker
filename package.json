@@ -1,31 +1,37 @@
 {
-  "name": "truscope-ai-fact-checking-dashboard",
+  "name": "nion-ai-fact-checker",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test": "vitest",
     "preview": "vite preview",
-    "vercel-build": "npm run build"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "@google/genai": "^1.19.0",
-    "@vercel/blob": "^2.0.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@google/generative-ai": "^0.2.1",
+    "@vercel/blob": "^0.15.1",
+    "recharts": "^2.8.0",
+    "lucide-react": "^0.263.1",
+    "papaparse": "^5.4.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "@vitest/ui": "^3.2.4",
-    "autoprefixer": "^10.4.21",
-    "jsdom": "^27.0.0",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^3.4.17",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "vitest": "^3.2.4"
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/papaparse": "^5.3.8",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.1.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0"
   }
 }
