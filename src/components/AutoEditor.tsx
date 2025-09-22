@@ -125,7 +125,7 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div>
-            <h2 className="text-2xl font-bold text-slate-100">Jules AI - Advanced Content Editor</h2>
+            <h2 className="text-2xl font-bold text-slate-100">Truscope Fact Checker By Nion - Advanced Content Editor</h2>
             <p className="text-slate-300 text-sm">Transform your content with AI-powered editing modes</p>
           </div>
           <button
