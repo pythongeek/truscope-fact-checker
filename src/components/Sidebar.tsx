@@ -3,8 +3,8 @@ import { ShieldCheckIcon } from './icons';
 
 interface SidebarProps {
     onSettingsClick: () => void;
-    currentView: 'checker' | 'history';
-    onNavigate: (view: 'checker' | 'history') => void;
+    currentView: 'checker' | 'history' | 'trending';
+    onNavigate: (view: 'checker' | 'history' | 'trending') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, currentView, onNavigate }) => {
@@ -12,7 +12,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, currentView, onNavig
         <aside className="w-64 bg-slate-900/70 backdrop-blur-lg p-6 border-r border-slate-800 flex-shrink-0 hidden md:flex flex-col">
             <div className="flex items-center gap-3 mb-10">
                 <ShieldCheckIcon className="w-8 h-8 text-indigo-400" />
-                <h1 className="text-2xl font-bold text-slate-100">TruScope AI</h1>
+                <h1 className="text-2xl font-bold text-slate-100">Truscope Fact Checker By Nion</h1>
             </div>
             <nav className="flex flex-col gap-2">
                 <button
@@ -38,6 +38,18 @@ const Sidebar: React.FC<SidebarProps> = ({ onSettingsClick, currentView, onNavig
                 >
                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     History
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onNavigate('trending')}
+                    className={`flex items-center gap-3 px-4 py-2 rounded-lg font-semibold text-left transition-colors ${
+                        currentView === 'trending'
+                        ? 'text-slate-100 bg-slate-700/50'
+                        : 'text-slate-300 hover:text-slate-200 hover:bg-slate-800'
+                    }`}
+                >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7.014A8.003 8.003 0 0112 3c1.398 0 2.743.57 3.657 1.514C18.343 6.229 19 8.828 19 11c0 3-1.5 5-2.343 4.657z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14a3 3 0 100-6 3 3 0 000 6z" /></svg>
+                    Trending
                 </button>
                 <button
                     type="button"

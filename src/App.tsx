@@ -4,6 +4,7 @@ import InputSection, { AnalysisMethod } from './components/InputSection';
 import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
+import TrendingMisinformation from './components/TrendingMisinformation';
 import { FactCheckReport } from './types/factCheck';
 import { runFactCheckOrchestrator } from './services/geminiService';
 import { saveReportToHistory } from './services/historyService';
@@ -50,7 +51,7 @@ function initializeGlobalJsonFix() {
 }
 
 
-type View = 'checker' | 'history';
+type View = 'checker' | 'history' | 'trending';
 
 const App: React.FC = () => {
     // Add the useEffect hook to initialize the fix
@@ -193,9 +194,13 @@ const App: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                    ) : (
+                    ) : currentView === 'history' ? (
                         <div className="max-w-6xl mx-auto">
                             <HistoryView onSelectReport={handleSelectReport} />
+                        </div>
+                    ) : (
+                        <div className="max-w-6xl mx-auto">
+                            <TrendingMisinformation />
                         </div>
                     )}
                 </main>
