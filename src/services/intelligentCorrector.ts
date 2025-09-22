@@ -1,15 +1,14 @@
 import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/corrections';
 import { AdvancedEvidence } from '../types/enhancedFactCheck';
 import { getGeminiApiKey } from './apiKeyService';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
-  private ai: GoogleGenAI;
+  private genAI: GoogleGenerativeAI;
 
   constructor() {
-    // Reverting to the user's original constructor pattern
-    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    this.genAI = new GoogleGenerativeAI(getGeminiApiKey());
   }
 
   async analyzeForCorrections(
@@ -51,21 +50,19 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
-      const result = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      const aiResponse = parseAIJsonResponse(text);
 
       return {
-        totalIssues: response.issues.length,
-        issuesByType: this.categorizeByType(response.issues),
-        issuesBySeverity: this.categorizeBySeverity(response.issues),
-        overallAccuracy: response.overallAccuracy,
-        recommendedAction: response.recommendedAction,
-        issues: response.issues || []
+        totalIssues: aiResponse.issues.length,
+        issuesByType: this.categorizeByType(aiResponse.issues),
+        issuesBySeverity: this.categorizeBySeverity(aiResponse.issues),
+        overallAccuracy: aiResponse.overallAccuracy,
+        recommendedAction: aiResponse.recommendedAction,
+        issues: aiResponse.issues || []
       };
     } catch (error) {
       console.error('Error analyzing corrections:', error);
@@ -130,24 +127,22 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
-      const result = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+      const aiResponse = parseAIJsonResponse(text);
 
       return {
         id: `correction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         originalStatement: issue.originalText,
-        correctedStatement: response.correctedStatement,
+        correctedStatement: aiResponse.correctedStatement,
         specificIssues: [issue],
-        correctInformation: response.correctInformation,
+        correctInformation: aiResponse.correctInformation,
         supportingSources: relevantEvidence,
-        confidence: response.confidence,
-        alternativePhrasings: response.alternativePhrasings,
-        correctionReasoning: response.correctionReasoning
+        confidence: aiResponse.confidence,
+        alternativePhrasings: aiResponse.alternativePhrasings,
+        correctionReasoning: aiResponse.correctionReasoning
       };
     } catch (error) {
       console.error('Error generating single correction:', error);
