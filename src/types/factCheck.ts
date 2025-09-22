@@ -24,7 +24,7 @@ export interface Segment {
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
-    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction';
+    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence';
     score: number; // 0-100
     description: string;
 }
@@ -44,7 +44,7 @@ export interface EvidenceItem {
     url: string | null;
     quote: string;
     score: number; // 0-100 reliability score
-    type: 'claim' | 'news' | 'search_result';
+    type: 'claim' | 'news' | 'search_result' | 'cached-database';
     publishedDate?: string;
 }
 

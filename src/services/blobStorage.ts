@@ -9,8 +9,19 @@ export interface StoredReport {
   userId?: string; // For future user system
 }
 
+import { FactDatabase } from '../types/factDatabase';
+
 export class BlobStorageService {
+  private static instance: BlobStorageService;
   private readonly BLOB_PREFIX = 'truescope-reports/';
+  private readonly FACT_DB_PATH = 'fact-database/db.json';
+
+  static getInstance(): BlobStorageService {
+    if (!BlobStorageService.instance) {
+      BlobStorageService.instance = new BlobStorageService();
+    }
+    return BlobStorageService.instance;
+  }
 
   async saveReport(report: StoredReport): Promise<string> {
     try {
@@ -67,6 +78,35 @@ export class BlobStorageService {
     } catch (error) {
       console.error('Failed to list reports from blob storage:', error);
       return [];
+    }
+  }
+
+  async saveFactDatabase(facts: FactDatabase[]): Promise<void> {
+    try {
+      await put(this.FACT_DB_PATH, JSON.stringify(facts, null, 2), {
+        access: 'public',
+        addRandomSuffix: false,
+      });
+    } catch (error) {
+      console.error('Failed to save fact database to blob storage:', error);
+      throw new Error('Failed to save fact database');
+    }
+  }
+
+  async loadFactDatabase(): Promise<FactDatabase[]> {
+    try {
+      const response = await fetch(`https://blob.vercel-storage.com/${this.FACT_DB_PATH}`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('Fact database not found, starting with an empty one.');
+          return [];
+        }
+        throw new Error(`Failed to fetch fact database: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to load fact database from blob storage:', error);
+      return []; // Return empty array on error to allow the app to continue
     }
   }
 }
