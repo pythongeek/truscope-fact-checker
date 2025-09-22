@@ -5,6 +5,8 @@ import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
 import { search } from './webSearch';
 import { enhancedFactCheck } from './textAnalysisService';
+import { RealTimeFactDBService } from './realTimeFactDB';
+import { FactDatabase, FactVerdict } from "../types/factDatabase";
 
 // AI Client Setup
 const getAiClient = () => {
@@ -416,11 +418,99 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
 };
 
 // --- Main Orchestrator ---
-export const runFactCheckOrchestrator = async (
+export async function runFactCheckOrchestrator(
+  text: string,
+  method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented'
+): Promise<FactCheckReport> {
+  const factDB = RealTimeFactDBService.getInstance();
+
+  // Check fact database first for cached results
+  const cachedFact = await factDB.getFact(text);
+  if (cachedFact && isFactFresh(cachedFact)) {
+    console.log('✅ Using cached fact from database');
+    return convertFactToReport(cachedFact, text);
+  }
+
+  // Proceed with original analysis if no cached result
+  const report = await originalFactCheckOrchestrator(text, method);
+
+  // Store result in fact database for future use
+  try {
+    await factDB.addFactFromReport(text, report);
+    console.log('✅ Fact saved to database for future use');
+  } catch (error) {
+    console.error('Failed to save fact to database:', error);
+  }
+
+  return report;
+}
+
+function isFactFresh(fact: FactDatabase): boolean {
+  const daysSinceVerification = (Date.now() - new Date(fact.verification.lastVerified).getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceVerification < 7; // Consider facts fresh for 7 days
+}
+
+function convertFactToReport(fact: FactDatabase, originalText: string): FactCheckReport {
+  return {
+    originalText,
+    final_verdict: mapVerdictToString(fact.verdict),
+    final_score: Math.round(fact.confidence * 100),
+    evidence: fact.sources.map(source => ({
+      id: Math.random().toString(36).substr(2, 9),
+      publisher: source.publisher,
+      quote: source.quote,
+      url: source.url,
+      score: source.credibilityScore,
+      type: 'cached-database'
+    })),
+    score_breakdown: {
+      final_score_formula: 'Cached from fact database',
+      metrics: [
+        {
+          name: 'Cached Confidence',
+          score: Math.round(fact.confidence * 100),
+          description: 'Pre-verified fact from database'
+        }
+      ],
+      confidence_intervals: {
+        lower_bound: Math.max(0, Math.round(fact.confidence * 100) - 10),
+        upper_bound: Math.min(100, Math.round(fact.confidence * 100) + 10)
+      }
+    },
+    reasoning: `This claim was previously verified and cached in our fact database. Last verified: ${new Date(fact.verification.lastVerified).toLocaleDateString()}`,
+    enhanced_claim_text: '',
+    metadata: {
+      method_used: 'cached-database',
+      processing_time_ms: 50, // Very fast for cached results
+      apis_used: ['fact-database'],
+      sources_consulted: {
+        total: fact.sources.length,
+        high_credibility: fact.sources.filter(s => s.credibilityScore > 80).length,
+        conflicting: 0
+      },
+      warnings: new Date(fact.verification.nextVerificationDue) < new Date() ? ['Fact may need re-verification'] : []
+    }
+  };
+}
+
+function mapVerdictToString(verdict: FactVerdict): string {
+  const verdictMap = {
+    'true': 'TRUE',
+    'mostly-true': 'MOSTLY TRUE',
+    'mixed': 'MIXED',
+    'mostly-false': 'MOSTLY FALSE',
+    'false': 'FALSE',
+    'unverified': 'UNVERIFIED'
+  };
+  return verdictMap[verdict];
+}
+
+// Keep original function for new analysis
+async function originalFactCheckOrchestrator(
     claimText: string,
     method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented',
     context?: string
-): Promise<FactCheckReport> => {
+): Promise<FactCheckReport> {
     const cacheKey = `${method}::${claimText.trim().toLowerCase()}`;
     const cachedReport = factCheckCache.get(cacheKey);
     if (cachedReport) {
