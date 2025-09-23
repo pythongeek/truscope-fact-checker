@@ -51,10 +51,7 @@ function initializeGlobalJsonFix() {
 }
 
 
-import ContentOptimizer from './components/ContentOptimizer';
-import { ContentPlan } from './types/seoAnalysis';
-
-type View = 'checker' | 'history' | 'trending' | 'optimizer';
+type View = 'checker' | 'history' | 'trending';
 
 const App: React.FC = () => {
     // Add the useEffect hook to initialize the fix
@@ -117,13 +114,6 @@ const App: React.FC = () => {
         setCurrentClaimText('');
         setInputText('');
         setError(null);
-    };
-
-    const handleOptimizedContent = (content: string, plan: ContentPlan) => {
-        console.log('Optimized Content:', content);
-        console.log('Content Plan:', plan);
-        // For now, just log the output. In a real app, you might update state or navigate.
-        alert('Content optimization applied! Check the console for details.');
     };
 
     const renderContent = () => {
@@ -202,16 +192,6 @@ const App: React.FC = () => {
                 return (
                     <div className="max-w-6xl mx-auto">
                         <HistoryView onSelectReport={handleSelectReport} />
-                    </div>
-                );
-            case 'optimizer':
-                return (
-                    <div className="max-w-6xl mx-auto">
-                        <ContentOptimizer
-                            originalContent={inputText}
-                            factCheckReport={result || undefined}
-                            onOptimizedContent={handleOptimizedContent}
-                        />
                     </div>
                 );
             case 'trending':
