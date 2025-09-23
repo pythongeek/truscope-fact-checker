@@ -20,8 +20,13 @@ function getKeyFromStorage(keyId: ApiKeyId, errorMessage: string): string {
     return apiKey;
 }
 
-export const getGeminiApiKey = (): string => 
-    getKeyFromStorage('gemini', 'Gemini API key not found. Please add it in the Settings panel.');
+export const getGeminiApiKey = (): string => {
+    const envApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (envApiKey) {
+        return envApiKey;
+    }
+    return getKeyFromStorage('gemini', 'Gemini API key not found. Please set it in the .env file or in the Settings panel.');
+};
 
 export const getFactCheckApiKey = (): string =>
     getKeyFromStorage('factCheck', 'Google Fact Check API key not found. Please add it in Settings.');
