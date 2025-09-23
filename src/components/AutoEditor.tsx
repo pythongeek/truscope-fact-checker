@@ -59,11 +59,11 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
 }) => {
   // State management
   const [selectedMode, setSelectedMode] = useState<string>('quick-fix');
-  const [editorResults, setEditorResults] = useState<Map<string, EditorResult>>(new Map());
+  const [editorResults, setEditorResults] = useState<{ [key: string]: EditorResult }>({});
   const [activeTab, setActiveTab] = useState<'selector' | 'results' | 'comparison' | 'history'>('selector');
   const [customPrompt, setCustomPrompt] = useState('');
-  const [processingJobs, setProcessingJobs] = useState<Map<string, ProcessingJob>>(new Map());
-  const [savedVersions, setSavedVersions] = useState<Map<string, EditorResult[]>>(new Map());
+  const [processingJobs, setProcessingJobs] = useState<{ [key: string]: ProcessingJob }>({});
+  const [savedVersions, setSavedVersions] = useState<{ [key: string]: EditorResult[] }>({});
   const [exportFormat, setExportFormat] = useState<'json' | 'markdown' | 'docx' | 'txt'>('json');
   const [batchProcessingStatus, setBatchProcessingStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [previewMode, setPreviewMode] = useState<'split' | 'overlay' | 'tabs'>('split');
@@ -136,7 +136,7 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
       startTime: Date.now()
     };
 
-    setProcessingJobs(prev => new Map(prev.set(mode, job)));
+    setProcessingJobs(prev => ({ ...prev, [mode]: job }));
 
     return new Promise((resolve, reject) => {
       let progress = 0;
@@ -145,16 +145,18 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
         if (progress > 100) progress = 100;
 
         setProcessingJobs(prev => {
-          const updated = new Map(prev);
-          const currentJob = updated.get(mode);
+          const currentJob = prev[mode];
           if (currentJob) {
-            updated.set(mode, {
-              ...currentJob,
-              status: progress === 100 ? 'completed' : 'processing',
-              progress
-            });
+            return {
+              ...prev,
+              [mode]: {
+                ...currentJob,
+                status: progress >= 100 ? 'completed' : 'processing',
+                progress,
+              }
+            };
           }
-          return updated;
+          return prev;
         });
 
         if (progress >= 100) {
@@ -193,29 +195,28 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
   const handleIndividualModeProcess = async (modeId: string) => {
     try {
       const result = await simulateProcessing(modeId, customPrompt);
-      setEditorResults(prev => new Map(prev.set(modeId, result)));
+      setEditorResults(prev => ({ ...prev, [modeId]: result }));
       setActiveTab('results');
 
       // Save to version history
-      setSavedVersions(prev => {
-        const updated = new Map(prev);
-        const versions = updated.get(modeId) || [];
-        versions.push(result);
-        updated.set(modeId, versions);
-        return updated;
-      });
+      setSavedVersions(prev => ({
+        ...prev,
+        [modeId]: [...(prev[modeId] || []), result]
+      }));
 
       // Save to Vercel Blob Storage
       await saveToVercelBlob(modeId, result);
     } catch (error) {
       console.error(`Failed to process ${modeId}:`, error);
       setProcessingJobs(prev => {
-        const updated = new Map(prev);
-        const job = updated.get(modeId);
-        if (job) {
-          updated.set(modeId, { ...job, status: 'failed', error: (error as Error).message });
+        const currentJob = prev[modeId];
+        if (currentJob) {
+          return {
+            ...prev,
+            [modeId]: { ...currentJob, status: 'failed', error: (error as Error).message }
+          };
         }
-        return updated;
+        return prev;
       });
     }
   };
@@ -229,19 +230,17 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
       const promises = batchModes.map(mode => simulateProcessing(mode, customPrompt));
       const results = await Promise.all(promises);
 
+      const newEditorResults: { [key: string]: EditorResult } = {};
+      const newSavedVersions: { [key: string]: EditorResult[] } = {};
+
       results.forEach((result, index) => {
         const mode = batchModes[index];
-        setEditorResults(prev => new Map(prev.set(mode, result)));
-
-        // Save to version history
-        setSavedVersions(prev => {
-          const updated = new Map(prev);
-          const versions = updated.get(mode) || [];
-          versions.push(result);
-          updated.set(mode, versions);
-          return updated;
-        });
+        newEditorResults[mode] = result;
+        newSavedVersions[mode] = [...(savedVersions[mode] || []), result];
       });
+
+      setEditorResults(prev => ({ ...prev, ...newEditorResults }));
+      setSavedVersions(prev => ({...prev, ...newSavedVersions}));
 
       setBatchProcessingStatus('completed');
       setActiveTab('results');
@@ -447,12 +446,12 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
   };
 
   const isProcessing = (mode: string) => {
-    const job = processingJobs.get(mode);
+    const job = processingJobs[mode];
     return job?.status === 'processing' || job?.status === 'queued';
   };
 
   const getProcessingProgress = (mode: string) => {
-    return processingJobs.get(mode)?.progress || 0;
+    return processingJobs[mode]?.progress || 0;
   };
 
   if (!isOpen) return null;
@@ -498,10 +497,10 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                   ? 'text-indigo-400 border-b-2 border-indigo-400'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
-              disabled={tab === 'results' && editorResults.size === 0}
+              disabled={tab === 'results' && Object.keys(editorResults).length === 0}
             >
               {tab === 'selector' && 'Mode Selection'}
-              {tab === 'results' && `Results (${editorResults.size})`}
+              {tab === 'results' && `Results (${Object.keys(editorResults).length})`}
               {tab === 'comparison' && 'Compare'}
               {tab === 'history' && 'Version History'}
             </button>
@@ -601,9 +600,9 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                         className="flex-1 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 text-white font-medium py-2 px-3 rounded transition-colors text-sm"
                       >
                         {isProcessing(mode.id) ? 'Processing...' :
-                         editorResults.has(mode.id) ? 'Reprocess' : 'Process'}
+                         editorResults[mode.id] ? 'Reprocess' : 'Process'}
                       </button>
-                      {editorResults.has(mode.id) && (
+                      {editorResults[mode.id] && (
                         <button
                           onClick={() => {
                             setSelectedMode(mode.id);
@@ -621,11 +620,11 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
             </div>
           )}
 
-          {activeTab === 'results' && editorResults.size > 0 && (
+          {activeTab === 'results' && Object.keys(editorResults).length > 0 && (
             <div className="space-y-6">
               {/* Results Overview */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Array.from(editorResults.entries()).map(([mode, result]) => (
+                {Object.entries(editorResults).map(([mode, result]: [string, EditorResult]) => (
                   <div key={mode} className={`p-4 rounded-lg border ${getModeColor(mode)}`}>
                     <div className="flex items-center gap-3 mb-3">
                       <span className="text-2xl">{editorModes.find(m => m.id === mode)?.icon}</span>
@@ -658,7 +657,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
               </div>
 
               {/* Selected Result Details */}
-              {selectedMode && editorResults.has(selectedMode) && (
+              {selectedMode && editorResults[selectedMode] && (
                 <div className="bg-slate-700/50 p-6 rounded-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-slate-100">
@@ -666,13 +665,13 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                     </h3>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => navigator.clipboard.writeText(editorResults.get(selectedMode)!.editedText)}
+                        onClick={() => navigator.clipboard.writeText(editorResults[selectedMode]!.editedText)}
                         className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-slate-200 rounded transition-colors"
                       >
                         Copy Text
                       </button>
                       <button
-                        onClick={() => handleExportResult(editorResults.get(selectedMode)!)}
+                        onClick={() => handleExportResult(editorResults[selectedMode]!)}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors"
                       >
                         Export Full Result
@@ -684,31 +683,31 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                     <div className="text-center p-3 bg-slate-800/50 rounded">
                       <div className="text-2xl font-bold text-green-400">
-                        {editorResults.get(selectedMode)!.improvementScore}
+                        {editorResults[selectedMode]!.improvementScore}
                       </div>
                       <div className="text-xs text-slate-400">Improvement Score</div>
                     </div>
                     <div className="text-center p-3 bg-slate-800/50 rounded">
                       <div className="text-2xl font-bold text-blue-400">
-                        {editorResults.get(selectedMode)!.changesApplied.length}
+                        {editorResults[selectedMode]!.changesApplied.length}
                       </div>
                       <div className="text-xs text-slate-400">Changes Applied</div>
                     </div>
                     <div className="text-center p-3 bg-slate-800/50 rounded">
                       <div className="text-2xl font-bold text-purple-400">
-                        {Math.round(editorResults.get(selectedMode)!.confidence)}%
+                        {Math.round(editorResults[selectedMode]!.confidence)}%
                       </div>
                       <div className="text-xs text-slate-400">Confidence</div>
                     </div>
                     <div className="text-center p-3 bg-slate-800/50 rounded">
                       <div className="text-2xl font-bold text-orange-400">
-                        {editorResults.get(selectedMode)!.tokensUsed}
+                        {editorResults[selectedMode]!.tokensUsed}
                       </div>
                       <div className="text-xs text-slate-400">Tokens Used</div>
                     </div>
                     <div className="text-center p-3 bg-slate-800/50 rounded">
                       <div className="text-2xl font-bold text-pink-400">
-                        ${editorResults.get(selectedMode)!.costEstimate}
+                        ${editorResults[selectedMode]!.costEstimate}
                       </div>
                       <div className="text-xs text-slate-400">Est. Cost</div>
                     </div>
@@ -719,7 +718,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                     <h4 className="text-lg font-semibold text-slate-100 mb-3">Enhanced Content</h4>
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-600">
                       <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
-                        {editorResults.get(selectedMode)!.editedText}
+                        {editorResults[selectedMode]!.editedText}
                       </pre>
                     </div>
                   </div>
@@ -728,7 +727,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
             </div>
           )}
 
-          {activeTab === 'comparison' && editorResults.size > 0 && (
+          {activeTab === 'comparison' && Object.keys(editorResults).length > 0 && (
             <div className="space-y-6">
               {/* Preview Mode Selector */}
               <div className="flex items-center gap-4 mb-4">
@@ -769,7 +768,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                         onChange={(e) => setSelectedMode(e.target.value)}
                         className="bg-slate-700 border border-slate-600 rounded px-3 py-1 text-slate-200 text-sm"
                       >
-                        {Array.from(editorResults.keys()).map((mode) => (
+                        {Object.keys(editorResults).map((mode) => (
                           <option key={mode} value={mode}>
                             {editorModes.find(m => m.id === mode)?.name}
                           </option>
@@ -778,8 +777,8 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                     </div>
                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-600 h-96 overflow-y-auto">
                       <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
-                        {selectedMode && editorResults.has(selectedMode)
-                          ? editorResults.get(selectedMode)!.editedText
+                        {selectedMode && editorResults[selectedMode]
+                          ? editorResults[selectedMode]!.editedText
                           : 'Select a mode to view enhanced content'
                         }
                       </pre>
@@ -803,7 +802,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                         onChange={(e) => setSelectedMode(e.target.value)}
                         className="bg-slate-700 border border-slate-600 rounded px-3 py-1 text-slate-200 text-sm"
                       >
-                        {Array.from(editorResults.keys()).map((mode) => (
+                        {Object.keys(editorResults).map((mode) => (
                           <option key={mode} value={mode}>
                             {editorModes.find(m => m.id === mode)?.name}
                           </option>
@@ -811,8 +810,8 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                       </select>
                     </div>
                     <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
-                      {selectedMode && editorResults.has(selectedMode)
-                        ? editorResults.get(selectedMode)!.editedText
+                      {selectedMode && editorResults[selectedMode]
+                        ? editorResults[selectedMode]!.editedText
                         : originalText
                       }
                     </pre>
@@ -833,7 +832,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                     >
                       Original
                     </button>
-                    {Array.from(editorResults.keys()).map((mode) => (
+                    {Object.keys(editorResults).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setSelectedMode(mode)}
@@ -851,8 +850,8 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                     <pre className="whitespace-pre-wrap text-slate-200 text-sm leading-relaxed">
                       {selectedMode === 'original'
                         ? originalText
-                        : selectedMode && editorResults.has(selectedMode)
-                        ? editorResults.get(selectedMode)!.editedText
+                        : selectedMode && editorResults[selectedMode]
+                        ? editorResults[selectedMode]!.editedText
                         : 'Select a mode to view content'
                       }
                     </pre>
@@ -861,11 +860,11 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
               )}
 
               {/* Changes Summary */}
-              {selectedMode && selectedMode !== 'original' && editorResults.has(selectedMode) && (
+              {selectedMode && selectedMode !== 'original' && editorResults[selectedMode] && (
                 <div className="bg-slate-700/50 p-4 rounded-lg">
                   <h4 className="text-lg font-semibold text-slate-100 mb-3">Changes Applied</h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
-                    {editorResults.get(selectedMode)!.changesApplied.map((change, index) => (
+                    {editorResults[selectedMode]!.changesApplied.map((change, index) => (
                       <div key={index} className="flex items-start gap-3 p-3 bg-slate-800/50 rounded">
                         <span className={`px-2 py-1 text-xs font-semibold rounded ${
                           change.type === 'addition' ? 'bg-green-500/20 text-green-300' :
@@ -898,11 +897,11 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-100">Version History</h3>
                 <div className="text-sm text-slate-400">
-                  Total versions saved: {Array.from(savedVersions.values()).reduce((sum, versions) => sum + versions.length, 0)}
+                  Total versions saved: {Object.values(savedVersions).reduce((sum: number, versions: EditorResult[]) => sum + versions.length, 0)}
                 </div>
               </div>
 
-              {Array.from(savedVersions.entries()).map(([mode, versions]) => (
+              {Object.entries(savedVersions).map(([mode, versions]: [string, EditorResult[]]) => (
                 <div key={mode} className="bg-slate-700/50 p-4 rounded-lg">
                   <h4 className="font-semibold text-slate-200 mb-3 flex items-center gap-2">
                     <span className="text-xl">{editorModes.find(m => m.id === mode)?.icon}</span>
@@ -910,7 +909,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                   </h4>
 
                   <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {versions.map((version, index) => (
+                    {versions.map((version: EditorResult, index: number) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-slate-800/50 rounded">
                         <div>
                           <div className="text-sm text-slate-200 font-medium">
@@ -925,7 +924,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
-                              setEditorResults(prev => new Map(prev.set(mode, version)));
+                              setEditorResults(prev => ({...prev, [mode]: version}));
                               setSelectedMode(mode);
                               setActiveTab('results');
                             }}
@@ -946,7 +945,7 @@ ${data.enhanced.changesApplied.map((change: ContentChange) =>
                 </div>
               ))}
 
-              {savedVersions.size === 0 && (
+              {Object.keys(savedVersions).length === 0 && (
                 <div className="text-center py-12 text-slate-400">
                   <svg className="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />

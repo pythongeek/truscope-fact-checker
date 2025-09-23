@@ -37,8 +37,7 @@ export async function POST(request: NextRequest) {
       success: true,
       url: blob.url,
       id: id,
-      mode: mode,
-      size: blob.size
+      mode: mode
     });
   } catch (error) {
     console.error('Blob save error:', error);
