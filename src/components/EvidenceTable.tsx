@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 // FIX: Updated import path for EvidenceItem.
-import { EvidenceItem } from '../types/factCheck';
+import { EvidenceItem } from '@/types/factCheck';
 
 type SortKey = 'publisher' | 'score';
 type SortOrder = 'asc' | 'desc';

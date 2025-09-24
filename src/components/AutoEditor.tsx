@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 
 // Enhanced types for industry-standard features
 interface EditorMode {

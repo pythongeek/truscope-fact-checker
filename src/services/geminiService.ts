@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '../types/factCheck';
+import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '@/types/factCheck';
 import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';

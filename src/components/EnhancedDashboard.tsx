@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import { EnhancedFactCheckService } from '../services/enhancedFactCheckService';
 import Dashboard from './Dashboard';
 import DashboardSkeleton from './DashboardSkeleton';

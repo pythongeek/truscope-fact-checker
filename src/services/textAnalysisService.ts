@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey } from './apiKeyService';
-import { Segment } from '../types/factCheck';
+import { Segment } from '@/types/factCheck';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export interface TextSegmentAnalysis {

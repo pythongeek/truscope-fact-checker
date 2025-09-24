@@ -1,4 +1,4 @@
-import { FactCheckReport, HistoryEntry } from '../types/factCheck';
+import { FactCheckReport, HistoryEntry } from '@/types/factCheck';
 
 const HISTORY_STORAGE_KEY = 'truescope_history';
 const MAX_HISTORY_ITEMS = 20;
@@ -37,7 +37,7 @@ export const saveReportToHistory = (claimText: string, report: FactCheckReport):
             claimText,
             report,
         };
-        
+
         // Add the new entry to the front and slice to maintain max length
         const updatedHistory = [newEntry, ...currentHistory].slice(0, MAX_HISTORY_ITEMS);
 

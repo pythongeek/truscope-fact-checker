@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 // FIX: Updated import path for FactCheckReport.
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import ReportView from './ReportView';
 import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon, PencilSquareIcon } from './icons';
 import AutoEditor from './AutoEditor';

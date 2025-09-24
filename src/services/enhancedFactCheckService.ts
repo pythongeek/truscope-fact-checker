@@ -1,6 +1,6 @@
 // src/services/enhancedFactCheckService.ts
 
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 // Make sure to import both the parser and the validator
 import { parseAIJsonResponse, validateAIResponseStructure } from '../utils/jsonParser';
 import { getGeminiApiKey } from './apiKeyService';

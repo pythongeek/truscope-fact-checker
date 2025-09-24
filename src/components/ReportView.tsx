@@ -1,6 +1,6 @@
 import React from 'react';
 // FIX: Updated import path for FactCheckReport.
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import ScoreBreakdown from './ScoreBreakdown';
 import EvidenceTable from './EvidenceTable';
 import MethodologyView from './MethodologyView';

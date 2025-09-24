@@ -1,6 +1,6 @@
 import React from 'react';
 // FIX: Corrected import path for types and aliased ScoreBreakdown to avoid naming conflict.
-import { ScoreBreakdown as ScoreBreakdownType, ScoreMetric } from '../types/factCheck';
+import { ScoreBreakdown as ScoreBreakdownType, ScoreMetric } from '@/types/factCheck';
 import { LightBulbIcon } from './icons';
 
 const MetricBar: React.FC<{ metric: ScoreMetric }> = ({ metric }) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Segment } from '../types/factCheck';
+import { Segment } from '@/types/factCheck';
 
 interface ColorCodedTextProps {
     segments: Segment[] | undefined;

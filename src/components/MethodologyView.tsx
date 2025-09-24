@@ -1,6 +1,6 @@
 import React from 'react';
 // FIX: Updated import path for FactCheckMetadata.
-import { FactCheckMetadata } from '../types/factCheck';
+import { FactCheckMetadata } from '@/types/factCheck';
 import { ExclamationCircleIcon } from './icons';
 
 const InfoCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (

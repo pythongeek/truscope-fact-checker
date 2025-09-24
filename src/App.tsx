@@ -5,7 +5,7 @@ import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
-import { FactCheckReport } from './types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import { runFactCheckOrchestrator } from './services/geminiService';
 import { saveReportToHistory } from './services/historyService';
 import { parseAIJsonResponse } from './utils/jsonParser'; // Added import

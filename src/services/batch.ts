@@ -1,5 +1,5 @@
 import { runFactCheckOrchestrator } from './geminiService';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import { AnalysisMethod } from '../components/InputSection';
 
 // --- Types for Batch Processing ---

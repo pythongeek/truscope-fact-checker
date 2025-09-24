@@ -1,5 +1,5 @@
 import { EditorMode, EditorConfig, EditorResult, ContentChange } from '../types/advancedEditor';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '@/types/factCheck';
 import { GoogleGenAI } from "@google/genai";
 import { getGeminiApiKey } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
