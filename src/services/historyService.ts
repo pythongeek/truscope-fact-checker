@@ -1,59 +1,47 @@
-import { FactCheckReport, HistoryEntry } from '../types/factCheck';
+import { HistoryEntry } from '../types';
+import { AIResponseParser } from '../utils/AIResponseParser';
 
-const HISTORY_STORAGE_KEY = 'truescope_history';
-const MAX_HISTORY_ITEMS = 20;
+const HISTORY_KEY = 'factCheckHistory';
 
-/**
- * Retrieves the analysis history from local storage.
- * @returns {HistoryEntry[]} An array of history entries, sorted by most recent first.
- */
-export const getHistory = (): HistoryEntry[] => {
+export const historyService = {
+  getHistory: (): HistoryEntry[] => {
     try {
-        const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
-        if (!storedHistory) {
-            return [];
-        }
-        const history = JSON.parse(storedHistory) as HistoryEntry[];
-        // Ensure it's sorted, just in case
-        return history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const storedHistory = localStorage.getItem(HISTORY_KEY);
+      if (storedHistory) {
+        // Since history is stored by our app, we can trust the format.
+        // However, for consistency, we could use the robust parser.
+        // Let's stick to the original parser for internally-managed data.
+        return JSON.parse(storedHistory) as HistoryEntry[];
+      }
     } catch (error) {
-        console.error("Failed to parse history from local storage:", error);
-        return [];
+      console.error('Error parsing history from localStorage:', error);
+      // If parsing fails, return an empty array to prevent app crash
+      return [];
     }
-};
+    return [];
+  },
 
-/**
- * Saves a new fact-check report to the history in local storage.
- * @param {string} claimText The original text that was analyzed.
- * @param {FactCheckReport} report The resulting analysis report.
- */
-export const saveReportToHistory = (claimText: string, report: FactCheckReport): void => {
+  saveHistory: (history: HistoryEntry[]): void => {
     try {
-        const currentHistory = getHistory();
-
-        const newEntry: HistoryEntry = {
-            id: new Date().toISOString(), // Simple unique ID
-            timestamp: new Date().toISOString(),
-            claimText,
-            report,
-        };
-        
-        // Add the new entry to the front and slice to maintain max length
-        const updatedHistory = [newEntry, ...currentHistory].slice(0, MAX_HISTORY_ITEMS);
-
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
+      const historyString = JSON.stringify(history);
+      localStorage.setItem(HISTORY_KEY, historyString);
     } catch (error) {
-        console.error("Failed to save report to history:", error);
+      console.error('Error saving history to localStorage:', error);
     }
-};
+  },
 
-/**
- * Clears all entries from the analysis history in local storage.
- */
-export const clearHistory = (): void => {
-    try {
-        localStorage.removeItem(HISTORY_STORAGE_KEY);
-    } catch (error) {
-        console.error("Failed to clear history:", error);
+  addHistoryEntry: (entry: HistoryEntry): HistoryEntry[] => {
+    const currentHistory = historyService.getHistory();
+    const updatedHistory = [entry, ...currentHistory];
+    // Optional: Limit history size
+    if (updatedHistory.length > 50) {
+      updatedHistory.pop();
     }
+    historyService.saveHistory(updatedHistory);
+    return updatedHistory;
+  },
+
+  clearHistory: (): void => {
+    localStorage.removeItem(HISTORY_KEY);
+  },
 };

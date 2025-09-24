@@ -1,105 +1,113 @@
-import { BlobStorageService, StoredReport } from './blobStorage';
-import { FactCheckReport, HistoryEntry } from '../types/factCheck';
-import { SmartCorrection } from '../types/corrections';
+import { v4 as uuidv4 } from 'uuid';
+import { HistoryEntry, FactCheckResult, AnalysisMode } from '../types';
+import { AIResponseParser } from '../utils/AIResponseParser';
 
-export class EnhancedHistoryService {
-  private blobStorage: BlobStorageService;
-  private readonly LOCAL_STORAGE_KEY = 'truescope_report_history_v2'; // New key for new format
-  private readonly MAX_LOCAL_REPORTS = 10;
+const ENHANCED_HISTORY_KEY = 'enhancedFactCheckHistory_v2';
+const MAX_HISTORY_ITEMS = 100;
 
-  constructor() {
-    this.blobStorage = new BlobStorageService();
-  }
+export interface PaginatedHistory {
+  entries: HistoryEntry[];
+  hasMore: boolean;
+  currentPage: number;
+}
 
-  async saveReportWithCorrections(
-    originalText: string,
-    report: FactCheckReport,
-    corrections: SmartCorrection[]
-  ): Promise<string> {
-    const reportId = this.generateReportId();
+class EnhancedHistoryService {
+  private historyCache: HistoryEntry[] | null = null;
 
-    const storedReport: StoredReport = {
-      id: reportId,
-      originalText,
-      report,
-      corrections,
-      timestamp: new Date().toISOString(),
-    };
-
+  private loadHistory(): HistoryEntry[] {
+    if (this.historyCache) {
+      return this.historyCache;
+    }
     try {
-      // Save to Vercel Blob Storage for persistence
-      await this.blobStorage.saveReport(storedReport);
-
-      // Also save to localStorage for quick access
-      this.saveToLocalStorage(storedReport);
-
-      return reportId;
+      const stored = localStorage.getItem(ENHANCED_HISTORY_KEY);
+      this.historyCache = stored ? AIResponseParser.parseAIResponse(stored) : [];
+      return this.historyCache!;
     } catch (error) {
-      console.error('Failed to save report, saving to localStorage only:', error);
-      this.saveToLocalStorage(storedReport);
-      return reportId;
-    }
-  }
-
-  async getReportWithCorrections(reportId: string): Promise<StoredReport | null> {
-    // Try localStorage first for speed
-    const localReport = this.getFromLocalStorage(reportId);
-    if (localReport) {
-      return localReport;
-    }
-
-    // Fallback to blob storage
-    try {
-      const blobReport = await this.blobStorage.getReport(reportId);
-      if (blobReport) {
-        // Cache the report locally for future fast access
-        this.saveToLocalStorage(blobReport);
-        return blobReport;
-      }
-    } catch (error) {
-      console.error('Failed to retrieve report from blob storage:', error);
-    }
-
-    return null;
-  }
-
-  // This method is for displaying the simple history list, so it can still return HistoryEntry
-  getLocalHistoryList(): HistoryEntry[] {
-    const reports = this.getLocalReports();
-    return reports.map(r => ({
-      id: r.id,
-      claimText: r.originalText,
-      report: r.report,
-      timestamp: r.timestamp
-    }));
-  }
-
-  private getLocalReports(): StoredReport[] {
-    try {
-      const stored = localStorage.getItem(this.LOCAL_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
+      console.error("Failed to load or parse history:", error);
       return [];
     }
   }
 
-  private saveToLocalStorage(report: StoredReport): void {
+  private saveHistory(history: HistoryEntry[]): void {
     try {
-      const existing = this.getLocalReports();
-      // Add new report and remove duplicates, then slice to max length
-      const updated = [report, ...existing.filter(r => r.id !== report.id)].slice(0, this.MAX_LOCAL_REPORTS);
-      localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      this.historyCache = history;
+      localStorage.setItem(ENHANCED_HISTORY_KEY, JSON.stringify(history));
     } catch (error) {
-      console.error('Failed to save to localStorage:', error);
+      console.error("Failed to save history:", error);
     }
   }
 
-  private getFromLocalStorage(reportId: string): StoredReport | null {
-    const reports = this.getLocalReports();
-    return reports.find(r => r.id === reportId) || null;
+  addEntry(
+    text: string,
+    mode: AnalysisMode,
+    result: FactCheckResult
+  ): HistoryEntry {
+    const newEntry: HistoryEntry = {
+      id: uuidv4(),
+      date: new Date().toISOString(),
+      text: text,
+      mode,
+      result,
+      version: '2.0'
+    };
+    const history = this.loadHistory();
+    const updatedHistory = [newEntry, ...history].slice(0, MAX_HISTORY_ITEMS);
+    this.saveHistory(updatedHistory);
+    return newEntry;
   }
 
-  private generateReportId(): string {
-    return `report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  getHistory(page: number = 1, limit: number = 10): PaginatedHistory {
+    const history = this.loadHistory();
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const entries = history.slice(startIndex, endIndex);
+
+    return {
+      entries,
+      hasMore: endIndex < history.length,
+      currentPage: page,
+    };
+  }
+
+  getEntry(id: string): HistoryEntry | undefined {
+    const history = this.loadHistory();
+    return history.find(entry => entry.id === id);
+  }
+
+  updateEntry(id: string, updatedData: Partial<HistoryEntry>): HistoryEntry | undefined {
+    let history = this.loadHistory();
+    const entryIndex = history.findIndex(entry => entry.id === id);
+    if (entryIndex > -1) {
+      history[entryIndex] = { ...history[entryIndex], ...updatedData, date: new Date().toISOString() };
+      this.saveHistory(history);
+      return history[entryIndex];
+    }
+    return undefined;
+  }
+
+  deleteEntry(id: string): boolean {
+    let history = this.loadHistory();
+    const newHistory = history.filter(entry => entry.id !== id);
+    if (newHistory.length < history.length) {
+      this.saveHistory(newHistory);
+      return true;
+    }
+    return false;
+  }
+
+  clearHistory(): void {
+    this.saveHistory([]);
+  }
+
+  searchHistory(query: string): HistoryEntry[] {
+    const history = this.loadHistory();
+    const lowercasedQuery = query.toLowerCase();
+    return history.filter(entry =>
+      entry.text.toLowerCase().includes(lowercasedQuery) ||
+      entry.result.summary.overall_rating.toLowerCase().includes(lowercasedQuery) ||
+      entry.result.claims.some(claim => claim.claim.toLowerCase().includes(lowercasedQuery))
+    );
   }
 }
+
+export const enhancedHistoryService = new EnhancedHistoryService();

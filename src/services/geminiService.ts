@@ -218,7 +218,7 @@ const normalizeClaim = async (claimText: string): Promise<ClaimNormalization> =>
             },
         });
         const jsonString = result.text.trim();
-        return JSON.parse(jsonString) as ClaimNormalization;
+        return AIResponseParser.parseAIResponse(jsonString) as ClaimNormalization;
     } catch (error) {
         console.error("Error normalizing claim:", error);
         throw new Error("Failed to normalize the claim using the AI model.");
@@ -249,7 +249,7 @@ const runGeminiOnlyCheck = async (normalizedClaim: ClaimNormalization, context?:
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
 };
 
 const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -275,7 +275,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
 };
 
 const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -302,7 +302,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
 };
 
 // NEW: Citation-Augmented Core Analysis Method
@@ -340,7 +340,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
+    const preliminaryAnalysis: PreliminaryAnalysis = AIResponseParser.parseAIResponse(jsonString);
 
     // --- 2. External Evidence Gathering ---
     console.log("Starting targeted searches for verification...");
@@ -399,7 +399,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const finalJsonString = finalResult.text.trim();
-    const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
+    const finalReport = AIResponseParser.parseAIResponse(finalJsonString) as FactCheckReport;
 
     // Ensure searchEvidence is populated with the actual search results
     if (searchResults.length > 0) {
