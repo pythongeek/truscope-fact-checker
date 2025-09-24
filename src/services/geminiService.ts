@@ -217,7 +217,7 @@ const normalizeClaim = async (claimText: string): Promise<ClaimNormalization> =>
                 },
             },
         });
-        const jsonString = result.text.trim();
+        const jsonString = result.response.text().trim();
         return JSON.parse(jsonString) as ClaimNormalization;
     } catch (error) {
         console.error("Error normalizing claim:", error);
@@ -248,7 +248,7 @@ const runGeminiOnlyCheck = async (normalizedClaim: ClaimNormalization, context?:
             responseSchema: factCheckReportSchema,
         },
     });
-    const jsonString = result.text.trim();
+    const jsonString = (await result.response).text().trim();
     return JSON.parse(jsonString) as FactCheckReport;
 };
 
@@ -274,7 +274,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
             tools: [{ googleSearch: {} }],
         },
     });
-    const jsonString = result.text.trim();
+    const jsonString = (await result.response).text().trim();
     return JSON.parse(jsonString) as FactCheckReport;
 };
 
@@ -301,7 +301,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
             tools: [{ googleSearch: {} }],
         },
     });
-    const jsonString = result.text.trim();
+    const jsonString = (await result.response).text().trim();
     return JSON.parse(jsonString) as FactCheckReport;
 };
 
@@ -339,7 +339,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
             responseSchema: preliminaryAnalysisSchema,
         },
     });
-    const jsonString = result.text.trim();
+    const jsonString = (await result.response).text().trim();
     const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
 
     // --- 2. External Evidence Gathering ---
@@ -398,7 +398,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
             responseSchema: factCheckReportSchema,
         },
     });
-    const finalJsonString = finalResult.text.trim();
+    const finalJsonString = (await finalResult.response).text().trim();
     const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
 
     // Ensure searchEvidence is populated with the actual search results
