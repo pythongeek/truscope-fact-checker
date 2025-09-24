@@ -1,5 +1,5 @@
 import React from 'react';
-import { FactCheckReport } from '../types';
+import { FactCheckReport } from '@/types/factCheck';
 import { ExportIcon } from './icons';
 
 // --- Utility Functions ---

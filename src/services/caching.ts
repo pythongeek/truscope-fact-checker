@@ -1,4 +1,4 @@
-import { FactCheckReport } from '../types';
+import { FactCheckReport } from '@/types/factCheck';
 
 interface CacheEntry {
     data: FactCheckReport;

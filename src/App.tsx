@@ -5,10 +5,10 @@ import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
-import { FactCheckReport } from './types';
+import { FactCheckReport } from '@/types/factCheck';
 import { runFactCheckOrchestrator } from './services/geminiService';
 import { saveReportToHistory } from './services/historyService';
-import { AIResponseParser } from './utils/jsonParser';
+import { parseAIJsonResponse } from './utils/jsonParser'; // Added import
 
 // Initialize the global JSON fix on app startup
 function initializeGlobalJsonFix() {
@@ -32,7 +32,7 @@ function initializeGlobalJsonFix() {
       )) {
         try {
           console.warn('[JSON Fix] Standard JSON.parse failed, attempting robust AI response parsing');
-          const result = AIResponseParser.parseAIResponse(text);
+          const result = parseAIJsonResponse(text);
           console.log('[JSON Fix] Successfully parsed AI response');
           return result;
         } catch (robustError) {

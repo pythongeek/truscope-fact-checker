@@ -1,4 +1,4 @@
-import { EvidenceItem } from '.';
+import { EvidenceItem } from './factCheck';
 
 // File: src/types/enhancedFactCheck.ts
 export interface AdvancedEvidence extends EvidenceItem {

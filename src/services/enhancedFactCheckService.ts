@@ -1,8 +1,8 @@
 // src/services/enhancedFactCheckService.ts
 
-import { FactCheckReport } from '../types';
+import { FactCheckReport } from '@/types/factCheck';
 // Make sure to import both the parser and the validator
-import { AIResponseParser } from '../utils/jsonParser';
+import { parseAIJsonResponse, validateAIResponseStructure } from '../utils/jsonParser';
 import { getGeminiApiKey } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -87,7 +87,21 @@ Return only the JSON object, no additional text or formatting.`;
   private parseGeminiResponse(response: string): any {
     try {
       // Use our robust JSON parser instead of direct JSON.parse
-      const parsedData = AIResponseParser.parseAIResponse(response);
+      const parsedData = parseAIJsonResponse(response);
+
+      // Validate the structure has required fields for fact-check reports
+      const requiredFields = [
+        'final_verdict',
+        'final_score',
+        'score_breakdown',
+        'evidence',
+        'metadata'
+      ];
+
+      if (!validateAIResponseStructure(parsedData, requiredFields)) {
+        console.warn('Enhanced fact-check response missing some expected fields, but continuing...');
+        // Continue anyway as some fields might be optional
+      }
 
       return parsedData;
     } catch (error) {

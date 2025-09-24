@@ -1,84 +1,59 @@
-// src/services/historyService.ts
+import { FactCheckReport, HistoryEntry } from '@/types/factCheck';
 
-import { HistoryEntry, FactCheckResult, AnalysisMode } from '../types';
+const HISTORY_STORAGE_KEY = 'truescope_history';
+const MAX_HISTORY_ITEMS = 20;
 
-const STORAGE_KEY = 'truescope_history';
-
-export class HistoryService {
-  static saveReportToHistory(
-    originalText: string,
-    result: FactCheckResult,
-    mode: AnalysisMode = 'comprehensive',
-    processingTime: number = 0
-  ): void {
+/**
+ * Retrieves the analysis history from local storage.
+ * @returns {HistoryEntry[]} An array of history entries, sorted by most recent first.
+ */
+export const getHistory = (): HistoryEntry[] => {
     try {
-      const history = this.getHistory();
-      const entry: HistoryEntry = {
-        id: `entry_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: Date.now(),
-        originalText,
-        result,
-        mode,
-        processingTime
-      };
-
-      // Add to beginning of array
-      history.unshift(entry);
-
-      // Keep only last 50 entries
-      const trimmedHistory = history.slice(0, 50);
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedHistory));
+        const storedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (!storedHistory) {
+            return [];
+        }
+        const history = JSON.parse(storedHistory) as HistoryEntry[];
+        // Ensure it's sorted, just in case
+        return history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     } catch (error) {
-      console.error('Failed to save to history:', error);
+        console.error("Failed to parse history from local storage:", error);
+        return [];
     }
-  }
+};
 
-  static getHistory(): HistoryEntry[] {
+/**
+ * Saves a new fact-check report to the history in local storage.
+ * @param {string} claimText The original text that was analyzed.
+ * @param {FactCheckReport} report The resulting analysis report.
+ */
+export const saveReportToHistory = (claimText: string, report: FactCheckReport): void => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return [];
+        const currentHistory = getHistory();
 
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : [];
+        const newEntry: HistoryEntry = {
+            id: new Date().toISOString(), // Simple unique ID
+            timestamp: new Date().toISOString(),
+            claimText,
+            report,
+        };
+
+        // Add the new entry to the front and slice to maintain max length
+        const updatedHistory = [newEntry, ...currentHistory].slice(0, MAX_HISTORY_ITEMS);
+
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory));
     } catch (error) {
-      console.error('Failed to load history:', error);
-      return [];
+        console.error("Failed to save report to history:", error);
     }
-  }
+};
 
-  static clearHistory(): void {
+/**
+ * Clears all entries from the analysis history in local storage.
+ */
+export const clearHistory = (): void => {
     try {
-      localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
     } catch (error) {
-      console.error('Failed to clear history:', error);
+        console.error("Failed to clear history:", error);
     }
-  }
-
-  static deleteEntry(id: string): void {
-    try {
-      const history = this.getHistory();
-      const filtered = history.filter(entry => entry.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-    } catch (error) {
-      console.error('Failed to delete entry:', error);
-    }
-  }
-
-  static getEntry(id: string): HistoryEntry | null {
-    try {
-      const history = this.getHistory();
-      return history.find(entry => entry.id === id) || null;
-    } catch (error) {
-      console.error('Failed to get entry:', error);
-      return null;
-    }
-  }
-}
-
-// Named exports for compatibility
-export const saveReportToHistory = HistoryService.saveReportToHistory;
-export const getHistory = HistoryService.getHistory;
-export const clearHistory = HistoryService.clearHistory;
-export const deleteEntry = HistoryService.deleteEntry;
-export const getEntry = HistoryService.getEntry;
+};

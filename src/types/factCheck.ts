@@ -1,6 +1,25 @@
-// src/types/index.ts
-
 import { GoogleSearchResult } from '../types';
+
+// New interface for preliminary analysis from AI
+export interface PreliminaryAnalysis {
+    preliminaryVerdict: string;
+    preliminaryScore: number;
+    claims: {
+        claim: string;
+        justification: string;
+        searchQuery: string;
+    }[];
+    textSegments: {
+        text: string;
+        score: number;
+    }[];
+}
+
+export interface Segment {
+    text: string;
+    score: number;
+    color: 'green' | 'yellow' | 'red' | 'default';
+}
 
 // --- Core Report Structure ---
 
@@ -8,7 +27,6 @@ export interface ScoreMetric {
     name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence';
     score: number; // 0-100
     description: string;
-    weight?: number;
 }
 
 export interface ScoreBreakdown {
@@ -23,10 +41,10 @@ export interface ScoreBreakdown {
 export interface EvidenceItem {
     id: string;
     publisher: string;
-    url?: string | null;
+    url: string | null;
     quote: string;
     score: number; // 0-100 reliability score
-    type?: 'claim' | 'news' | 'search_result' | 'cached-database';
+    type: 'claim' | 'news' | 'search_result' | 'cached-database';
     publishedDate?: string;
 }
 
@@ -42,22 +60,7 @@ export interface FactCheckMetadata {
     warnings: string[];
 }
 
-export interface SearchEvidence {
-    query: string;
-    results: GoogleSearchResult[];
-}
-
-export interface TextSegment {
-    id?: string;
-    text: string;
-    score?: number;
-    color?: 'green' | 'yellow' | 'red' | 'default';
-    category?: 'claim' | 'evidence' | 'opinion' | 'context' | 'factual_claim' | 'speculation' | 'misleading';
-    confidence?: number;
-    issues?: string[];
-}
-
-export interface FactCheckResult {
+export interface FactCheckReport {
     originalText: string;
     final_verdict: string;
     final_score: number; // 0-100
@@ -65,14 +68,12 @@ export interface FactCheckResult {
     evidence: EvidenceItem[];
     metadata: FactCheckMetadata;
     searchEvidence?: SearchEvidence;
-    originalTextSegments?: TextSegment[];
-    reasoning?: string;
-    enhanced_claim_text?: string;
+    originalTextSegments?: Segment[]; // NEW: Color-coded text segments
+    reasoning?: string; // NEW: AI's explanation for the verdict
+    enhanced_claim_text: string;
     correctionAnalysis?: any;
     availableCorrections?: number;
 }
-
-export type AnalysisMode = 'basic' | 'comprehensive' | 'quick' | 'detailed';
 
 // --- New Types for Backend Logic & Orchestration ---
 
@@ -82,15 +83,25 @@ export interface ClaimNormalization {
     keywords: string[];
 }
 
+export interface SearchResult {
+    title: string;
+    link: string;
+    snippet: string;
+    source: string;
+}
+
+export interface SearchEvidence {
+    query: string;
+    results: SearchResult[];
+}
+
 // --- New Type for History ---
 
 export interface HistoryEntry {
-  id: string;
-  timestamp: number;
-  originalText: string;
-  result: FactCheckResult;
-  mode: AnalysisMode;
-  processingTime: number;
+    id: string;
+    timestamp: string;
+    claimText: string;
+    report: FactCheckReport;
 }
 
 // Represents the structured, detailed analysis from the core AI model
@@ -128,20 +139,5 @@ export interface HybridReconciliation {
         source_a: string;
         source_b: string;
         description: string;
-    }[];
-}
-
-// New interface for preliminary analysis from AI
-export interface PreliminaryAnalysis {
-    preliminaryVerdict: string;
-    preliminaryScore: number;
-    claims: {
-        claim: string;
-        justification: string;
-        searchQuery: string;
-    }[];
-    textSegments: {
-        text: string;
-        score: number;
     }[];
 }

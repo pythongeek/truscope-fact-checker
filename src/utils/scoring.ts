@@ -1,4 +1,4 @@
-import { ScoreBreakdown } from '../types';
+import { ScoreBreakdown } from '@/types/factCheck';
 
 // --- Scoring Logic ---
 

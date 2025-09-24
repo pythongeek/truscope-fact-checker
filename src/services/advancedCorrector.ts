@@ -1,8 +1,8 @@
 import { EditorMode, EditorConfig, EditorResult, ContentChange } from '../types/advancedEditor';
-import { FactCheckReport } from '../types';
-import { AIResponseParser } from '../utils/jsonParser';
+import { FactCheckReport } from '@/types/factCheck';
 import { GoogleGenAI } from "@google/genai";
 import { getGeminiApiKey } from './apiKeyService';
+import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export class AdvancedCorrectorService {
   private static instance: AdvancedCorrectorService;

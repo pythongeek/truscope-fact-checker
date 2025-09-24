@@ -1,6 +1,6 @@
 import { FactDatabase, VerifiedSource, FactVerdict } from '../types/factDatabase';
 import { BlobStorageService } from './blobStorage';
-import { FactCheckReport } from '../types';
+import { FactCheckReport } from '@/types/factCheck';
 
 export class RealTimeFactDBService {
   private static instance: RealTimeFactDBService;
