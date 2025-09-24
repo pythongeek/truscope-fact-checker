@@ -1,4 +1,5 @@
-// Enhanced JSON parser for AI responses
+// src/utils/jsonParser.ts
+
 export class AIResponseParser {
   static parseAIResponse(responseText: string): any {
     try {
@@ -24,4 +25,15 @@ export class AIResponseParser {
       }
     }
   }
+
+  static safeParseJSON(text: string, fallback: any = null): any {
+    try {
+      return this.parseAIResponse(text);
+    } catch {
+      return fallback;
+    }
+  }
 }
+
+// Legacy export for compatibility
+export const parseAIResponse = AIResponseParser.parseAIResponse;

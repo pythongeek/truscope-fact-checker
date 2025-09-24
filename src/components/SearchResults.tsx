@@ -1,5 +1,5 @@
 import React from 'react';
-import { SearchEvidence } from '../types/factCheck';
+import { SearchEvidence } from '../types';
 
 interface SearchResultsProps {
     searchEvidence?: SearchEvidence;

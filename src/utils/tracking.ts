@@ -1,4 +1,4 @@
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '../types';
 
 /**
  * Tracks usage and performance metrics for a fact-check analysis.

@@ -1,8 +1,8 @@
 // src/services/enhancedFactCheckService.ts
 
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '../types';
 // Make sure to import both the parser and the validator
-import { AIResponseParser } from '../utils/AIResponseParser';
+import { AIResponseParser } from '../utils/jsonParser';
 import { getGeminiApiKey } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -88,6 +88,7 @@ Return only the JSON object, no additional text or formatting.`;
     try {
       // Use our robust JSON parser instead of direct JSON.parse
       const parsedData = AIResponseParser.parseAIResponse(response);
+
       return parsedData;
     } catch (error) {
       console.error('Failed to parse Gemini response:', error);

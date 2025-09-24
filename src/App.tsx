@@ -5,10 +5,10 @@ import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
-import { FactCheckReport } from './types/factCheck';
+import { FactCheckReport } from './types';
 import { runFactCheckOrchestrator } from './services/geminiService';
 import { saveReportToHistory } from './services/historyService';
-import { AIResponseParser } from './utils/AIResponseParser';
+import { AIResponseParser } from './utils/jsonParser';
 
 // Initialize the global JSON fix on app startup
 function initializeGlobalJsonFix() {
@@ -18,19 +18,32 @@ function initializeGlobalJsonFix() {
   // Override JSON.parse globally to handle AI response parsing
   (JSON as any).parse = function(text: string, reviver?: (key: string, value: any) => any): any {
     try {
-      // First, try to parse with the robust AI response parser
-      return AIResponseParser.parseAIResponse(text);
+      // Try the original JSON.parse first
+      return originalJsonParse.call(this, text, reviver);
     } catch (error) {
-      // If the robust parser fails, it might be a regular JSON string that's genuinely invalid,
-      // or a non-JSON string. We'll let the original parser throw its more specific error.
-      try {
-        return originalJsonParse.call(this, text, reviver);
-      } catch (originalError) {
-        // If both fail, we log the failure and re-throw the error from the robust parser,
-        // as it's more likely to be the intended parsing method for this app.
-        console.error('[JSON Fix] Both robust and standard JSON parsing failed.');
-        throw error;
+      // If original fails and the text looks like it might be an AI response
+      if (typeof text === 'string' && (
+        text.includes('```') ||
+        text.includes('final_verdict') ||
+        text.includes('score_breakdown') ||
+        text.includes('enhanced_claim_text') ||
+        text.trim().startsWith('```json') ||
+        (text.includes('{') && text.includes('}') && text.includes('`'))
+      )) {
+        try {
+          console.warn('[JSON Fix] Standard JSON.parse failed, attempting robust AI response parsing');
+          const result = AIResponseParser.parseAIResponse(text);
+          console.log('[JSON Fix] Successfully parsed AI response');
+          return result;
+        } catch (robustError) {
+          console.error('[JSON Fix] Robust parsing also failed:', robustError);
+          console.error('[JSON Fix] Original text sample:', text.substring(0, 200));
+          // If robust parsing also fails, throw the original error
+          throw error;
+        }
       }
+      // For non-AI responses, throw the original error
+      throw error;
     }
   };
 

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '../types/factCheck';
+import { AIResponseParser } from '../utils/jsonParser';
+import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '../types';
 import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
@@ -218,7 +219,7 @@ const normalizeClaim = async (claimText: string): Promise<ClaimNormalization> =>
             },
         });
         const jsonString = result.text.trim();
-        return AIResponseParser.parseAIResponse(jsonString) as ClaimNormalization;
+        return JSON.parse(jsonString) as ClaimNormalization;
     } catch (error) {
         console.error("Error normalizing claim:", error);
         throw new Error("Failed to normalize the claim using the AI model.");
@@ -249,7 +250,7 @@ const runGeminiOnlyCheck = async (normalizedClaim: ClaimNormalization, context?:
         },
     });
     const jsonString = result.text.trim();
-    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
+    return JSON.parse(jsonString) as FactCheckReport;
 };
 
 const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -275,7 +276,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
+    return JSON.parse(jsonString) as FactCheckReport;
 };
 
 const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -302,7 +303,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
         },
     });
     const jsonString = result.text.trim();
-    return AIResponseParser.parseAIResponse(jsonString) as FactCheckReport;
+    return JSON.parse(jsonString) as FactCheckReport;
 };
 
 // NEW: Citation-Augmented Core Analysis Method
@@ -340,7 +341,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    const preliminaryAnalysis: PreliminaryAnalysis = AIResponseParser.parseAIResponse(jsonString);
+    const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
 
     // --- 2. External Evidence Gathering ---
     console.log("Starting targeted searches for verification...");
@@ -399,7 +400,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const finalJsonString = finalResult.text.trim();
-    const finalReport = AIResponseParser.parseAIResponse(finalJsonString) as FactCheckReport;
+    const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
 
     // Ensure searchEvidence is populated with the actual search results
     if (searchResults.length > 0) {

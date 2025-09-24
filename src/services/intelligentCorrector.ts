@@ -2,7 +2,7 @@ import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/cor
 import { AdvancedEvidence } from '../types/enhancedFactCheck';
 import { getGeminiApiKey } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
-import { parseAIJsonResponse } from '../utils/jsonParser';
+import { AIResponseParser } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
   private ai: GoogleGenAI;
@@ -57,7 +57,7 @@ export class IntelligentCorrector {
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const response = AIResponseParser.parseAIResponse(result.text);
 
       return {
         totalIssues: response.issues.length,
@@ -136,7 +136,7 @@ export class IntelligentCorrector {
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const response = AIResponseParser.parseAIResponse(result.text);
 
       return {
         id: `correction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

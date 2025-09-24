@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getHistory, clearHistory } from '../services/historyService';
-import { HistoryEntry } from '../types/factCheck';
-import { FactCheckReport } from '../types/factCheck';
+import { HistoryEntry, FactCheckReport } from '../types';
 import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon } from './icons';
 import ExportResults from './ExportResults';
 

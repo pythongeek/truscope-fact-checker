@@ -1,47 +1,84 @@
-import { HistoryEntry } from '../types';
-import { AIResponseParser } from '../utils/AIResponseParser';
+// src/services/historyService.ts
 
-const HISTORY_KEY = 'factCheckHistory';
+import { HistoryEntry, FactCheckResult, AnalysisMode } from '../types';
 
-export const historyService = {
-  getHistory: (): HistoryEntry[] => {
+const STORAGE_KEY = 'truescope_history';
+
+export class HistoryService {
+  static saveReportToHistory(
+    originalText: string,
+    result: FactCheckResult,
+    mode: AnalysisMode = 'comprehensive',
+    processingTime: number = 0
+  ): void {
     try {
-      const storedHistory = localStorage.getItem(HISTORY_KEY);
-      if (storedHistory) {
-        // Since history is stored by our app, we can trust the format.
-        // However, for consistency, we could use the robust parser.
-        // Let's stick to the original parser for internally-managed data.
-        return JSON.parse(storedHistory) as HistoryEntry[];
-      }
+      const history = this.getHistory();
+      const entry: HistoryEntry = {
+        id: `entry_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        originalText,
+        result,
+        mode,
+        processingTime
+      };
+
+      // Add to beginning of array
+      history.unshift(entry);
+
+      // Keep only last 50 entries
+      const trimmedHistory = history.slice(0, 50);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedHistory));
     } catch (error) {
-      console.error('Error parsing history from localStorage:', error);
-      // If parsing fails, return an empty array to prevent app crash
+      console.error('Failed to save to history:', error);
+    }
+  }
+
+  static getHistory(): HistoryEntry[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return [];
+
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Failed to load history:', error);
       return [];
     }
-    return [];
-  },
+  }
 
-  saveHistory: (history: HistoryEntry[]): void => {
+  static clearHistory(): void {
     try {
-      const historyString = JSON.stringify(history);
-      localStorage.setItem(HISTORY_KEY, historyString);
+      localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error('Error saving history to localStorage:', error);
+      console.error('Failed to clear history:', error);
     }
-  },
+  }
 
-  addHistoryEntry: (entry: HistoryEntry): HistoryEntry[] => {
-    const currentHistory = historyService.getHistory();
-    const updatedHistory = [entry, ...currentHistory];
-    // Optional: Limit history size
-    if (updatedHistory.length > 50) {
-      updatedHistory.pop();
+  static deleteEntry(id: string): void {
+    try {
+      const history = this.getHistory();
+      const filtered = history.filter(entry => entry.id !== id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+      console.error('Failed to delete entry:', error);
     }
-    historyService.saveHistory(updatedHistory);
-    return updatedHistory;
-  },
+  }
 
-  clearHistory: (): void => {
-    localStorage.removeItem(HISTORY_KEY);
-  },
-};
+  static getEntry(id: string): HistoryEntry | null {
+    try {
+      const history = this.getHistory();
+      return history.find(entry => entry.id === id) || null;
+    } catch (error) {
+      console.error('Failed to get entry:', error);
+      return null;
+    }
+  }
+}
+
+// Named exports for compatibility
+export const saveReportToHistory = HistoryService.saveReportToHistory;
+export const getHistory = HistoryService.getHistory;
+export const clearHistory = HistoryService.clearHistory;
+export const deleteEntry = HistoryService.deleteEntry;
+export const getEntry = HistoryService.getEntry;
