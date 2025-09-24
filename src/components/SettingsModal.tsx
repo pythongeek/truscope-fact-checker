@@ -8,12 +8,12 @@ interface SettingsModalProps {
 }
 
 const API_KEY_FIELDS = [
-    { id: 'gemini', label: 'Gemini API Key', group: 'Google APIs' },
-    { id: 'factCheck', label: 'Google Fact Check Tools API Key', group: 'Google APIs' },
-    { id: 'search', label: 'Google Search API Key', group: 'Google APIs' },
-    { id: 'searchId', label: 'Google Search ID', group: 'Google APIs' },
-    { id: 'newsdata', label: 'newsdata.io API Key', group: 'Third-Party APIs' },
-    { id: 'serp', label: 'SERP API Key', group: 'Third-Party APIs' },
+    { id: 'gemini', label: 'Gemini API Key', group: 'Google APIs', url: 'https://aistudio.google.com/' },
+    { id: 'factCheck', label: 'Google Fact Check Tools API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview' },
+    { id: 'search', label: 'Google Search API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview' },
+    { id: 'searchId', label: 'Google Search ID', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview' },
+    { id: 'newsdata', label: 'newsdata.io API Key', group: 'Third-Party APIs', url: 'https://newsdata.io/free-news-api' },
+    { id: 'serp', label: 'SERP API Key', group: 'Third-Party APIs', url: 'https://serphouse.com/' },
 ];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
@@ -77,6 +77,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                             placeholder={`Enter your ${field.label}`}
                                             className="w-full p-3 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-slate-200 placeholder-slate-400"
                                         />
+                                        <p className="mt-2 text-xs text-slate-400">
+                                            Get your free API key from <a href={field.url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">{field.url}</a>
+                                        </p>
                                     </div>
                                 ))}
                             </div>
