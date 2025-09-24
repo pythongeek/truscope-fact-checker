@@ -7,6 +7,7 @@ import { search } from './webSearch';
 import { enhancedFactCheck } from './textAnalysisService';
 import { RealTimeFactDBService } from './realTimeFactDB';
 import { FactDatabase, FactVerdict } from "../types/factDatabase";
+import { parseAIJsonResponse } from '../utils/jsonParser';
 
 // AI Client Setup
 const getAiClient = () => {
@@ -153,7 +154,10 @@ const factCheckReportSchema = {
                 properties: {
                     text: { type: Type.STRING },
                     score: { type: Type.INTEGER },
-                    color: { type: Type.STRING, enum: ['green', 'yellow', 'red', 'default'] }
+                    color: {
+                        type: Type.STRING,
+                        enum: ['green', 'yellow', 'red', 'default']
+                    }
                 },
                 required: ['text', 'score', 'color']
             }
@@ -218,7 +222,13 @@ const normalizeClaim = async (claimText: string): Promise<ClaimNormalization> =>
             },
         });
         const jsonString = result.text.trim();
-        return JSON.parse(jsonString) as ClaimNormalization;
+        const parsedResult = parseAIJsonResponse(jsonString);
+
+        if (!parsedResult || !parsedResult.normalized_claim || !parsedResult.keywords) {
+             throw new Error('AI response for claim normalization is missing required fields.');
+        }
+
+        return parsedResult as ClaimNormalization;
     } catch (error) {
         console.error("Error normalizing claim:", error);
         throw new Error("Failed to normalize the claim using the AI model.");
@@ -249,7 +259,7 @@ const runGeminiOnlyCheck = async (normalizedClaim: ClaimNormalization, context?:
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return parseAIJsonResponse(jsonString) as FactCheckReport;
 };
 
 const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -275,7 +285,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return parseAIJsonResponse(jsonString) as FactCheckReport;
 };
 
 const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -302,7 +312,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
         },
     });
     const jsonString = result.text.trim();
-    return JSON.parse(jsonString) as FactCheckReport;
+    return parseAIJsonResponse(jsonString) as FactCheckReport;
 };
 
 // NEW: Citation-Augmented Core Analysis Method
@@ -340,7 +350,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    const preliminaryAnalysis: PreliminaryAnalysis = JSON.parse(jsonString);
+    const preliminaryAnalysis: PreliminaryAnalysis = parseAIJsonResponse(jsonString);
 
     // --- 2. External Evidence Gathering ---
     console.log("Starting targeted searches for verification...");
@@ -399,7 +409,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const finalJsonString = finalResult.text.trim();
-    const finalReport = JSON.parse(finalJsonString) as FactCheckReport;
+    const finalReport = parseAIJsonResponse(finalJsonString) as FactCheckReport;
 
     // Ensure searchEvidence is populated with the actual search results
     if (searchResults.length > 0) {
