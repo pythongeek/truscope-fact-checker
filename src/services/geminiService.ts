@@ -8,6 +8,7 @@ import { enhancedFactCheck } from './textAnalysisService';
 import { RealTimeFactDBService } from './realTimeFactDB';
 import { FactDatabase, FactVerdict } from "../types/factDatabase";
 import { parseAIJsonResponse } from '../utils/jsonParser';
+import { generateSHA256 } from '../utils/hashUtils';
 
 // Helper function to extract text from different SDK response structures
 const extractTextFromGeminiResponse = (result: any): string => {
@@ -640,7 +641,7 @@ export async function runFactCheckOrchestrator(
   const cachedFact = await factDB.getFact(text);
   if (cachedFact && isFactFresh(cachedFact)) {
     console.log('✅ Using cached fact from database');
-    return convertFactToReport(cachedFact, text);
+    return await convertFactToReport(cachedFact, text);
   }
 
   // Proceed with original analysis if no cached result
@@ -662,8 +663,10 @@ function isFactFresh(fact: FactDatabase): boolean {
   return daysSinceVerification < 7; // Consider facts fresh for 7 days
 }
 
-function convertFactToReport(fact: FactDatabase, originalText: string): FactCheckReport {
+async function convertFactToReport(fact: FactDatabase, originalText: string): Promise<FactCheckReport> {
+    const factCheckId = await generateSHA256(`cached-database::${originalText.trim().toLowerCase()}`);
   return {
+    id: factCheckId,
     originalText,
     final_verdict: mapVerdictToString(fact.verdict),
     final_score: Math.round(fact.confidence * 100),
@@ -723,7 +726,8 @@ async function originalFactCheckOrchestrator(
     method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented',
     context?: string
 ): Promise<FactCheckReport> {
-    const cacheKey = `${method}::${claimText.trim().toLowerCase()}`;
+    const factCheckId = await generateSHA256(`${method}::${claimText.trim().toLowerCase()}`);
+    const cacheKey = factCheckId;
     const cachedReport = factCheckCache.get(cacheKey);
     if (cachedReport) {
         console.log(`[Cache] Hit for key: ${cacheKey}`);
@@ -760,6 +764,7 @@ async function originalFactCheckOrchestrator(
                 throw new Error(`Unsupported analysis method: ${method}`);
         }
 
+        report.id = factCheckId;
         report.metadata.processing_time_ms = Date.now() - startTime;
         report.originalText = claimText;
         

@@ -61,6 +61,7 @@ export interface FactCheckMetadata {
 }
 
 export interface FactCheckReport {
+    id: string;
     originalText: string;
     final_verdict: string;
     final_score: number; // 0-100
