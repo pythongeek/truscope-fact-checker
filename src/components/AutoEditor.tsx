@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FactCheckReport } from '@/types/factCheck';
+import { AdvancedCorrectorService } from '@/services/advancedCorrector';
 
 // Enhanced types for industry-standard features
 interface EditorMode {
@@ -126,98 +127,80 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
     }
   ];
 
-  // Industry-standard processing simulation
-  const simulateProcessing = async (mode: string, customInstructions?: string): Promise<EditorResult> => {
+  const handleEditorProcessing = async (
+    mode: string,
+    customInstructions?: string
+  ): Promise<EditorResult> => {
     const job: ProcessingJob = {
       id: `job_${Date.now()}_${mode}`,
       mode,
       status: 'queued',
       progress: 0,
-      startTime: Date.now()
+      startTime: Date.now(),
     };
 
-    setProcessingJobs(prev => ({ ...prev, [mode]: job }));
+    setProcessingJobs((prev) => ({ ...prev, [mode]: job }));
 
-    return new Promise((resolve, reject) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 20;
-        if (progress > 100) progress = 100;
+    try {
+      const correctorService = AdvancedCorrectorService.getInstance();
+      console.log(`🚀 Starting ${mode} editor processing...`);
+      setProcessingJobs((prev) => ({
+        ...prev,
+        [mode]: { ...prev[mode], status: 'processing', progress: 10 },
+      }));
 
-        setProcessingJobs(prev => {
-          const currentJob = prev[mode];
-          if (currentJob) {
-            return {
-              ...prev,
-              [mode]: {
-                ...currentJob,
-                status: progress >= 100 ? 'completed' : 'processing',
-                progress,
-              }
-            };
-          }
-          return prev;
-        });
+      const serviceResult = await correctorService.processContent(
+        mode as any, // The service expects a more specific type
+        originalText,
+        factCheckReport,
+        customInstructions
+      );
 
-        if (progress >= 100) {
-          clearInterval(interval);
+      setProcessingJobs((prev) => ({
+        ...prev,
+        [mode]: { ...prev[mode], progress: 80 },
+      }));
 
-          // Simulate result
-          const result: EditorResult = {
-            mode,
-            originalText,
-            editedText: `[ENHANCED BY ${mode.toUpperCase()}]\n\n${originalText}\n\n[Additional improvements and corrections applied based on fact-check analysis...]`,
-            improvementScore: Math.floor(Math.random() * 30) + 70,
-            processingTime: Date.now() - job.startTime,
-            confidence: Math.floor(Math.random() * 20) + 80,
-            changesApplied: [
-              {
-                type: 'modification',
-                originalPhrase: 'example text',
-                newPhrase: 'improved example text',
-                reason: 'Enhanced clarity and accuracy',
-                confidence: 0.92,
-                position: { start: 0, end: 12 }
-              }
-            ],
-            tokensUsed: Math.floor(Math.random() * 1000) + 500,
-            costEstimate: parseFloat((Math.random() * 0.05).toFixed(4)),
-            version: `v1.${Date.now()}`
-          };
+      // Adapt serviceResult to the component's EditorResult type
+      const result: EditorResult = {
+        ...serviceResult,
+        tokensUsed: 0, // Placeholder
+        costEstimate: 0, // Placeholder
+        version: `v1.${Date.now()}`,
+      };
 
-          resolve(result);
-        }
-      }, 200);
-    });
+      console.log('✅ Editor processing completed.');
+      setProcessingJobs((prev) => ({
+        ...prev,
+        [mode]: { ...prev[mode], status: 'completed', progress: 100 },
+      }));
+
+      return result;
+    } catch (error) {
+      console.error('Editor processing failed:', error);
+      setProcessingJobs((prev) => ({
+        ...prev,
+        [mode]: { ...prev[mode], status: 'failed', error: (error as Error).message },
+      }));
+      throw error;
+    }
   };
 
   // Independent function handlers - FIXED INDEPENDENCE ISSUE
   const handleIndividualModeProcess = async (modeId: string) => {
     try {
-      const result = await simulateProcessing(modeId, customPrompt);
-      setEditorResults(prev => ({ ...prev, [modeId]: result }));
+      const result = await handleEditorProcessing(modeId, customPrompt);
+      setEditorResults((prev) => ({ ...prev, [modeId]: result }));
       setActiveTab('results');
 
       // Save to version history
-      setSavedVersions(prev => ({
+      setSavedVersions((prev) => ({
         ...prev,
-        [modeId]: [...(prev[modeId] || []), result]
+        [modeId]: [...(prev[modeId] || []), result],
       }));
-
-      // Save to Vercel Blob Storage
-      await saveToVercelBlob(modeId, result);
     } catch (error) {
       console.error(`Failed to process ${modeId}:`, error);
-      setProcessingJobs(prev => {
-        const currentJob = prev[modeId];
-        if (currentJob) {
-          return {
-            ...prev,
-            [modeId]: { ...currentJob, status: 'failed', error: (error as Error).message }
-          };
-        }
-        return prev;
-      });
+      // Error state is already set in handleEditorProcessing
     }
   };
 
@@ -227,11 +210,11 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
     const batchModes = ['quick-fix', 'enhanced', 'seo-optimized'];
 
     try {
-      const promises = batchModes.map(mode => simulateProcessing(mode, customPrompt));
+      const promises = batchModes.map((mode) => handleEditorProcessing(mode, customPrompt));
       const results = await Promise.all(promises);
 
       const newEditorResults: { [key: string]: EditorResult } = {};
-      const newSavedVersions: { [key: string]: EditorResult[] } = {};
+      const newSavedVersions: { [key:string]: EditorResult[] } = {};
 
       results.forEach((result, index) => {
         const mode = batchModes[index];
@@ -239,64 +222,14 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
         newSavedVersions[mode] = [...(savedVersions[mode] || []), result];
       });
 
-      setEditorResults(prev => ({ ...prev, ...newEditorResults }));
-      setSavedVersions(prev => ({...prev, ...newSavedVersions}));
+      setEditorResults((prev) => ({ ...prev, ...newEditorResults }));
+      setSavedVersions((prev) => ({ ...prev, ...newSavedVersions }));
 
       setBatchProcessingStatus('completed');
       setActiveTab('results');
-
-      // Batch save to Vercel Blob
-      await saveBatchToVercelBlob(results);
     } catch (error) {
       console.error('Batch processing failed:', error);
       setBatchProcessingStatus('idle');
-    }
-  };
-
-  // Vercel Blob Storage integration
-  const saveToVercelBlob = async (mode: string, result: EditorResult) => {
-    try {
-      const response = await fetch('/api/blob/save-editor-result', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `editor_${mode}_${Date.now()}`,
-          mode,
-          result,
-          originalText,
-          factCheckId: factCheckReport.id
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to save to blob storage');
-
-      const { url } = await response.json();
-      console.log(`Saved ${mode} result to blob:`, url);
-    } catch (error) {
-      console.error('Blob storage error:', error);
-    }
-  };
-
-  const saveBatchToVercelBlob = async (results: EditorResult[]) => {
-    try {
-      const response = await fetch('/api/blob/save-batch-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `batch_${Date.now()}`,
-          results,
-          originalText,
-          factCheckId: factCheckReport.id,
-          timestamp: new Date().toISOString()
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to save batch to blob storage');
-
-      const { urls } = await response.json();
-      console.log('Saved batch results to blob:', urls);
-    } catch (error) {
-      console.error('Batch blob storage error:', error);
     }
   };
 
