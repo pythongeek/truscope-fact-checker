@@ -112,7 +112,8 @@ export class BlobStorageService {
       const response = await fetch(`https://blob.vercel-storage.com/${this.FACT_DB_PATH}`);
       if (!response.ok) {
         if (response.status === 404) {
-          console.log('Fact database not found, starting with an empty one.');
+          console.log('Fact database not found, creating a new empty one.');
+          await this.saveFactDatabase([]); // Create an empty database
           return [];
         }
         throw new Error(`Failed to fetch fact database: ${response.statusText}`);
