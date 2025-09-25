@@ -202,14 +202,6 @@ export class AdvancedCorrectorService {
           temperature: 0.7,
         },
       });
-
-      // FIXED: Use the same pattern as geminiService.ts
-      const content = this.extractTextFromGeminiResponse(result);
-
-      if (!content) {
-        throw new Error('Empty response from AI service');
-      }
-
       // High confidence since we're using fact-checked data
       const confidence = 0.9;
 
@@ -217,93 +209,6 @@ export class AdvancedCorrectorService {
     } catch (error) {
       console.error('Error calling Gemini API:', error);
       throw new Error(`Failed to get response from AI service: ${error.message}`);
-    }
-  }
-
-  // Use the same extraction method as in geminiService.ts
-  private extractTextFromGeminiResponse(result: any): string {
-    console.log('Gemini API raw response structure:', Object.keys(result || {}));
-
-    if (!result) {
-        throw new Error('No response from AI model');
-    }
-
-    let responseText: string = '';
-
-    try {
-        // Method 1: New @google/genai SDK - text() method
-        if (typeof result.text === 'function') {
-            responseText = result.text();
-            console.log('Used result.text() method');
-        }
-        // Method 2: Old SDK - direct text property
-        else if (typeof result.text === 'string') {
-            responseText = result.text;
-            console.log('Used result.text property');
-        }
-        // Method 3: Candidates structure (common in Google AI APIs)
-        else if (result.candidates && Array.isArray(result.candidates) && result.candidates.length > 0) {
-            const candidate = result.candidates[0];
-            if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
-                responseText = candidate.content.parts.map((part: any) => part.text || '').join('');
-                console.log('Used candidates structure');
-            }
-        }
-        // Method 4: Direct content extraction
-        else if (result.content) {
-            if (typeof result.content === 'string') {
-                responseText = result.content;
-            } else if (result.content.parts && Array.isArray(result.content.parts)) {
-                responseText = result.content.parts.map((part: any) => part.text || '').join('');
-            }
-            console.log('Used content structure');
-        }
-        // Method 5: Last resort - stringify and try to extract JSON
-        else {
-            const stringified = JSON.stringify(result);
-            console.log('Response structure not recognized, raw response:', stringified.substring(0, 500));
-
-            // Try to find JSON in the stringified response
-            const jsonMatch = stringified.match(/\{.*\}/);
-            if (jsonMatch) {
-                responseText = jsonMatch[0];
-                console.log('Extracted JSON from stringified response');
-            } else {
-                responseText = stringified;
-            }
-        }
-    } catch (error) {
-        console.error('Error extracting text from response:', error);
-        responseText = JSON.stringify(result);
-    }
-
-    if (!responseText || responseText.trim() === '') {
-        console.error('Empty response after all extraction attempts');
-        throw new Error('Empty response from AI model after trying all extraction methods');
-    }
-
-    console.log('Extracted response text (first 200 chars):', responseText.substring(0, 200));
-    return responseText.trim();
-  }
-
-  private getMaxTokens(outputLength: EditorConfig['expectedOutputLength']): number {
-    switch (outputLength) {
-      case 'preserve': return 2000;
-      case 'expand': return 4000;
-      case 'comprehensive': return 8000;
-      default: return 2000;
-    }
-  }
-
-  private analyzeChanges(originalText: string, editedText: string): ContentChange[] {
-    const changes: ContentChange[] = [];
-
-    // Simple change detection
-    if (originalText !== editedText) {
-      // Basic word count comparison
-      const originalWords = originalText.split(/\s+/).length;
-      const editedWords = editedText.split(/\s+/).length;
-
       if (editedWords > originalWords * 1.2) {
         changes.push({
           type: 'addition',
