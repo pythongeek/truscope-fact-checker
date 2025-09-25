@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
+    // Debugging: Check if the environment variable is available
+    console.log(
+      'BLOB_READ_WRITE_TOKEN is set:',
+      !!process.env.BLOB_READ_WRITE_TOKEN
+    );
+
     const facts = await request.json();
     const dbPath = 'fact-database/db.json';
 
