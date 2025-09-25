@@ -384,6 +384,7 @@ Make sure your response is valid JSON.`;
 
         // Create a proper FactCheckReport structure
         const report: FactCheckReport = {
+            id: `gemini-only-${Math.random().toString(36).substr(2, 9)}`,
             originalText: normalizedClaim.original_claim,
             final_verdict: parsed.final_verdict || 'Unverified',
             final_score: parsed.final_score || 50,
@@ -429,6 +430,7 @@ Make sure your response is valid JSON.`;
 
         // Return a basic fallback report
         return {
+            id: `gemini-error-${Math.random().toString(36).substr(2, 9)}`,
             originalText: normalizedClaim.original_claim,
             final_verdict: 'Analysis Error',
             final_score: 0,
