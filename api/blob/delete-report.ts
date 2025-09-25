@@ -1,5 +1,5 @@
 import { del } from '@vercel/blob';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server.js';
 
 export async function POST(request: NextRequest) {
   try {
