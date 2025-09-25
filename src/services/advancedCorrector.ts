@@ -202,37 +202,6 @@ export class AdvancedCorrectorService {
           temperature: 0.7,
         },
       });
-
-      // FIXED: Use the correct way to extract text from Gemini API response
-      let content: string = '';
-      
-      // Method 1: Try the text property directly (most common)
-      if (result.response && result.response.text) {
-        content = typeof result.response.text === 'function' ? result.response.text() : result.response.text;
-      }
-      // Method 2: Try candidates structure
-      else if (result.response && result.response.candidates && result.response.candidates[0]) {
-        const candidate = result.response.candidates[0];
-        if (candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-          content = candidate.content.parts[0].text || '';
-        }
-      }
-      // Method 3: Direct text access (newer SDK versions)
-      else if (result.text) {
-        content = typeof result.text === 'function' ? result.text() : result.text;
-      }
-      // Method 4: Fallback to response text
-      else if ((result as any).response?.text) {
-        const responseText = (result as any).response.text;
-        content = typeof responseText === 'function' ? responseText() : responseText;
-      }
-
-      content = content.trim();
-
-      if (!content) {
-        throw new Error('Empty response from AI service');
-      }
-
       // High confidence since we're using fact-checked data
       const confidence = 0.9;
 
@@ -240,27 +209,6 @@ export class AdvancedCorrectorService {
     } catch (error) {
       console.error('Error calling Gemini API:', error);
       throw new Error(`Failed to get response from AI service: ${error.message}`);
-    }
-  }
-
-  private getMaxTokens(outputLength: EditorConfig['expectedOutputLength']): number {
-    switch (outputLength) {
-      case 'preserve': return 2000;
-      case 'expand': return 4000;
-      case 'comprehensive': return 8000;
-      default: return 2000;
-    }
-  }
-
-  private analyzeChanges(originalText: string, editedText: string): ContentChange[] {
-    const changes: ContentChange[] = [];
-
-    // Simple change detection
-    if (originalText !== editedText) {
-      // Basic word count comparison
-      const originalWords = originalText.split(/\s+/).length;
-      const editedWords = editedText.split(/\s+/).length;
-      
       if (editedWords > originalWords * 1.2) {
         changes.push({
           type: 'addition',
