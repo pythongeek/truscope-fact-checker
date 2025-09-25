@@ -9,6 +9,82 @@ import { RealTimeFactDBService } from './realTimeFactDB';
 import { FactDatabase, FactVerdict } from "../types/factDatabase";
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
+// Helper function to extract text from different SDK response structures
+const extractTextFromGeminiResponse = (result: any): string => {
+    console.log('Gemini API raw response structure:', Object.keys(result || {}));
+
+    if (!result) {
+        throw new Error('No response from AI model');
+    }
+
+    let responseText: string = '';
+
+    try {
+        // Method 1: New @google/genai SDK - text() method
+        if (typeof result.text === 'function') {
+            responseText = result.text();
+            console.log('Used result.text() method');
+        }
+        // Method 2: New SDK - response.text() method
+        else if (result.response && typeof result.response.text === 'function') {
+            responseText = result.response.text();
+            console.log('Used result.response.text() method');
+        }
+        // Method 3: Old SDK - direct text property
+        else if (typeof result.text === 'string') {
+            responseText = result.text;
+            console.log('Used result.text property');
+        }
+        // Method 4: Old SDK - response.text property
+        else if (result.response && typeof result.response.text === 'string') {
+            responseText = result.response.text;
+            console.log('Used result.response.text property');
+        }
+        // Method 5: Candidates structure (common in Google AI APIs)
+        else if (result.candidates && Array.isArray(result.candidates) && result.candidates.length > 0) {
+            const candidate = result.candidates[0];
+            if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
+                responseText = candidate.content.parts.map((part: any) => part.text || '').join('');
+                console.log('Used candidates structure');
+            }
+        }
+        // Method 6: Direct content extraction
+        else if (result.content) {
+            if (typeof result.content === 'string') {
+                responseText = result.content;
+            } else if (result.content.parts && Array.isArray(result.content.parts)) {
+                responseText = result.content.parts.map((part: any) => part.text || '').join('');
+            }
+            console.log('Used content structure');
+        }
+        // Method 7: Last resort - stringify and try to extract JSON
+        else {
+            const stringified = JSON.stringify(result);
+            console.log('Response structure not recognized, raw response:', stringified.substring(0, 500));
+
+            // Try to find JSON in the stringified response
+            const jsonMatch = stringified.match(/\{.*\}/);
+            if (jsonMatch) {
+                responseText = jsonMatch[0];
+                console.log('Extracted JSON from stringified response');
+            } else {
+                responseText = stringified;
+            }
+        }
+    } catch (error) {
+        console.error('Error extracting text from response:', error);
+        responseText = JSON.stringify(result);
+    }
+
+    if (!responseText || responseText.trim() === '') {
+        console.error('Empty response after all extraction attempts');
+        throw new Error('Empty response from AI model after trying all extraction methods');
+    }
+
+    console.log('Extracted response text (first 200 chars):', responseText.substring(0, 200));
+    return responseText.trim();
+};
+
 // AI Client Setup
 const getAiClient = () => {
     const apiKey = getGeminiApiKey();
@@ -202,64 +278,190 @@ const preliminaryAnalysisSchema = {
 // --- Orchestration Steps ---
 
 // 1. Normalize Claim
+// Updated normalizeClaim function with comprehensive error handling
 const normalizeClaim = async (claimText: string): Promise<ClaimNormalization> => {
+    if (!claimText || claimText.trim() === '') {
+        throw new Error('Empty claim text provided');
+    }
+
     try {
+        console.log('Starting claim normalization for:', claimText.substring(0, 100));
+
         const ai = getAiClient();
+
+        // Simple prompt without complex schemas first
+        const simplePrompt = `Extract key information from this text and respond with valid JSON:
+
+Text: "${claimText}"
+
+Respond with exactly this JSON structure:
+{
+  "original_claim": "${claimText}",
+  "normalized_claim": "simplified version of the main claim",
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}`;
+
         const result = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `Analyze the following text and extract the core factual claim. Normalize the claim into a clear, verifiable statement. Also, identify up to 5 key search terms or entities. Respond ONLY with a JSON object matching this schema: \`{"original_claim": string, "normalized_claim": string, "keywords": string[]}\`. Text: "${claimText}"`,
+            contents: simplePrompt,
             config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        original_claim: { type: Type.STRING },
-                        normalized_claim: { type: Type.STRING },
-                        keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    },
-                    required: ['original_claim', 'normalized_claim', 'keywords']
-                },
-            },
+                temperature: 0.1,
+                maxOutputTokens: 1000,
+            }
         });
-        const jsonString = result.text.trim();
-        const parsedResult = parseAIJsonResponse(jsonString);
 
-        if (!parsedResult || !parsedResult.normalized_claim || !parsedResult.keywords) {
-             throw new Error('AI response for claim normalization is missing required fields.');
+        const responseText = extractTextFromGeminiResponse(result);
+        console.log('Normalization AI response:', responseText);
+
+        const parsedResult = parseAIJsonResponse(responseText);
+
+        // Validate the response has required fields
+        if (parsedResult && parsedResult.normalized_claim && parsedResult.keywords && Array.isArray(parsedResult.keywords)) {
+            console.log('Successfully normalized claim');
+            return parsedResult as ClaimNormalization;
+        } else {
+            console.warn('AI response missing required fields, using fallback');
+            throw new Error('AI response validation failed');
         }
 
-        return parsedResult as ClaimNormalization;
     } catch (error) {
         console.error("Error normalizing claim:", error);
-        throw new Error("Failed to normalize the claim using the AI model.");
+        console.error("Claim text:", claimText);
+
+        // Robust fallback normalization
+        const words = claimText.toLowerCase()
+            .replace(/[^\w\s]/g, ' ')
+            .split(/\s+/)
+            .filter(word => word.length > 2);
+
+        const keywords = [...new Set(words)]
+            .filter(word => !['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'].includes(word))
+            .slice(0, 5);
+
+        const fallbackNormalization: ClaimNormalization = {
+            original_claim: claimText.trim(),
+            normalized_claim: claimText.trim(),
+            keywords: keywords.length > 0 ? keywords : [claimText.split(' ')[0] || 'unknown']
+        };
+
+        console.log("Using fallback normalization:", fallbackNormalization);
+        return fallbackNormalization;
     }
 };
 
 // --- Verification Methods ---
 
-const runGeminiOnlyCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
-    const ai = getAiClient();
-    const prompt = `
-        You are TruScope AI, an advanced fact-checking engine.
-        Perform a deep analysis of the following claim based *only* on your internal knowledge base. Do not perform any external searches.
-        Evaluate the claim's veracity, identify supporting or conflicting evidence from your training data, and assess the likely credibility of potential sources.
+const runGeminiOnlyCheckWithFallback = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
+    try {
+        const ai = getAiClient();
         
-        Claim: "${normalizedClaim.normalized_claim}"
-        Keywords: ${normalizedClaim.keywords.join(', ')}
-        ${context ? `Context: "${context}"` : ''}
+        // Simplified prompt for better reliability
+        const prompt = `You are a fact-checking AI. Analyze this claim and provide a JSON response:
 
-        Construct a detailed FactCheckReport and respond ONLY with the JSON object that adheres to the provided schema.
-    `;
-    const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: factCheckReportSchema,
-        },
-    });
-    const jsonString = result.text.trim();
-    return parseAIJsonResponse(jsonString) as FactCheckReport;
+Claim: "${normalizedClaim.normalized_claim}"
+Keywords: ${normalizedClaim.keywords.join(', ')}
+
+Provide a JSON response with:
+- final_verdict: string (like "True", "False", "Mixed", "Unverified")
+- final_score: number from 0-100
+- reasoning: string explaining your assessment
+- evidence: array of evidence objects
+
+Make sure your response is valid JSON.`;
+
+        const result = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                temperature: 0.2,
+                maxOutputTokens: 2000,
+            }
+        });
+
+        const responseText = extractTextFromGeminiResponse(result);
+        const parsed = parseAIJsonResponse(responseText);
+
+        // Create a proper FactCheckReport structure
+        const report: FactCheckReport = {
+            originalText: normalizedClaim.original_claim,
+            final_verdict: parsed.final_verdict || 'Unverified',
+            final_score: parsed.final_score || 50,
+            reasoning: parsed.reasoning || 'Analysis completed with limited information',
+            score_breakdown: {
+                final_score_formula: "AI assessment based on internal knowledge",
+                metrics: [
+                    {
+                        name: 'Internal Knowledge',
+                        score: parsed.final_score || 50,
+                        description: 'Assessment based on AI training data'
+                    }
+                ],
+                confidence_intervals: {
+                    lower_bound: Math.max(0, (parsed.final_score || 50) - 15),
+                    upper_bound: Math.min(100, (parsed.final_score || 50) + 15)
+                }
+            },
+            evidence: parsed.evidence || [],
+            metadata: {
+                method_used: 'gemini-only',
+                processing_time_ms: 0,
+                apis_used: ['gemini'],
+                sources_consulted: {
+                    total: 0,
+                    high_credibility: 0,
+                    conflicting: 0
+                },
+                warnings: []
+            },
+            enhanced_claim_text: normalizedClaim.normalized_claim,
+            originalTextSegments: [{
+                text: normalizedClaim.normalized_claim,
+                score: parsed.final_score || 50,
+                color: (parsed.final_score || 50) >= 75 ? 'green' : (parsed.final_score || 50) >= 40 ? 'yellow' : 'red'
+            }]
+        };
+
+        return report;
+
+    } catch (error) {
+        console.error("Error in Gemini-only check:", error);
+
+        // Return a basic fallback report
+        return {
+            originalText: normalizedClaim.original_claim,
+            final_verdict: 'Analysis Error',
+            final_score: 0,
+            reasoning: `Unable to complete analysis: ${error.message}`,
+            score_breakdown: {
+                final_score_formula: "error occurred",
+                metrics: [
+                    {
+                        name: 'Error Status',
+                        score: 0,
+                        description: 'Analysis failed due to technical error'
+                    }
+                ]
+            },
+            evidence: [],
+            metadata: {
+                method_used: 'gemini-only',
+                processing_time_ms: 0,
+                apis_used: ['gemini'],
+                sources_consulted: {
+                    total: 0,
+                    high_credibility: 0,
+                    conflicting: 0
+                },
+                warnings: [`Analysis failed: ${error.message}`]
+            },
+            enhanced_claim_text: normalizedClaim.normalized_claim,
+            originalTextSegments: [{
+                text: normalizedClaim.normalized_claim,
+                score: 0,
+                color: 'red'
+            }]
+        };
+    }
 };
 
 const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -543,7 +745,7 @@ async function originalFactCheckOrchestrator(
 
         switch (method) {
             case 'gemini-only':
-                report = await enhancedFactCheck(claimText, method, () => runGeminiOnlyCheck(normalizedClaim, context));
+                report = await enhancedFactCheck(claimText, method, () => runGeminiOnlyCheckWithFallback(normalizedClaim, context));
                 break;
             case 'google-ai':
                 report = await enhancedFactCheck(claimText, method, () => runGoogleSearchAndAiCheck(normalizedClaim, context));
