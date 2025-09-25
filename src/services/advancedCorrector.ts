@@ -208,14 +208,12 @@ export class AdvancedCorrectorService {
       });
 
       // Extract text from Gemini response
-      let content: string;
-      if (typeof result.text === 'function') {
-        content = result.text();
-      } else if (typeof result.text === 'string') {
-        content = result.text;
-      } else {
-        throw new Error('Unable to extract text from AI response');
+      const response = result.response;
+      if (!response) {
+        throw new Error('No response from AI service');
       }
+      const text = response.text();
+      let content: string = text;
 
       content = content.trim();
 
