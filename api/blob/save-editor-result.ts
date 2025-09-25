@@ -1,52 +1,40 @@
-// api/blob/save-editor-result/route.ts
 import { put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
+
+export const runtime = 'edge';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, mode, result, originalText, factCheckId } = body;
 
-    // Create comprehensive blob data
-    const blobData = {
-      id,
-      timestamp: new Date().toISOString(),
-      type: 'editor-result',
-      factCheckId,
-      mode,
-      originalText,
-      result,
-      metadata: {
-        version: '1.0',
-        platform: 'truescope-ai',
-        environment: process.env.NODE_ENV
-      }
-    };
+    // Validate the incoming data
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
+    }
 
-    // Save to Vercel Blob with organized naming
-    const filename = `editor-results/${factCheckId}/${mode}/${id}.json`;
-    const blob = await put(filename, JSON.stringify(blobData, null, 2), {
+    // Generate filename with timestamp for editor results
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `editor-results/result-${timestamp}-${Math.random().toString(36).substr(2, 9)}.json`;
+
+    // Store the editor result in Vercel Blob
+    const blob = await put(filename, JSON.stringify(body, null, 2), {
       access: 'public',
       contentType: 'application/json'
     });
 
-    // Optional: Save to database for indexing
-    // await saveEditorResultToDatabase(blobData, blob.url);
-
     return NextResponse.json({
       success: true,
       url: blob.url,
-      id: id,
-      mode: mode
+      filename: filename
     });
+
   } catch (error) {
-    console.error('Blob save error:', error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('Blob storage error:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to save editor result',
-        details: errorMessage
-      },
+      { error: 'Failed to save to blob storage' },
       { status: 500 }
     );
   }

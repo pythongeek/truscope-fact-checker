@@ -9,12 +9,24 @@ export interface StoredReport {
   userId?: string; // For future user system
 }
 
+export interface EditorResult {
+  mode: string;
+  originalText: string;
+  editedText: string;
+  changesApplied: any[];
+  improvementScore: number;
+  processingTime: number;
+  confidence: number;
+  timestamp: string;
+}
+
 import { FactDatabase } from '../types/factDatabase';
 
 export class BlobStorageService {
   private static instance: BlobStorageService;
   private readonly BLOB_PREFIX = 'truescope-reports/';
   private readonly FACT_DB_PATH = 'fact-database/db.json';
+  private readonly EDITOR_RESULTS_PREFIX = 'editor-results/';
 
   static getInstance(): BlobStorageService {
     if (!BlobStorageService.instance) {
@@ -43,6 +55,32 @@ export class BlobStorageService {
     }
   }
 
+  // NEW: Save editor results
+  async saveEditorResult(result: EditorResult): Promise<string> {
+    try {
+      const response = await fetch('/api/blob/save-editor-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...result,
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Server returned ${response.status}: ${errorText}`);
+      }
+
+      const responseData = await response.json();
+      return responseData.url;
+    } catch (error) {
+      console.error('Failed to save editor result to blob storage:', error);
+      throw new Error(`Failed to save editor result: ${error.message}`);
+    }
+  }
+
   async getReport(reportId: string): Promise<StoredReport | null> {
     try {
       const filename = `${this.BLOB_PREFIX}${reportId}.json`;
@@ -55,6 +93,22 @@ export class BlobStorageService {
       return await response.json();
     } catch (error) {
       console.error('Failed to retrieve report from blob storage:', error);
+      return null;
+    }
+  }
+
+  async getEditorResult(resultId: string): Promise<EditorResult | null> {
+    try {
+      const filename = `${this.EDITOR_RESULTS_PREFIX}${resultId}.json`;
+      const response = await fetch(`https://blob.vercel-storage.com/${filename}`);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to retrieve editor result from blob storage:', error);
       return null;
     }
   }
@@ -86,6 +140,22 @@ export class BlobStorageService {
       );
     } catch (error) {
       console.error('Failed to list reports from blob storage:', error);
+      return [];
+    }
+  }
+
+  async listEditorResults(limit: number = 50): Promise<string[]> {
+    try {
+      const { blobs } = await list({
+        prefix: this.EDITOR_RESULTS_PREFIX,
+        limit,
+      });
+
+      return blobs.map(blob =>
+        blob.pathname.replace(this.EDITOR_RESULTS_PREFIX, '').replace('.json', '')
+      );
+    } catch (error) {
+      console.error('Failed to list editor results from blob storage:', error);
       return [];
     }
   }
