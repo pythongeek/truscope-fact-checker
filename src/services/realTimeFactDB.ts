@@ -7,6 +7,7 @@ export class RealTimeFactDBService {
   private factCache: Map<string, FactDatabase> = new Map();
   private blobStorage: BlobStorageService;
   private isInitialized = false;
+  private isInitializing = false;
 
   constructor() {
     this.blobStorage = BlobStorageService.getInstance();
@@ -20,7 +21,9 @@ export class RealTimeFactDBService {
   }
 
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    if (this.isInitialized || this.isInitializing) return;
+
+    this.isInitializing = true;
 
     try {
       const facts = await this.blobStorage.loadFactDatabase();
@@ -32,6 +35,8 @@ export class RealTimeFactDBService {
     } catch (error) {
       console.error('Failed to initialize fact database:', error);
       this.isInitialized = true; // Continue with empty cache
+    } finally {
+      this.isInitializing = false;
     }
   }
 
@@ -167,6 +172,9 @@ export class RealTimeFactDBService {
   }
 
   private async ensureInitialized(): Promise<void> {
+    while (this.isInitializing) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     if (!this.isInitialized) {
       await this.initialize();
     }

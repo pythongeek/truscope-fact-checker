@@ -26,7 +26,7 @@ const extractTextFromGeminiResponse = (result: any): string => {
             responseText = result.text();
             console.log('Used result.text() method');
         }
-        // Method 2: New SDK - response.text() method
+        // Method 2: New SDK - response.text() property
         else if (result.response && typeof result.response.text === 'function') {
             responseText = result.response.text();
             console.log('Used result.response.text() method');
@@ -47,6 +47,14 @@ const extractTextFromGeminiResponse = (result: any): string => {
             if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts)) {
                 responseText = candidate.content.parts.map((part: any) => part.text || '').join('');
                 console.log('Used candidates structure');
+            }
+        }
+        // Method 5b: A new candidate structure seen in recent logs
+        else if (result.candidates && Array.isArray(result.candidates) && result.candidates.length > 0) {
+            const candidate = result.candidates[0];
+            if (candidate.content && typeof candidate.content === 'object' && candidate.content.parts && Array.isArray(candidate.content.parts) && candidate.content.parts.length > 0) {
+                 responseText = candidate.content.parts[0].text;
+                 console.log('Used new candidate structure');
             }
         }
         // Method 6: Direct content extraction

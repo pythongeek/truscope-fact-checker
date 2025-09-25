@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
     );
 
     const facts = await request.json();
+    console.log('Received facts to save:', JSON.stringify(facts, null, 2));
+
     const dbPath = 'fact-database/db.json';
 
     const blob = await put(dbPath, JSON.stringify(facts, null, 2), {
@@ -19,11 +21,13 @@ export async function POST(request: NextRequest) {
       allowOverwrite: true,
     });
 
+    console.log('Successfully saved fact database. Blob URL:', blob.url);
+
     return NextResponse.json({ success: true, url: blob.url });
   } catch (error) {
     console.error('Failed to save fact database:', error);
     return NextResponse.json(
-      { error: 'Failed to save fact database' },
+      { error: 'Failed to save fact database', details: error.message },
       { status: 500 }
     );
   }
