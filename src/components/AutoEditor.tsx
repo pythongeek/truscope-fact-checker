@@ -264,7 +264,7 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
           mode,
           result,
           originalText,
-          factCheckId: factCheckReport.metadata?.processing_time_ms || Date.now()
+          factCheckId: factCheckReport.id
         })
       });
 
@@ -286,7 +286,7 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
           id: `batch_${Date.now()}`,
           results,
           originalText,
-          factCheckId: factCheckReport.metadata?.processing_time_ms || Date.now(),
+          factCheckId: factCheckReport.id,
           timestamp: new Date().toISOString()
         })
       });
@@ -307,7 +307,7 @@ const AutoEditor: React.FC<AutoEditorProps> = ({
         exportedAt: new Date().toISOString(),
         version: result.version,
         mode: result.mode,
-        factCheckId: factCheckReport.metadata?.processing_time_ms || Date.now()
+        factCheckId: factCheckReport.id
       },
       original: {
         text: result.originalText,

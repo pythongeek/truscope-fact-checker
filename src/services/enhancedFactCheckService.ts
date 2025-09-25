@@ -150,6 +150,7 @@ Return only the JSON object, no additional text or formatting.`;
 
       // Ensure we have a valid FactCheckReport structure
       const factCheckReport: FactCheckReport = {
+        id: `enhanced-${method}-${Math.random().toString(36).substr(2, 9)}`,
         originalText: text,
         final_verdict: result.final_verdict || 'Unknown',
         final_score: result.final_score || 50,
