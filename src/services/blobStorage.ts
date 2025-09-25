@@ -1,4 +1,4 @@
-import { put, del, list } from '@vercel/blob';
+import { list } from '@vercel/blob';
 
 export interface StoredReport {
   id: string;
@@ -25,13 +25,18 @@ export class BlobStorageService {
 
   async saveReport(report: StoredReport): Promise<string> {
     try {
-      const filename = `${this.BLOB_PREFIX}${report.id}.json`;
-      const blob = await put(filename, JSON.stringify(report), {
-        access: 'public', // Change to 'private' in production
-        addRandomSuffix: false,
+      const response = await fetch('/api/blob/save-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(report),
       });
 
-      return blob.url;
+      if (!response.ok) {
+        throw new Error('Failed to save report');
+      }
+
+      const { url } = await response.json();
+      return url;
     } catch (error) {
       console.error('Failed to save report to blob storage:', error);
       throw new Error('Failed to save report');
@@ -56,9 +61,13 @@ export class BlobStorageService {
 
   async deleteReport(reportId: string): Promise<boolean> {
     try {
-      const filename = `${this.BLOB_PREFIX}${reportId}.json`;
-      await del(filename);
-      return true;
+      const response = await fetch('/api/blob/delete-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId }),
+      });
+
+      return response.ok;
     } catch (error) {
       console.error('Failed to delete report from blob storage:', error);
       return false;
@@ -83,10 +92,15 @@ export class BlobStorageService {
 
   async saveFactDatabase(facts: FactDatabase[]): Promise<void> {
     try {
-      await put(this.FACT_DB_PATH, JSON.stringify(facts, null, 2), {
-        access: 'public',
-        addRandomSuffix: false,
+      const response = await fetch('/api/blob/save-fact-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(facts),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to save fact database');
+      }
     } catch (error) {
       console.error('Failed to save fact database to blob storage:', error);
       throw new Error('Failed to save fact database');
