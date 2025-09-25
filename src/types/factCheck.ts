@@ -24,7 +24,7 @@ export interface Segment {
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
-    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence';
+    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status';
     score: number; // 0-100
     description: string;
 }
