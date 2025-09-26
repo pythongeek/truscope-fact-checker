@@ -15,14 +15,20 @@ const InputSection: React.FC<InputSectionProps> = ({ inputText, onTextChange, on
 
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl shadow-lg">
-            <textarea
-                value={inputText}
-                onChange={(e) => onTextChange(e.target.value)}
-                placeholder="Example: 'Climate change is primarily caused by human activities according to 97% of scientists'"
-                className="w-full h-40 p-4 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-slate-200 placeholder-slate-400 resize-none"
-                disabled={isLoading}
-                aria-label="Content to analyze"
-            />
+            <div className="relative">
+                <textarea
+                    value={inputText}
+                    onChange={(e) => onTextChange(e.target.value)}
+                    placeholder="Example: 'Climate change is primarily caused by human activities according to 97% of scientists'"
+                    className="w-full h-64 p-4 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-slate-200 placeholder-slate-400 resize-y"
+                    disabled={isLoading}
+                    aria-label="Content to analyze"
+                    maxLength={10000}
+                />
+                <div className="absolute bottom-3 right-3 text-xs text-slate-400">
+                    {inputText.length} / 10000
+                </div>
+            </div>
             <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                     <label htmlFor="analysis-method" className="block text-sm font-medium text-slate-300 mb-1">
