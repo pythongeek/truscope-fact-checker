@@ -4,7 +4,7 @@ import { FactCheckReport } from '@/types/factCheck';
 import { SmartCorrection, DetectedIssue } from '@/types/corrections';
 import ReportView from './ReportView';
 import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon, PencilSquareIcon } from './icons';
-import { AdvancedEditor } from './AdvancedEditor';
+import { IntegratedEditor } from './IntegratedEditor';
 import DashboardSkeleton from './DashboardSkeleton';
 
 // A new, self-contained component to visually represent the final verdict.
@@ -57,7 +57,7 @@ interface DashboardProps {
     isLoading: boolean;
 }
 
-type Tab = 'Overview' | 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis';
+type Tab = 'Overview' | 'Evidence' | 'Breakdown' | 'Methodology' | 'Search Results' | 'Original Text Analysis' | 'Advanced Editor';
 
 // A compact ScoreCircle component to replace the old ScoreCard, integrated directly into the dashboard header.
 const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
@@ -104,7 +104,6 @@ const ScoreCircle: React.FC<{ score: number }> = ({ score }) => {
 
 const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
     const [activeTab, setActiveTab] = useState<Tab>('Overview');
-    const [isEditorOpen, setIsEditorOpen] = useState(false);
 
     if (isLoading) {
         return <DashboardSkeleton />;
@@ -128,7 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
     if (result.originalTextSegments && result.originalTextSegments.length > 0) {
         availableTabs.push('Original Text Analysis');
     }
-    availableTabs.push('Evidence', 'Breakdown', 'Methodology', 'Search Results');
+    availableTabs.push('Evidence', 'Breakdown', 'Methodology', 'Search Results', 'Advanced Editor');
 
 
     return (
@@ -138,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
                  <ScoreCircle score={result.final_score} />
                  <VerdictDisplay verdict={result.final_verdict} score={result.final_score} />
                  <button
-                    onClick={() => setIsEditorOpen(true)}
+                    onClick={() => setActiveTab('Advanced Editor')}
                     className="ml-auto bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                 >
                     <PencilSquareIcon className="w-5 h-5" />
@@ -166,15 +165,15 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
 
             {/* Tab Content */}
             <div className="min-h-[200px]">
-                <ReportView report={result} activeTab={activeTab} />
+                {activeTab === 'Advanced Editor' ? (
+                    <IntegratedEditor
+                        factCheckReport={result}
+                        corrections={result.correctionAnalysis?.issues || []}
+                    />
+                ) : (
+                    <ReportView report={result} activeTab={activeTab} />
+                )}
             </div>
-
-            <AdvancedEditor
-                isOpen={isEditorOpen}
-                onClose={() => setIsEditorOpen(false)}
-                factCheckReport={result}
-                corrections={result.correctionAnalysis?.issues || []}
-            />
         </div>
     );
 };
