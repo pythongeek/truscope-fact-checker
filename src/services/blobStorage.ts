@@ -6,27 +6,18 @@ export interface StoredReport {
   report: any;
   corrections: any[];
   timestamp: string;
-  userId?: string; // For future user system
+  userId?: string;
 }
 
-export interface EditorResult {
-  mode: string;
-  originalText: string;
-  editedText: string;
-  changesApplied: any[];
-  improvementScore: number;
-  processingTime: number;
-  confidence: number;
-  timestamp: string;
-}
-
+// Remove EditorResult interface from here since it's defined in types
+import { EditorResult } from '../types/advancedEditor';
 import { FactDatabase } from '../types/factDatabase';
 
 export class BlobStorageService {
   private static instance: BlobStorageService;
   private readonly BLOB_PREFIX = 'truescope-reports/';
   private readonly FACT_DB_PATH = 'fact-database/db.json';
-  private readonly EDITOR_RESULTS_PREFIX = 'editor-results/';
+  // Remove EDITOR_RESULTS_PREFIX since we're not storing editor results
 
   static getInstance(): BlobStorageService {
     if (!BlobStorageService.instance) {
@@ -55,31 +46,8 @@ export class BlobStorageService {
     }
   }
 
-  // NEW: Save editor results
-  async saveEditorResult(result: EditorResult): Promise<string> {
-    try {
-      const response = await fetch('/api/blob/save-editor-result', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...result,
-          timestamp: new Date().toISOString()
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server response:', errorText);
-        throw new Error(`Server returned ${response.status}: ${errorText}`);
-      }
-
-      const responseData = await response.json();
-      return responseData.url;
-    } catch (error) {
-      console.error('Failed to save editor result to blob storage:', error);
-      throw new Error(`Failed to save editor result: ${error.message}`);
-    }
-  }
+  // REMOVED: saveEditorResult method - no longer needed
+  // Editor results will be handled in-memory only to save blob storage space
 
   async getReport(reportId: string): Promise<StoredReport | null> {
     try {
@@ -97,21 +65,7 @@ export class BlobStorageService {
     }
   }
 
-  async getEditorResult(resultId: string): Promise<EditorResult | null> {
-    try {
-      const filename = `${this.EDITOR_RESULTS_PREFIX}${resultId}.json`;
-      const response = await fetch(`https://blob.vercel-storage.com/${filename}`);
-
-      if (!response.ok) {
-        return null;
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to retrieve editor result from blob storage:', error);
-      return null;
-    }
-  }
+  // REMOVED: getEditorResult method - no longer needed
 
   async deleteReport(reportId: string): Promise<boolean> {
     try {
@@ -144,21 +98,7 @@ export class BlobStorageService {
     }
   }
 
-  async listEditorResults(limit: number = 50): Promise<string[]> {
-    try {
-      const { blobs } = await list({
-        prefix: this.EDITOR_RESULTS_PREFIX,
-        limit,
-      });
-
-      return blobs.map(blob =>
-        blob.pathname.replace(this.EDITOR_RESULTS_PREFIX, '').replace('.json', '')
-      );
-    } catch (error) {
-      console.error('Failed to list editor results from blob storage:', error);
-      return [];
-    }
-  }
+  // REMOVED: listEditorResults method - no longer needed
 
   async saveFactDatabase(facts: FactDatabase[]): Promise<void> {
     try {
@@ -192,6 +132,49 @@ export class BlobStorageService {
     } catch (error) {
       console.error('Failed to load fact database from blob storage:', error);
       return []; // Return empty array on error to allow the app to continue
+    }
+  }
+
+  // NEW: In-memory editor result handling
+  static handleEditorResult(result: EditorResult): void {
+    // Store in sessionStorage for the current session only
+    // This avoids using blob storage while preserving results during the session
+    try {
+      const key = `editor-result-${Date.now()}`;
+      sessionStorage.setItem(key, JSON.stringify({
+        ...result,
+        timestamp: new Date().toISOString()
+      }));
+
+      // Keep only the last 10 results to avoid storage bloat
+      const keys = Object.keys(sessionStorage).filter(k => k.startsWith('editor-result-'));
+      if (keys.length > 10) {
+        keys.sort().slice(0, keys.length - 10).forEach(k => sessionStorage.removeItem(k));
+      }
+
+      console.log('Editor result stored in session:', key);
+    } catch (error) {
+      console.warn('Failed to store editor result in session storage:', error);
+      // This is non-critical, so we just warn and continue
+    }
+  }
+
+  static getRecentEditorResults(): EditorResult[] {
+    try {
+      const keys = Object.keys(sessionStorage).filter(k => k.startsWith('editor-result-'));
+      return keys
+        .map(key => {
+          try {
+            return JSON.parse(sessionStorage.getItem(key) || '');
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    } catch (error) {
+      console.warn('Failed to retrieve editor results from session storage:', error);
+      return [];
     }
   }
 }
