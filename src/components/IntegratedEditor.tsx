@@ -347,7 +347,7 @@ export const IntegratedEditor: React.FC<IntegratedEditorProps> = ({
             value={originalText}
             onChange={(e) => setOriginalText(e.target.value)}
             placeholder="Enter your text here, or it will be automatically loaded from your fact-check analysis..."
-            className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900"
           />
         </div>
 
@@ -426,7 +426,7 @@ export const IntegratedEditor: React.FC<IntegratedEditorProps> = ({
                   📋 Copy
                 </button>
               </label>
-              <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-40">
+              <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-40 text-gray-900">
                 <div className="whitespace-pre-wrap leading-relaxed">
                   {highlightChanges(result.editedText, result.changesApplied)}
                 </div>
@@ -439,7 +439,7 @@ export const IntegratedEditor: React.FC<IntegratedEditorProps> = ({
                 <div>
                   <h3 className="font-medium text-gray-800 mb-2">Original Text</h3>
                   <div className="p-4 border rounded-lg bg-red-50 h-60 overflow-y-auto">
-                    <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                    <div className="whitespace-pre-wrap leading-relaxed text-sm text-red-900">
                       {originalText}
                     </div>
                   </div>
@@ -447,7 +447,7 @@ export const IntegratedEditor: React.FC<IntegratedEditorProps> = ({
                 <div>
                   <h3 className="font-medium text-gray-800 mb-2">Corrected Text</h3>
                   <div className="p-4 border rounded-lg bg-green-50 h-60 overflow-y-auto">
-                    <div className="whitespace-pre-wrap leading-relaxed text-sm">
+                    <div className="whitespace-pre-wrap leading-relaxed text-sm text-green-900">
                       {result.editedText}
                     </div>
                   </div>
