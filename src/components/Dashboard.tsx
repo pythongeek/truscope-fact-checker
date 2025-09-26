@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 // FIX: Updated import path for FactCheckReport.
 import { FactCheckReport } from '@/types/factCheck';
+import { SmartCorrection, DetectedIssue } from '@/types/corrections';
 import ReportView from './ReportView';
 import { CheckCircleIcon, ExclamationCircleIcon, XCircleIcon, PencilSquareIcon } from './icons';
-import AutoEditor from './AutoEditor';
+import { AdvancedEditor } from './AdvancedEditor';
 import DashboardSkeleton from './DashboardSkeleton';
 
 // A new, self-contained component to visually represent the final verdict.
@@ -141,7 +142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
                     className="ml-auto bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                 >
                     <PencilSquareIcon className="w-5 h-5" />
-                    <span>Auto-Edit Content</span>
+                    <span>Advanced Edit</span>
                 </button>
             </div>
 
@@ -168,11 +169,11 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
                 <ReportView report={result} activeTab={activeTab} />
             </div>
 
-            <AutoEditor
+            <AdvancedEditor
                 isOpen={isEditorOpen}
                 onClose={() => setIsEditorOpen(false)}
-                originalText={result.originalText}
                 factCheckReport={result}
+                corrections={result.correctionAnalysis?.issues || []}
             />
         </div>
     );

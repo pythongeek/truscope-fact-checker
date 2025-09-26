@@ -6,6 +6,8 @@ import { SmartCorrection } from '../types/corrections';
 interface AdvancedEditorProps {
   factCheckReport?: FactCheckReport;
   corrections?: SmartCorrection[];
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const EDITOR_CONFIGS: EditorConfig[] = [
@@ -40,7 +42,9 @@ const EDITOR_CONFIGS: EditorConfig[] = [
 
 export const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
   factCheckReport,
-  corrections = []
+  corrections = [],
+  isOpen,
+  onClose
 }) => {
   const [selectedMode, setSelectedMode] = useState<EditorMode>('quick-fix');
   const [originalText, setOriginalText] = useState('');
@@ -249,160 +253,172 @@ export const AdvancedEditor: React.FC<AdvancedEditorProps> = ({
 
   const selectedConfig = EDITOR_CONFIGS.find(c => c.id === selectedMode);
 
+  if (!isOpen) {
+      return null;
+  }
+
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">
-          TruScope AI - Advanced Content Editor
-        </h2>
-
-        {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {EDITOR_CONFIGS.map((config) => (
-            <div
-              key={config.id}
-              className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                selectedMode === config.id
-                  ? 'border-blue-500 bg-blue-50 shadow-md'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-              onClick={() => setSelectedMode(config.id)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-gray-800">{config.name}</h3>
-                <div className="flex space-x-1">
-                  <span className={`px-2 py-1 text-xs rounded ${
-                    config.processingTime === 'fast' ? 'bg-green-100 text-green-800' :
-                    config.processingTime === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {config.processingTime}
-                  </span>
-                  <span className={`px-2 py-1 text-xs rounded ${
-                    config.costTier === 'low' ? 'bg-green-100 text-green-800' :
-                    config.costTier === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {config.costTier}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600">{config.description}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Text Input */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Original Text
-          </label>
-          <textarea
-            ref={textareaRef}
-            value={originalText}
-            onChange={(e) => setOriginalText(e.target.value)}
-            placeholder="Enter your text here..."
-            className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
-        {/* Action Button */}
-        <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={handleEdit}
-            disabled={isProcessing || !originalText.trim()}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {isProcessing ? 'Processing...' : `Apply ${selectedConfig?.name}`}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] m-4 flex flex-col">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 border-b">
+          <h2 className="text-2xl font-bold text-gray-800">
+            TruScope AI - Advanced Content Editor
+          </h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">
+            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-
-          {corrections && corrections.length > 0 && (
-            <div className="text-sm text-blue-600">
-              📝 {corrections.length} fact-check correction(s) available
-            </div>
-          )}
         </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className={`p-4 rounded-lg mb-6 ${
-            error.includes('No changes needed')
-              ? 'bg-green-50 text-green-700 border border-green-200'
-              : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
-            {error}
-          </div>
-        )}
-
-        {/* Results */}
-        {result && (
-          <div className="space-y-6">
-            {/* Edited Text */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Edited Text
-                {result.changesApplied.length > 0 && (
-                  <span className="ml-2 text-xs text-gray-500">
-                    ({result.changesApplied.length} change(s) made)
-                  </span>
-                )}
-              </label>
-              <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-40">
-                <div className="whitespace-pre-wrap leading-relaxed">
-                  {highlightChanges(result.editedText, result.changesApplied)}
-                </div>
-              </div>
-            </div>
-
-            {/* Changes Summary */}
-            {result.changesApplied.length > 0 && (
-              <div>
-                <h3 className="font-medium text-gray-800 mb-3">Changes Applied</h3>
-                <div className="space-y-2">
-                  {result.changesApplied.map((change, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded border-l-4 border-blue-500">
-                      <div className="flex justify-between items-start mb-1">
+        <div className="flex-1 overflow-y-auto p-6">
+            <div className="space-y-6">
+                {/* Mode Selection */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {EDITOR_CONFIGS.map((config) => (
+                    <div
+                    key={config.id}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                        selectedMode === config.id
+                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    onClick={() => setSelectedMode(config.id)}
+                    >
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-semibold text-gray-800">{config.name}</h3>
+                        <div className="flex space-x-1">
                         <span className={`px-2 py-1 text-xs rounded ${
-                          change.type === 'addition' ? 'bg-green-100 text-green-800' :
-                          change.type === 'deletion' ? 'bg-red-100 text-red-800' :
-                          change.type === 'modification' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
+                            config.processingTime === 'fast' ? 'bg-green-100 text-green-800' :
+                            config.processingTime === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
                         }`}>
-                          {change.type}
+                            {config.processingTime}
                         </span>
-                        <span className="text-xs text-gray-500">{change.confidence}% confidence</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-1">{change.reason}</p>
-                      {change.originalPhrase && change.newPhrase && (
-                        <div className="text-xs">
-                          <span className="text-red-600 line-through">{change.originalPhrase}</span>
-                          <span className="mx-2">→</span>
-                          <span className="text-green-600">{change.newPhrase}</span>
+                        <span className={`px-2 py-1 text-xs rounded ${
+                            config.costTier === 'low' ? 'bg-green-100 text-green-800' :
+                            config.costTier === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                        }`}>
+                            {config.costTier}
+                        </span>
                         </div>
-                      )}
                     </div>
-                  ))}
+                    <p className="text-sm text-gray-600">{config.description}</p>
+                    </div>
+                ))}
                 </div>
-              </div>
-            )}
 
-            {/* Performance Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="text-sm text-blue-600 font-medium">Improvement Score</div>
-                <div className="text-2xl font-bold text-blue-800">{result.improvementScore}</div>
-              </div>
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-sm text-green-600 font-medium">Processing Time</div>
-                <div className="text-2xl font-bold text-green-800">{result.processingTime}ms</div>
-              </div>
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <div className="text-sm text-purple-600 font-medium">Confidence</div>
-                <div className="text-2xl font-bold text-purple-800">{result.confidence}%</div>
-              </div>
+                {/* Text Input */}
+                <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Original Text
+                </label>
+                <textarea
+                    ref={textareaRef}
+                    value={originalText}
+                    onChange={(e) => setOriginalText(e.target.value)}
+                    placeholder="Enter your text here..."
+                    className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                </div>
+
+                {/* Action Button */}
+                <div className="flex justify-between items-center mb-6">
+                <button
+                    onClick={handleEdit}
+                    disabled={isProcessing || !originalText.trim()}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                    {isProcessing ? 'Processing...' : `Apply ${selectedConfig?.name}`}
+                </button>
+
+                {corrections && corrections.length > 0 && (
+                    <div className="text-sm text-blue-600">
+                    📝 {corrections.length} fact-check correction(s) available
+                    </div>
+                )}
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                <div className={`p-4 rounded-lg mb-6 ${
+                    error.includes('No changes needed')
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}>
+                    {error}
+                </div>
+                )}
+
+                {/* Results */}
+                {result && (
+                <div className="space-y-6">
+                    {/* Edited Text */}
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Edited Text
+                        {result.changesApplied.length > 0 && (
+                        <span className="ml-2 text-xs text-gray-500">
+                            ({result.changesApplied.length} change(s) made)
+                        </span>
+                        )}
+                    </label>
+                    <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 min-h-40">
+                        <div className="whitespace-pre-wrap leading-relaxed">
+                        {highlightChanges(result.editedText, result.changesApplied)}
+                        </div>
+                    </div>
+                    </div>
+
+                    {/* Changes Summary */}
+                    {result.changesApplied.length > 0 && (
+                    <div>
+                        <h3 className="font-medium text-gray-800 mb-3">Changes Applied</h3>
+                        <div className="space-y-2">
+                        {result.changesApplied.map((change, index) => (
+                            <div key={index} className="p-3 bg-gray-50 rounded border-l-4 border-blue-500">
+                            <div className="flex justify-between items-start mb-1">
+                                <span className={`px-2 py-1 text-xs rounded ${
+                                change.type === 'addition' ? 'bg-green-100 text-green-800' :
+                                change.type === 'deletion' ? 'bg-red-100 text-red-800' :
+                                change.type === 'modification' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                                }`}>
+                                {change.type}
+                                </span>
+                                <span className="text-xs text-gray-500">{change.confidence}% confidence</span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-1">{change.reason}</p>
+                            {change.originalPhrase && change.newPhrase && (
+                                <div className="text-xs">
+                                <span className="text-red-600 line-through">{change.originalPhrase}</span>
+                                <span className="mx-2">→</span>
+                                <span className="text-green-600">{change.newPhrase}</span>
+                                </div>
+                            )}
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                    )}
+
+                    {/* Performance Metrics */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                        <div className="text-sm text-blue-600 font-medium">Improvement Score</div>
+                        <div className="text-2xl font-bold text-blue-800">{result.improvementScore}</div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                        <div className="text-sm text-green-600 font-medium">Processing Time</div>
+                        <div className="text-2xl font-bold text-green-800">{result.processingTime}ms</div>
+                    </div>
+                    <div className="bg-purple-50 p-4 rounded-lg">
+                        <div className="text-sm text-purple-600 font-medium">Confidence</div>
+                        <div className="text-2xl font-bold text-purple-800">{result.confidence}%</div>
+                    </div>
+                    </div>
+                </div>
+                )}
             </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
