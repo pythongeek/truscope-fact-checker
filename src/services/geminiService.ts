@@ -794,6 +794,50 @@ async function originalFactCheckOrchestrator(
     }
 };
 
+// --- Model Management ---
+export const listGeminiModels = async (): Promise<string[]> => {
+    try {
+        const ai = getAiClient();
+        // The Google AI SDK for JS does not have a direct `listModels` method.
+        // We need to make a direct REST call to the discovery endpoint.
+        const apiKey = getGeminiApiKey();
+        if (!apiKey) {
+            throw new Error("API key not found");
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Error fetching models list:", errorData);
+            // Don't throw an error, just return an empty array to allow fallback
+            return [];
+        }
+
+        const data = await response.json();
+
+        if (data && Array.isArray(data.models)) {
+            // Filter models that support 'generateContent' as suggested by the error message
+            const supportedModels = data.models
+                .filter((model: any) =>
+                    model.supportedGenerationMethods &&
+                    model.supportedGenerationMethods.includes('generateContent') &&
+                    // Let's also filter for models that are not 'vision' specific for this text-based tool
+                    !model.name.includes('vision')
+                )
+                .map((model: any) => model.name.replace('models/', '')); // Return clean names
+
+            console.log("Found supported models:", supportedModels);
+            return supportedModels;
+        }
+
+        return [];
+    } catch (error) {
+        console.error("Failed to list Gemini models:", error);
+        return []; // Return empty array on failure to allow fallback
+    }
+};
+
 // --- Legacy function for 'newsdata' method ---
 export const fetchNewsData = async (query: string): Promise<NewsArticle[]> => {
     try {

@@ -31,7 +31,7 @@ export const getGeminiApiKey = (): string => {
 
 export const getGeminiModel = (): string => {
     const storedModel = localStorage.getItem(API_KEYS_CONFIG.geminiModel);
-    return storedModel || 'gemini-1.5-flash-latest'; // Default model
+    return storedModel || 'gemini-pro'; // Default model updated to a more standard one
 };
 
 export const getFactCheckApiKey = (): string =>
