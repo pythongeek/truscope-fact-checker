@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { XCircleIcon } from './icons';
 import { setApiKeys, getApiKeys } from '../services/apiKeyService';
+import { listGeminiModels } from '../services/geminiService';
 
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
+const FALLBACK_GEMINI_MODELS = [
+    'gemini-pro',
+    'gemini-1.0-pro',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+];
+
 const API_KEY_FIELDS = [
     { id: 'gemini', label: 'Gemini API Key', group: 'Google APIs', url: 'https://aistudio.google.com/', type: 'password' },
-    { id: 'geminiModel', label: 'Gemini Model', group: 'Google APIs', type: 'select', options: ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro'] },
+    { id: 'geminiModel', label: 'Gemini Model', group: 'Google APIs', type: 'select', options: [] },
     { id: 'factCheck', label: 'Google Fact Check Tools API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
     { id: 'search', label: 'Google Search API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
     { id: 'searchId', label: 'Google Search ID', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
@@ -19,10 +27,34 @@ const API_KEY_FIELDS = [
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     const [keys, setKeys] = useState<Record<string, string>>({});
+    const [geminiModels, setGeminiModels] = useState<string[]>([]);
+    const [isLoadingModels, setIsLoadingModels] = useState(false);
+    const [modelError, setModelError] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
             setKeys(getApiKeys());
+
+            const fetchModels = async () => {
+                setIsLoadingModels(true);
+                setModelError(null);
+                try {
+                    const models = await listGeminiModels();
+                    if (models.length > 0) {
+                        setGeminiModels(models);
+                    } else {
+                        setGeminiModels(FALLBACK_GEMINI_MODELS);
+                        setModelError("Could not fetch model list. Using fallback options.");
+                    }
+                } catch (error) {
+                    setGeminiModels(FALLBACK_GEMINI_MODELS);
+                    setModelError("Failed to fetch model list. Using fallback options.");
+                } finally {
+                    setIsLoadingModels(false);
+                }
+            };
+
+            fetchModels();
         }
     }, [isOpen]);
 
@@ -71,16 +103,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                             {field.label}
                                         </label>
                                         {field.type === 'select' ? (
-                                            <select
-                                                id={field.id}
-                                                value={keys[field.id] || ''}
-                                                onChange={(e) => handleInputChange(field.id, e.target.value)}
-                                                className="w-full p-3 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-slate-200"
-                                            >
-                                                {field.options?.map(option => (
-                                                    <option key={option} value={option}>{option}</option>
-                                                ))}
-                                            </select>
+                                            <>
+                                                <select
+                                                    id={field.id}
+                                                    value={keys[field.id] || ''}
+                                                    onChange={(e) => handleInputChange(field.id, e.target.value)}
+                                                    className="w-full p-3 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-slate-200"
+                                                    disabled={isLoadingModels}
+                                                >
+                                                    {isLoadingModels ? (
+                                                        <option>Loading models...</option>
+                                                    ) : (
+                                                        geminiModels.map(option => (
+                                                            <option key={option} value={option}>{option}</option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                                {modelError && <p className="mt-2 text-xs text-amber-400">{modelError}</p>}
+                                            </>
                                         ) : (
                                             <input
                                                 type="password"
