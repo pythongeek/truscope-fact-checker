@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FactCheckReport } from '@/types/factCheck';
 import ColorCodedText from './ColorCodedText';
 import AutoEditorTab from './AutoEditorTab';
+import ComplianceDashboard from './compliance/ComplianceDashboard';
 
 interface DashboardProps {
     result: FactCheckReport;
@@ -13,14 +14,15 @@ const Dashboard: React.FC<DashboardProps> = ({ result, isLoading }) => {
 
 const tabs = [
     { id: 'overview', name: 'Overview', icon: '📊' },
-    { id: 'category-analysis', name: 'Category Analysis', icon: '🏷️' }, // NEW
+    { id: 'category-analysis', name: 'Category Analysis', icon: '🏷️' },
     { id: 'original-text-analysis', name: 'Original Text Analysis', icon: '📄' },
     { id: 'evidence', name: 'Evidence', icon: '🔍' },
-    { id: 'source-credibility', name: 'Source Analysis', icon: '📊' }, // NEW
-    { id: 'temporal-analysis', name: 'Temporal Analysis', icon: '⏰' }, // NEW
+    { id: 'source-credibility', name: 'Source Analysis', icon: '📊' },
+    { id: 'temporal-analysis', name: 'Temporal Analysis', icon: '⏰' },
     { id: 'breakdown', name: 'Breakdown', icon: '📈' },
     { id: 'methodology', name: 'Methodology', icon: '🔬' },
     { id: 'search-results', name: 'Search Results', icon: '🌐' },
+    { id: 'compliance', name: 'IFCN Compliance', icon: '✅' }, // NEW
     { id: 'advanced-editor', name: 'Advanced Editor', icon: '🤖' }
 ];
 
@@ -487,6 +489,13 @@ case 'source-credibility':
     return renderSourceCredibilityAnalysis();
 case 'temporal-analysis':
     return renderTemporalAnalysis();
+case 'compliance':
+    return (
+        <ComplianceDashboard
+            factCheckReport={result}
+            originalText={result.originalText || ''}
+        />
+    );
 
             default:
                 return null;
