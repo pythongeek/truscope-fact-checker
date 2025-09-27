@@ -252,11 +252,13 @@ export class EnhancedFactCheckService {
 
   private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
     return {
+      id: `error-${Date.now()}`,
       final_verdict: 'Analysis failed due to technical error',
       final_score: 0,
       reasoning: `Error during ${method} analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
       evidence: [],
       originalText: text,
+      enhanced_claim_text: text,
       metadata: {
         method_used: method,
         processing_time_ms: processingTime,

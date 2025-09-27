@@ -1,13 +1,4 @@
-export interface SourceCredibilityData {
-  domain: string;
-  credibilityScore: number; // 0-100
-  biasRating: 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
-  factualReporting: 'very-high' | 'high' | 'mixed' | 'low' | 'very-low';
-  category: 'academic' | 'news' | 'government' | 'ngo' | 'corporate' | 'social' | 'blog';
-  lastUpdated: Date;
-  verificationStatus: 'verified' | 'unverified' | 'flagged';
-  notes?: string;
-}
+import { SourceCredibilityData } from '../../types/factCheck';
 
 export class SourceCredibilityService {
   private static instance: SourceCredibilityService;

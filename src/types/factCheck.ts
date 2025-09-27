@@ -19,12 +19,13 @@ export interface Segment {
     text: string;
     score: number;
     color: 'green' | 'yellow' | 'red' | 'default';
+    temporalIssues?: boolean;
 }
 
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
-    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status';
+    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status' | 'Claim Verification' | 'Temporal Accuracy';
     score: number; // 0-100
     description: string;
 }
@@ -44,7 +45,7 @@ export interface EvidenceItem {
     url: string | null;
     quote: string;
     score: number; // 0-100 reliability score
-    type: 'claim' | 'news' | 'search_result' | 'cached-database';
+    type: 'claim' | 'news' | 'search_result' | 'cached-database' | 'academic';
     publishedDate?: string;
 }
 
@@ -82,6 +83,17 @@ export interface CategoryRating {
   reasoning: string;
   evidenceStrength: 'strong' | 'moderate' | 'weak' | 'insufficient';
   certaintyLevel: 'high' | 'medium' | 'low';
+}
+
+export interface SourceCredibilityData {
+  domain: string;
+  credibilityScore: number; // 0-100
+  biasRating: 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
+  factualReporting: 'very-high' | 'high' | 'mixed' | 'low' | 'very-low';
+  category: 'academic' | 'news' | 'government' | 'ngo' | 'corporate' | 'social' | 'blog';
+  lastUpdated: Date;
+  verificationStatus: 'verified' | 'unverified' | 'flagged';
+  notes?: string;
 }
 
 export interface SourceCredibilityAnalysis {

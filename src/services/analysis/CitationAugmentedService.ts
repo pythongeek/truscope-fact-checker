@@ -231,11 +231,13 @@ export class CitationAugmentedService {
     };
 
     return {
+      id: `report-${Date.now()}`,
       final_verdict: this.generateVerdict(finalScore, segmentAnalyses),
       final_score: finalScore,
       reasoning: this.generateReasoning(segmentAnalyses, temporalAnalysis),
       evidence: allEvidence,
       originalText,
+      enhanced_claim_text: originalText, // Use original text as a fallback
       originalTextSegments,
       temporal_analysis: {
         hasTemporalClaims: temporalAnalysis.length > 0,
