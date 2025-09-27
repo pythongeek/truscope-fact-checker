@@ -75,6 +75,12 @@ const ColorCodedText: React.FC<ColorCodedTextProps> = ({ segments }) => {
                             <div className="flex items-start justify-between gap-3 mb-2">
                                 <p className="text-base leading-relaxed flex-1">
                                     {segment.text}
+                                    {/* Add temporal issue indicator */}
+                                    {segment.temporalIssues && (
+                                        <span className="ml-2 px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded-full">
+                                            ⏰ Temporal Issue
+                                        </span>
+                                    )}
                                 </p>
                                 <div className="flex-shrink-0 text-right">
                                     <div className="text-sm font-semibold">

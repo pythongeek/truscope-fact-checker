@@ -1,184 +1,275 @@
-// src/services/enhancedFactCheckService.ts
+import { FactCheckReport } from '../types/factCheck';
+import { CitationAugmentedService } from './analysis/CitationAugmentedService';
+import { TemporalContextService } from './core/TemporalContextService';
+import { SourceCredibilityService } from './core/SourceCredibilityService';
+import { CategoryRatingService } from './core/CategoryRatingService';
 
-import { FactCheckReport } from '@/types/factCheck';
-// Make sure to import both the parser and the validator
-import { parseAIJsonResponse, validateAIResponseStructure } from '../utils/jsonParser';
-import { getGeminiApiKey } from './apiKeyService';
-import { GoogleGenAI } from "@google/genai";
+export type FactCheckMethod =
+  | 'comprehensive'
+  | 'citation-augmented'
+  | 'cross-validation'
+  | 'temporal-focus'
+  | 'source-priority';
 
 export class EnhancedFactCheckService {
-  private ai: GoogleGenAI;
+  private citationService: CitationAugmentedService;
+  private temporalService: TemporalContextService;
+  private credibilityService: SourceCredibilityService;
+  private ratingService: CategoryRatingService;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    this.citationService = new CitationAugmentedService();
+    this.temporalService = TemporalContextService.getInstance();
+    this.credibilityService = SourceCredibilityService.getInstance();
+    this.ratingService = CategoryRatingService.getInstance();
   }
 
-  // Kept the original, working callGeminiAPI method
-  private async callGeminiAPI(prompt: string): Promise<string> {
-    const result = await this.ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
-    return result.text;
-  }
+  async orchestrateFactCheck(text: string, method: FactCheckMethod): Promise<FactCheckReport> {
+    const startTime = Date.now();
 
-  // Kept the original, working buildFactCheckPrompt method
-  private buildFactCheckPrompt(text: string, method: string): string {
-    return `
-Please analyze the following text for factual accuracy and return a JSON response with the exact structure specified.
-
-Text to analyze: "${text}"
-
-Method: ${method}
-
-IMPORTANT: Your response must be valid JSON only. Do not wrap it in markdown code blocks or add any explanatory text.
-
-Required JSON structure:
-{
-  "final_verdict": "string (e.g., 'Mostly True', 'False', 'Mixed', etc.)",
-  "final_score": number (0-100),
-  "reasoning": "string explaining the analysis",
-  "score_breakdown": {
-    "final_score_formula": "string describing how the score was calculated",
-    "metrics": [
-      {
-        "name": "string",
-        "score": number (0-100),
-        "description": "string"
-      }
-    ],
-    "confidence_intervals": {
-      "lower_bound": number,
-      "upper_bound": number
-    }
-  },
-  "evidence": [
-    {
-      "id": "string",
-      "quote": "string",
-      "publisher": "string",
-      "score": number (0-100),
-      "url": "string or null"
-    }
-  ],
-  "metadata": {
-    "method_used": "${method}",
-    "processing_time_ms": 0,
-    "apis_used": ["gemini"],
-    "sources_consulted": {
-      "total": number,
-      "high_credibility": number,
-      "conflicting": number
-    },
-    "warnings": []
-  },
-  "searchEvidence": {
-    "query": "string",
-    "results": []
-  },
-  "originalTextSegments": [],
-  "enhanced_claim_text": ""
-}
-
-Return only the JSON object, no additional text or formatting.`;
-  }
-
-  // Added the new helper method from the user's suggestion
-  private parseGeminiResponse(response: string): any {
     try {
-      // Use our robust JSON parser instead of direct JSON.parse
-      const parsedData = parseAIJsonResponse(response);
+      switch (method) {
+        case 'comprehensive':
+          return await this.runComprehensiveAnalysis(text);
 
-      // Validate the structure has required fields for fact-check reports
-      const requiredFields = [
-        'final_verdict',
-        'final_score',
-        'score_breakdown',
-        'evidence',
-        'metadata'
-      ];
+        case 'citation-augmented':
+          return await this.runCitationAugmentedAnalysis(text);
 
-      if (!validateAIResponseStructure(parsedData, requiredFields)) {
-        console.warn('Enhanced fact-check response missing some expected fields, but continuing...');
-        // Continue anyway as some fields might be optional
+        case 'temporal-focus':
+          return await this.runTemporalFocusedAnalysis(text);
+
+        case 'source-priority':
+          return await this.runSourcePriorityAnalysis(text);
+
+        default:
+          return await this.runCitationAugmentedAnalysis(text); // Default fallback
       }
-
-      return parsedData;
     } catch (error) {
-      console.error('Failed to parse Gemini response:', error);
-      console.error('Raw response (first 500 chars):', response.substring(0, 500));
-      throw new Error(`The AI model returned an invalid JSON structure. This may be a temporary issue. Error: ${error.message}`);
+      // Fallback error report
+      return this.generateErrorReport(text, method, error, Date.now() - startTime);
     }
   }
 
-  // Added the new default value helper
-  private getDefaultScoreBreakdown() {
-    return {
-      final_score_formula: "weighted average of metrics",
-      metrics: [
-        { name: 'Source Reliability' as const, score: 50, description: 'Default reliability score' },
-        { name: 'Corroboration' as const, score: 50, description: 'Default corroboration score' }
-      ]
-    };
-  }
+  private async runComprehensiveAnalysis(text: string): Promise<FactCheckReport> {
+    // Run citation-augmented as base, then enhance
+    const baseReport = await this.citationService.performCitationAugmentedAnalysis(text);
 
-  // Added the new default value helper
-  private getDefaultMetadata(method: string) {
+    // Add source credibility analysis
+    const sourceAnalyses = await Promise.all(
+      baseReport.evidence.map(evidence =>
+        evidence.url ? this.credibilityService.analyzeSource(evidence.url) : null
+      )
+    );
+
+    // Recalculate with source credibility weighting
+    const enhancedScore = this.credibilityService.calculateWeightedScore(baseReport.evidence);
+    const biasWarnings = this.credibilityService.getBiasWarnings(
+      baseReport.evidence.map(e => ({ url: e.url }))
+    );
+
+    // Generate category rating
+    const categoryRating = this.ratingService.convertScoreToCategory(
+      enhancedScore,
+      this.calculateEvidenceQuality(sourceAnalyses),
+      baseReport.evidence.length
+    );
+
     return {
-      method_used: method,
-      processing_time_ms: 0,
-      apis_used: ['gemini'],
-      sources_consulted: {
-        total: 0,
-        high_credibility: 0,
-        conflicting: 0
+      ...baseReport,
+      final_score: enhancedScore,
+      final_verdict: `Comprehensive analysis: ${categoryRating.reasoning}`,
+      category_rating: categoryRating,
+      source_credibility_analysis: {
+        analyses: sourceAnalyses.filter(s => s !== null),
+        averageCredibility: this.calculateAverageCredibility(sourceAnalyses),
+        biasWarnings,
+        credibilityWarnings: this.generateCredibilityWarnings(sourceAnalyses),
+        highCredibilitySources: sourceAnalyses.filter(s => s && s.credibilityScore >= 85).length,
+        flaggedSources: sourceAnalyses.filter(s => s && s.verificationStatus === 'flagged').length
       },
-      warnings: ['Analysis completed with default values due to parsing issues']
+      metadata: {
+        ...baseReport.metadata,
+        method_used: 'comprehensive',
+        warnings: [
+          ...baseReport.metadata.warnings,
+          ...biasWarnings
+        ]
+      }
     };
   }
 
-  // The new, more robust orchestration method
-  async orchestrateFactCheck(text: string, method: string): Promise<FactCheckReport> {
-    try {
-      console.log(`[Enhanced Fact Check] Starting ${method} analysis for text:`, text.substring(0, 100) + '...');
+  private async runCitationAugmentedAnalysis(text: string): Promise<FactCheckReport> {
+    const report = await this.citationService.performCitationAugmentedAnalysis(text);
 
-      const prompt = this.buildFactCheckPrompt(text, method);
-      const response = await this.callGeminiAPI(prompt);
+    // Add category rating
+    const categoryRating = this.ratingService.convertScoreToCategory(
+      report.final_score,
+      70, // Default evidence quality
+      report.evidence.length
+    );
 
-      // Replace any direct JSON.parse calls with our robust parser
-      const result = this.parseGeminiResponse(response);
+    return {
+      ...report,
+      category_rating: categoryRating
+    };
+  }
 
-      // Ensure we have a valid FactCheckReport structure
-      const factCheckReport: FactCheckReport = {
-        id: `enhanced-${method}-${Math.random().toString(36).substr(2, 9)}`,
-        originalText: text,
-        final_verdict: result.final_verdict || 'Unknown',
-        final_score: result.final_score || 50,
-        score_breakdown: result.score_breakdown || this.getDefaultScoreBreakdown(),
-        evidence: result.evidence || [],
-        metadata: result.metadata || this.getDefaultMetadata(method),
-        searchEvidence: result.searchEvidence,
-        originalTextSegments: result.originalTextSegments,
-        reasoning: result.reasoning,
-        enhanced_claim_text: result.enhanced_claim_text || '',
-        correctionAnalysis: result.correctionAnalysis,
-        availableCorrections: result.availableCorrections
-      };
+  private async runTemporalFocusedAnalysis(text: string): Promise<FactCheckReport> {
+    const temporalValidations = this.temporalService.evaluateTemporalClaims(text);
 
-      console.log(`[Enhanced Fact Check] Completed ${method} analysis with verdict:`, factCheckReport.final_verdict);
+    // Enhanced temporal analysis with claim verification
+    const baseReport = await this.citationService.performCitationAugmentedAnalysis(text);
 
-      return factCheckReport;
-    } catch (error) {
-      console.error(`Error during fact-check orchestration with method '${method}':`, error);
+    // Adjust score based on temporal accuracy
+    const temporalScore = temporalValidations.filter(v => v.isValid).length / Math.max(temporalValidations.length, 1) * 100;
+    const adjustedScore = Math.round((baseReport.final_score * 0.6) + (temporalScore * 0.4));
 
-      // Provide more specific error messages
-      if (error.message && error.message.includes('invalid JSON structure')) {
-        throw new Error('The AI model returned an invalid response format. Please try again.');
-      } else if (error.message && error.message.includes('Unexpected token')) {
-        throw new Error('The AI model response could not be processed. Please try a different analysis method.');
-      } else {
-        throw new Error(`Analysis failed: ${error.message}`);
+    const categoryRating = this.ratingService.convertScoreToCategory(
+      adjustedScore,
+      70,
+      baseReport.evidence.length
+    );
+
+    return {
+      ...baseReport,
+      final_score: adjustedScore,
+      final_verdict: `Temporal-focused analysis: ${this.generateTemporalVerdict(adjustedScore, temporalValidations)}`,
+      category_rating: categoryRating,
+      temporal_analysis: {
+        hasTemporalClaims: temporalValidations.length > 0,
+        validations: temporalValidations,
+        overallTemporalScore: temporalScore,
+        temporalWarnings: temporalValidations.filter(v => !v.isValid).map(v => v.reasoning)
+      },
+      metadata: {
+        ...baseReport.metadata,
+        method_used: 'temporal-focus',
+        warnings: [
+          ...baseReport.metadata.warnings,
+          ...temporalValidations.filter(v => !v.isValid).map(v => `Temporal issue: ${v.reasoning}`)
+        ]
       }
+    };
+  }
+
+  private async runSourcePriorityAnalysis(text: string): Promise<FactCheckReport> {
+    const baseReport = await this.citationService.performCitationAugmentedAnalysis(text);
+
+    // Analyze all sources for credibility
+    const sourceAnalyses = await Promise.all(
+      baseReport.evidence.map(evidence =>
+        evidence.url ? this.credibilityService.analyzeSource(evidence.url) : null
+      )
+    );
+
+    // Recalculate score with heavy source credibility weighting
+    const enhancedScore = this.credibilityService.calculateWeightedScore(baseReport.evidence);
+    const biasWarnings = this.credibilityService.getBiasWarnings(
+      baseReport.evidence.map(e => ({ url: e.url }))
+    );
+
+    const categoryRating = this.ratingService.convertScoreToCategory(
+      enhancedScore,
+      this.calculateEvidenceQuality(sourceAnalyses),
+      baseReport.evidence.length
+    );
+
+    return {
+      ...baseReport,
+      final_score: enhancedScore,
+      final_verdict: `Source-priority analysis: ${this.generateSourceBasedVerdict(enhancedScore, sourceAnalyses)}`,
+      category_rating: categoryRating,
+      source_credibility_analysis: {
+        analyses: sourceAnalyses.filter(s => s !== null),
+        averageCredibility: this.calculateAverageCredibility(sourceAnalyses),
+        biasWarnings,
+        credibilityWarnings: this.generateCredibilityWarnings(sourceAnalyses),
+        highCredibilitySources: sourceAnalyses.filter(s => s && s.credibilityScore >= 85).length,
+        flaggedSources: sourceAnalyses.filter(s => s && s.verificationStatus === 'flagged').length
+      },
+      metadata: {
+        ...baseReport.metadata,
+        method_used: 'source-priority',
+        warnings: [
+          ...baseReport.metadata.warnings,
+          ...biasWarnings
+        ]
+      }
+    };
+  }
+
+  private generateTemporalVerdict(score: number, validations: any[]): string {
+    const invalidCount = validations.filter(v => !v.isValid).length;
+
+    if (invalidCount === 0 && score >= 80) return 'Temporally consistent and factually accurate';
+    if (invalidCount === 0) return 'Temporally consistent but factual accuracy varies';
+    if (invalidCount === 1) return 'Minor temporal inconsistency detected';
+    return 'Multiple temporal issues require attention';
+  }
+
+  private generateSourceBasedVerdict(score: number, sourceAnalyses: any[]): string {
+    const validSources = sourceAnalyses.filter(s => s !== null);
+    const highCredibility = validSources.filter(s => s.credibilityScore >= 80).length;
+    const flagged = validSources.filter(s => s.verificationStatus === 'flagged').length;
+
+    if (flagged > 0) return `Caution: ${flagged} flagged source(s) detected`;
+    if (highCredibility >= 3) return 'Strong source credibility foundation';
+    if (highCredibility >= 1) return 'Good source credibility with some limitations';
+    return 'Limited high-credibility sources available';
+  }
+
+  private calculateEvidenceQuality(sourceAnalyses: any[]): number {
+    const validSources = sourceAnalyses.filter(s => s !== null);
+    if (validSources.length === 0) return 30;
+
+    return validSources.reduce((sum: number, source: any) => sum + source.credibilityScore, 0) / validSources.length;
+  }
+
+  private calculateAverageCredibility(sourceAnalyses: any[]): number {
+    const validSources = sourceAnalyses.filter(s => s !== null);
+    if (validSources.length === 0) return 0;
+
+    return Math.round(validSources.reduce((sum: number, source: any) => sum + source.credibilityScore, 0) / validSources.length);
+  }
+
+  private generateCredibilityWarnings(sourceAnalyses: any[]): string[] {
+    const warnings: string[] = [];
+    const validSources = sourceAnalyses.filter(s => s !== null);
+
+    const lowCredibilityCount = validSources.filter(s => s.credibilityScore < 50).length;
+    const flaggedCount = validSources.filter(s => s.verificationStatus === 'flagged').length;
+
+    if (lowCredibilityCount > 0) {
+      warnings.push(`${lowCredibilityCount} source(s) have low credibility scores`);
     }
+
+    if (flaggedCount > 0) {
+      warnings.push(`${flaggedCount} source(s) are flagged as potentially unreliable`);
+    }
+
+    return warnings;
+  }
+
+  private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
+    return {
+      id: `error-${Date.now()}`,
+      final_verdict: 'Analysis failed due to technical error',
+      final_score: 0,
+      reasoning: `Error during ${method} analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      evidence: [],
+      originalText: text,
+      enhanced_claim_text: text,
+      metadata: {
+        method_used: method,
+        processing_time_ms: processingTime,
+        apis_used: ['error-handling'],
+        sources_consulted: { total: 0, high_credibility: 0, conflicting: 0 },
+        warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
+      },
+      score_breakdown: {
+        final_score_formula: 'Error - unable to calculate',
+        metrics: []
+      }
+    };
   }
 }

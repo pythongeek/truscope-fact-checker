@@ -21,18 +21,19 @@ const EnhancedDashboard: React.FC<EnhancedDashboardProps> = ({
     enhanceReport();
   }, [baseReport, originalText]);
 
-  const enhanceReport = async () => {
+const enhanceReport = async () => {
     setIsEnhancing(true);
     setError(null);
     try {
       const enhancedService = new EnhancedFactCheckService();
-      // Using the new `orchestrateFactCheck` method.
-      // The `method` parameter is set to "comprehensive" as a sensible default.
+      // Use comprehensive method for enhanced analysis
       const result = await enhancedService.orchestrateFactCheck(originalText, "comprehensive");
       setEnhancedReport(result);
     } catch (err) {
       console.error('Failed to enhance report:', err);
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      // Fallback to base report if enhancement fails
+      setEnhancedReport(baseReport);
     } finally {
       setIsEnhancing(false);
     }

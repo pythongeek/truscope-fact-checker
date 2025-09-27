@@ -6,7 +6,7 @@ import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
 import { FactCheckReport } from '@/types/factCheck';
-import { runFactCheckOrchestrator } from './services/geminiService';
+import { EnhancedFactCheckService } from './services/enhancedFactCheckService';
 import { saveReportToHistory } from './services/historyService';
 import { parseAIJsonResponse } from './utils/jsonParser'; // Added import
 
@@ -67,6 +67,20 @@ const App: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+    const mapAnalysisMethod = (method: string): string => {
+      const methodMap: Record<string, string> = {
+        'citation-augmented': 'citation-augmented',
+        'hybrid': 'comprehensive',
+        'temporal-focus': 'temporal-focus',
+        'source-priority': 'source-priority',
+        'google-ai': 'citation-augmented', // fallback
+        'newsdata': 'citation-augmented', // fallback
+        'gemini-only': 'citation-augmented' // fallback
+      };
+
+      return methodMap[method] || 'citation-augmented';
+    };
+
     const handleAnalyze = async (method: AnalysisMethod) => {
         if (!inputText.trim()) {
             setError('Please enter some text to analyze.');
@@ -78,22 +92,17 @@ const App: React.FC = () => {
         setResult(null);
 
         try {
-            // Map the AnalysisMethod to the expected service method names
-            const serviceMethod = method === 'newsdata' ? 'citation-augmented' : method;
+            const enhancedService = new EnhancedFactCheckService();
+            const mappedMethod = mapAnalysisMethod(method);
 
-            const report = await runFactCheckOrchestrator(
+            const report = await enhancedService.orchestrateFactCheck(
                 inputText,
-                serviceMethod as 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented'
+                mappedMethod as any
             );
 
             setResult(report);
             setCurrentClaimText(inputText);
             saveReportToHistory(inputText, report);
-
-            // Show success message for Citation-Augmented method
-            if (method === 'citation-augmented' && report.evidence.length > 0) {
-                console.log(`✅ Citation-Augmented Analysis completed with ${report.evidence.length} external sources verified.`);
-            }
 
         } catch (err) {
             console.error('Analysis failed:', err);

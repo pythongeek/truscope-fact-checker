@@ -19,12 +19,13 @@ export interface Segment {
     text: string;
     score: number;
     color: 'green' | 'yellow' | 'red' | 'default';
+    temporalIssues?: boolean;
 }
 
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
-    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status';
+    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status' | 'Claim Verification' | 'Temporal Accuracy';
     score: number; // 0-100
     description: string;
 }
@@ -44,7 +45,7 @@ export interface EvidenceItem {
     url: string | null;
     quote: string;
     score: number; // 0-100 reliability score
-    type: 'claim' | 'news' | 'search_result' | 'cached-database';
+    type: 'claim' | 'news' | 'search_result' | 'cached-database' | 'academic';
     publishedDate?: string;
 }
 
@@ -58,6 +59,50 @@ export interface FactCheckMetadata {
         conflicting: number;
     };
     warnings: string[];
+}
+
+export interface TemporalValidation {
+  isValid: boolean;
+  context: string;
+  confidence: number;
+  dateType: 'past' | 'present' | 'near_future' | 'far_future';
+  reasoning: string;
+}
+
+export interface TemporalAnalysis {
+  hasTemporalClaims: boolean;
+  validations: TemporalValidation[];
+  overallTemporalScore: number;
+  temporalWarnings: string[];
+}
+
+export interface CategoryRating {
+  category: 'true' | 'mostly-true' | 'half-true' | 'mostly-false' | 'false' | 'pants-on-fire' | 'unverifiable' | 'outdated' | 'misleading-context';
+  confidence: number;
+  numericScore: number;
+  reasoning: string;
+  evidenceStrength: 'strong' | 'moderate' | 'weak' | 'insufficient';
+  certaintyLevel: 'high' | 'medium' | 'low';
+}
+
+export interface SourceCredibilityData {
+  domain: string;
+  credibilityScore: number; // 0-100
+  biasRating: 'left' | 'lean-left' | 'center' | 'lean-right' | 'right' | 'unknown';
+  factualReporting: 'very-high' | 'high' | 'mixed' | 'low' | 'very-low';
+  category: 'academic' | 'news' | 'government' | 'ngo' | 'corporate' | 'social' | 'blog';
+  lastUpdated: Date;
+  verificationStatus: 'verified' | 'unverified' | 'flagged';
+  notes?: string;
+}
+
+export interface SourceCredibilityAnalysis {
+  analyses: any[];
+  averageCredibility: number;
+  biasWarnings: string[];
+  credibilityWarnings: string[];
+  highCredibilitySources?: number;
+  flaggedSources?: number;
 }
 
 export interface FactCheckReport {
@@ -74,6 +119,10 @@ export interface FactCheckReport {
     enhanced_claim_text: string;
     correctionAnalysis?: any;
     availableCorrections?: number;
+    // ADD these new fields
+    temporal_analysis?: TemporalAnalysis;
+    category_rating?: CategoryRating;
+    source_credibility_analysis?: SourceCredibilityAnalysis;
 }
 
 // --- New Types for Backend Logic & Orchestration ---

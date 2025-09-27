@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheckIcon } from './icons';
 
-export type AnalysisMethod = 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented' | 'newsdata';
+export type AnalysisMethod = 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented' | 'newsdata' | 'temporal-focus' | 'source-priority';
 
 interface InputSectionProps {
     inputText: string;
@@ -41,12 +41,24 @@ const InputSection: React.FC<InputSectionProps> = ({ inputText, onTextChange, on
                         disabled={isLoading}
                         className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors w-full sm:w-auto"
                     >
-                        <option value="citation-augmented">Citation-Augmented Analysis (Recommended)</option>
-                        <option value="hybrid">Comprehensive Analysis</option>
-                        <option value="google-ai">Tool-Based Verification</option>
-                        <option value="newsdata">Recent News Coverage</option>
-                        <option value="gemini-only">Core AI Analysis</option>
+                        <option value="citation-augmented">📚 Citation-Augmented Analysis (Recommended)</option>
+                        <option value="hybrid">🔄 Comprehensive Analysis</option>
+                        <option value="google-ai">🔧 Tool-Based Verification</option>
+                        <option value="newsdata">📰 Recent News Coverage</option>
+                        <option value="gemini-only">🧠 Core AI Analysis</option>
+                        <option value="temporal-focus">⏰ Temporal-Focused Analysis (NEW)</option>
+                        <option value="source-priority">📊 Source-Priority Analysis (NEW)</option>
                     </select>
+
+                    <div className="mt-2 text-xs text-slate-400">
+                        {selectedMethod === 'citation-augmented' && 'Advanced analysis with source verification and temporal context'}
+                        {selectedMethod === 'hybrid' && 'Cross-validates multiple methods for highest accuracy'}
+                        {selectedMethod === 'temporal-focus' && 'Specialized analysis for time-sensitive claims'}
+                        {selectedMethod === 'source-priority' && 'Emphasizes source credibility in final assessment'}
+                        {selectedMethod === 'google-ai' && 'Uses Google Fact Check Tools and search APIs'}
+                        {selectedMethod === 'newsdata' && 'Focuses on recent news coverage verification'}
+                        {selectedMethod === 'gemini-only' && 'Basic AI-only fact checking'}
+                    </div>
                 </div>
                 <button
                     onClick={() => onAnalyze(selectedMethod)}
