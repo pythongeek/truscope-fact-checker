@@ -1,5 +1,6 @@
 const API_KEYS_CONFIG = {
     gemini: 'gemini_api_key',
+    geminiModel: 'gemini_model', // Added for model selection
     factCheck: 'fact_check_api_key',
     search: 'search_api_key',
     searchId: 'search_id',
@@ -26,6 +27,11 @@ export const getGeminiApiKey = (): string => {
         return envApiKey;
     }
     return getKeyFromStorage('gemini', 'Gemini API key not found. Please set it in the .env file or in the Settings panel.');
+};
+
+export const getGeminiModel = (): string => {
+    const storedModel = localStorage.getItem(API_KEYS_CONFIG.geminiModel);
+    return storedModel || 'gemini-1.5-flash-latest'; // Default model
 };
 
 export const getFactCheckApiKey = (): string =>

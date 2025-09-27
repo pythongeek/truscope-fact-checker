@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '@/types/factCheck';
-import { getGeminiApiKey, getNewsDataApiKey } from './apiKeyService';
+import { getGeminiApiKey, getNewsDataApiKey, getGeminiModel } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
 import { search } from './webSearch';
@@ -311,7 +311,7 @@ Respond with exactly this JSON structure:
 }`;
 
         const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: getGeminiModel(),
             contents: simplePrompt,
             config: {
                 temperature: 0.1,
@@ -379,7 +379,7 @@ Provide a JSON response with:
 Make sure your response is valid JSON.`;
 
         const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: getGeminiModel(),
             contents: prompt,
             config: {
                 temperature: 0.2,
@@ -491,7 +491,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
         ${FACT_CHECK_REPORT_TYPE_DEFINITION}
     `;
     const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
@@ -518,7 +518,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
         ${FACT_CHECK_REPORT_TYPE_DEFINITION}
     `;
     const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
@@ -555,7 +555,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     `;
 
     const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: preliminaryAnalysisPrompt,
         config: {
             responseMimeType: "application/json",
@@ -614,7 +614,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     `;
 
     const finalResult = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: finalAnalysisPrompt,
         config: {
             responseMimeType: "application/json",

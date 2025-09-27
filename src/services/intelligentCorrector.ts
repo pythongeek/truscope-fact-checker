@@ -1,6 +1,6 @@
 import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/corrections';
 import { AdvancedEvidence } from '../types/enhancedFactCheck';
-import { getGeminiApiKey } from './apiKeyService';
+import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
@@ -53,7 +53,7 @@ export class IntelligentCorrector {
     try {
       // Reverting to the user's original call structure
       const result = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
@@ -132,7 +132,7 @@ export class IntelligentCorrector {
     try {
       // Reverting to the user's original call structure
       const result = await this.ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: getGeminiModel(),
         contents: prompt,
       });
       // Assuming the user's response structure is correct for this SDK version
