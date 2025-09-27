@@ -107,7 +107,7 @@ export class SourceCredibilityService {
     } else if (domain.includes('university') || domain.includes('college')) {
       credibilityScore = 80;
       category = 'academic';
-    } else if (domain.includes('news') || domain.includes('times') || domain.includes('post')) {
+    } else if (domain.startsWith('news.') || domain.includes('.news.') || domain.includes('times') || domain.includes('post')) {
       credibilityScore = 60;
       category = 'news';
     }

@@ -6,7 +6,7 @@ export const temporalTestCases = [
   },
   {
     description: "Recent past should be highly confident",
-    input: "Last month's data indicates growth",
+    input: "On 08/15/2025, the data indicated growth",
     expected: { isValid: true, confidence: 95 }
   },
   {

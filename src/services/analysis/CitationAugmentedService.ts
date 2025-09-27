@@ -1,6 +1,8 @@
 import { TemporalContextService } from '../core/TemporalContextService';
 import { SourceCredibilityService } from '../core/SourceCredibilityService';
 import { FactCheckReport, EvidenceItem } from '../../types/factCheck';
+import { executeMultiStrategySearch } from '../webSearch';
+import { generateSHA256 } from '../../utils/hashUtils';
 
 export interface CitationContext {
   claimSegment: string;
@@ -119,39 +121,32 @@ export class CitationAugmentedService {
   }
 
   private async searchForEvidence(claimText: string): Promise<EvidenceItem[]> {
-    // This would integrate with your existing search functionality
-    // For now, simulating with a structured approach
+    const keywords = this.extractKeyTerms(claimText).split(' ');
+    const searchResults = await executeMultiStrategySearch(claimText, keywords);
 
-    const searchQuery = this.extractKeyTerms(claimText);
+    if (!searchResults || searchResults.length === 0) {
+      return [];
+    }
 
-    // In a real implementation, this would call your existing search APIs
-    // Placeholder for integration with existing search services
-    const mockEvidence: EvidenceItem[] = [
-      {
-        id: `evidence-${Date.now()}`,
-        quote: `Related information about: ${searchQuery}`,
-        publisher: 'Academic Source',
-        url: 'https://example.com/academic-source',
-        score: 85,
-        type: 'academic'
-      }
-    ];
+    const evidenceItems = await Promise.all(
+      searchResults.map(async (result) => {
+        if (!result || !result.link) return null;
 
-    // Analyze source credibility
-    const enhancedEvidence = await Promise.all(
-      mockEvidence.map(async (evidence) => {
-        if (evidence.url) {
-          const credibilityData = await this.credibilityService.analyzeSource(evidence.url);
-          return {
-            ...evidence,
-            score: Math.round((evidence.score + credibilityData.credibilityScore) / 2)
-          };
-        }
-        return evidence;
+        const credibilityData = await this.credibilityService.analyzeSource(result.link);
+        const evidenceId = await generateSHA256(result.link);
+
+        return {
+          id: evidenceId,
+          quote: result.snippet,
+          publisher: result.source,
+          url: result.link,
+          score: credibilityData.credibilityScore,
+          type: 'search_result',
+        } as EvidenceItem;
       })
     );
 
-    return enhancedEvidence;
+    return evidenceItems.filter((item): item is EvidenceItem => item !== null);
   }
 
   private extractKeyTerms(claimText: string): string {
