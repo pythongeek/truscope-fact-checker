@@ -142,25 +142,77 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
   };
 
   const convertToColorCodedSegments = (report: FactCheckReport) => {
+    // Enhanced segment conversion with temporal validation
     if (report.originalTextSegments && report.originalTextSegments.length > 0) {
-      return report.originalTextSegments.map((segment, index) => ({
-        text: segment.text,
-        score: segment.score,
-        color: scoreToColor(segment.score),
-        startIndex: index * Math.floor(originalText.length / report.originalTextSegments!.length),
-        endIndex: (index + 1) * Math.floor(originalText.length / report.originalTextSegments!.length),
-        reason: getReasonForScore(segment.score)
-      }));
+      return report.originalTextSegments.map((segment, index) => {
+        // Check for temporal issues in this segment
+        const hasTemporalIssues = checkTemporalIssues(segment.text);
+        const adjustedScore = hasTemporalIssues ? Math.max(segment.score - 20, 0) : segment.score;
+
+        return {
+          text: segment.text,
+          score: adjustedScore,
+          color: scoreToColor(adjustedScore),
+          startIndex: index * Math.floor(originalText.length / report.originalTextSegments!.length),
+          endIndex: (index + 1) * Math.floor(originalText.length / report.originalTextSegments!.length),
+          reason: hasTemporalIssues
+            ? `${getReasonForScore(adjustedScore)} - Temporal inconsistency detected`
+            : getReasonForScore(adjustedScore),
+          temporalIssues: hasTemporalIssues
+        };
+      });
     }
+
+    // Enhanced single segment analysis
+    const hasTemporalIssues = checkTemporalIssues(originalText);
+    const adjustedScore = hasTemporalIssues ? Math.max(report.final_score - 20, 0) : report.final_score;
 
     return [{
       text: originalText,
-      score: report.final_score,
-      color: scoreToColor(report.final_score),
+      score: adjustedScore,
+      color: scoreToColor(adjustedScore),
       startIndex: 0,
       endIndex: originalText.length,
-      reason: getReasonForScore(report.final_score)
+      reason: hasTemporalIssues
+        ? `${getReasonForScore(adjustedScore)} - Temporal inconsistency detected`
+        : getReasonForScore(adjustedScore),
+      temporalIssues: hasTemporalIssues
     }];
+  };
+
+  // ADD this new helper method after convertToColorCodedSegments
+  const checkTemporalIssues = (text: string): boolean => {
+    const currentDate = new Date();
+    const temporalPatterns = [
+      /(\w+\s+\d{4})/g,           // "August 2025"
+      /(\d{1,2}\/\d{1,2}\/\d{4})/g, // "8/15/2025"
+      /(\d{4}-\d{1,2}-\d{1,2})/g,   // "2025-08-15"
+      /(in \d{4})/g,              // "in 2025"
+      /(since \d{4})/g,           // "since 2025"
+    ];
+
+    for (const pattern of temporalPatterns) {
+      const matches = text.match(pattern);
+      if (matches) {
+        for (const match of matches) {
+          try {
+            const extractedDate = new Date(match.replace(/in |since /, ''));
+            if (!isNaN(extractedDate.getTime())) {
+              const daysDiff = (currentDate.getTime() - extractedDate.getTime()) / (1000 * 3600 * 24);
+
+              // FIXED LOGIC: Past dates should be valid, not flagged as issues
+              if (daysDiff < -365) { // Only flag if more than 1 year in future
+                return true;
+              }
+            }
+          } catch (error) {
+            // Date parsing failed, could indicate an issue
+            continue;
+          }
+        }
+      }
+    }
+    return false;
   };
 
   const scoreToColor = (score: number): 'green' | 'yellow' | 'orange' | 'red' => {
