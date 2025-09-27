@@ -14,15 +14,65 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedMode, setSelectedMode] = useState<EditorMode>('enhanced');
-  const [activeView, setActiveView] = useState<'analysis' | 'editor'>('analysis');
+  const [activeView, setActiveView] = useState<'analysis' | 'editor' | 'stats'>('analysis');
+  const [apiStatus, setApiStatus] = useState<{ available: boolean; message: string; model: string } | null>(null);
+  const [correctionStatus, setCorrectionStatus] = useState<string>('');
+  const [tokenStats, setTokenStats] = useState<any[]>([]);
 
   const autoEditorService = AutoEditorIntegrationService.getInstance();
+
+  // Check API health when component mounts
+  useEffect(() => {
+    checkAPIStatus();
+    loadTokenStats();
+  }, []);
 
   useEffect(() => {
     if (result && originalText) {
       generateAnalysisFromResult();
     }
   }, [result, originalText]);
+
+  // Save selected model to storage when it changes
+  useEffect(() => {
+    try {
+      const modelSelector = document.querySelector('[data-model-selector]') as HTMLSelectElement;
+      if (modelSelector) {
+        const handleModelChange = () => {
+          sessionStorage.setItem('truescope-selected-model', modelSelector.value);
+          checkAPIStatus(); // Recheck status with new model
+        };
+
+        modelSelector.addEventListener('change', handleModelChange);
+        return () => modelSelector.removeEventListener('change', handleModelChange);
+      }
+    } catch (error) {
+      console.warn('Could not bind to model selector:', error);
+    }
+  }, []);
+
+  const checkAPIStatus = async () => {
+    try {
+      const status = await autoEditorService.checkAPIHealth();
+      setApiStatus(status);
+    } catch (error) {
+      setApiStatus({
+        available: false,
+        message: 'Unable to check API status',
+        model: 'unknown'
+      });
+    }
+  };
+
+  const loadTokenStats = () => {
+    try {
+      const stats = autoEditorService.getTokenUsageStats();
+      setTokenStats(stats.slice(-20)); // Show last 20 entries
+    } catch (error) {
+      console.warn('Could not load token stats:', error);
+      setTokenStats([]);
+    }
+  };
 
   const generateAnalysisFromResult = async () => {
     if (!result || !originalText) return;
@@ -39,11 +89,55 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
       };
 
       setAnalysis(analysis);
-      (autoEditorService as any).saveAnalysisToStorage(originalText, analysis);
     } catch (error) {
       console.error('Failed to generate analysis:', error);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleAutoCorrect = async () => {
+    if (!analysis) return;
+
+    setIsEditing(true);
+    setCorrectionStatus('Initializing auto-correction...');
+
+    try {
+      // Check API status first
+      setCorrectionStatus('Checking API availability...');
+      const status = await autoEditorService.checkAPIHealth();
+
+      if (!status.available) {
+        setCorrectionStatus(`API unavailable (${status.model}) - using fallback method...`);
+      } else {
+        setCorrectionStatus(`Using ${status.model} for AI correction...`);
+      }
+
+      setCorrectionStatus('Processing corrections...');
+      const result = await autoEditorService.performAutoCorrection(originalText, analysis, selectedMode);
+
+      setEditorResult(result);
+      setActiveView('editor');
+      setCorrectionStatus('Correction completed successfully!');
+
+      // Refresh token stats
+      loadTokenStats();
+
+    } catch (error: any) {
+      console.error('Auto-correction failed:', error);
+      setCorrectionStatus(`Error: ${error.message}`);
+
+      // Show user-friendly error message
+      if (error.message.includes('503')) {
+        alert('🔧 API service is temporarily unavailable. We\'ve applied basic corrections using our fallback method. Please try again later for AI-powered corrections.');
+      } else if (error.message.includes('404')) {
+        alert('🔧 The selected AI model is not available. Please try selecting a different model or use the fallback correction method.');
+      } else {
+        alert(`Auto-correction failed: ${error.message}`);
+      }
+    } finally {
+      setIsEditing(false);
+      setTimeout(() => setCorrectionStatus(''), 5000); // Clear status after 5 seconds
     }
   };
 
@@ -92,22 +186,6 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
     }));
   };
 
-  const handleAutoCorrect = async () => {
-    if (!analysis) return;
-
-    setIsEditing(true);
-    try {
-      const result = await autoEditorService.performAutoCorrection(originalText, analysis, selectedMode);
-      setEditorResult(result);
-      setActiveView('editor');
-    } catch (error: any) {
-      console.error('Auto-correction failed:', error);
-      alert(`Auto-correction failed: ${error.message}`);
-    } finally {
-      setIsEditing(false);
-    }
-  };
-
   const getColorClass = (color: string) => {
     const colorMap: { [key: string]: string } = {
       green: 'bg-green-100 border-green-400 text-green-800',
@@ -138,6 +216,92 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
           <div className="w-4 h-4 bg-red-500 rounded-full"></div>
           <span className="text-slate-300"><strong>Red:</strong> Wrong/Misleading (0-24)</span>
         </div>
+      </div>
+    </div>
+  );
+
+  const renderTokenStatsView = () => (
+    <div className="space-y-6">
+      <div className="bg-slate-800/50 p-6 rounded-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-semibold text-slate-100">Token Usage Statistics</h3>
+          <div className="flex space-x-2">
+            <button
+              onClick={loadTokenStats}
+              className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors text-sm"
+            >
+              🔄 Refresh
+            </button>
+            <button
+              onClick={() => {
+                autoEditorService.clearTokenUsageStats();
+                setTokenStats([]);
+              }}
+              className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors text-sm"
+            >
+              🗑️ Clear
+            </button>
+          </div>
+        </div>
+
+        {tokenStats.length === 0 ? (
+          <div className="text-center py-8 text-slate-400">
+            <div className="text-4xl mb-2">📊</div>
+            <p>No token usage data available yet.</p>
+            <p className="text-sm">Statistics will appear after using auto-correction features.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="bg-blue-500/20 border border-blue-500/30 p-4 rounded-xl text-center">
+                <div className="text-2xl font-bold text-blue-300">
+                  {tokenStats.reduce((sum, stat) => sum + stat.totalTokens, 0).toLocaleString()}
+                </div>
+                <div className="text-sm text-blue-400">Total Tokens Used</div>
+              </div>
+              <div className="bg-green-500/20 border border-green-500/30 p-4 rounded-xl text-center">
+                <div className="text-2xl font-bold text-green-300">{tokenStats.length}</div>
+                <div className="text-sm text-green-400">Corrections Made</div>
+              </div>
+              <div className="bg-purple-500/20 border border-purple-500/30 p-4 rounded-xl text-center">
+                <div className="text-2xl font-bold text-purple-300">
+                  {Math.round(tokenStats.reduce((sum, stat) => sum + stat.totalTokens, 0) / tokenStats.length) || 0}
+                </div>
+                <div className="text-sm text-purple-400">Avg Tokens/Correction</div>
+              </div>
+              <div className="bg-orange-500/20 border border-orange-500/30 p-4 rounded-xl text-center">
+                <div className="text-2xl font-bold text-orange-300">
+                  {[...new Set(tokenStats.map(stat => stat.model))].length}
+                </div>
+                <div className="text-sm text-orange-400">Models Used</div>
+              </div>
+            </div>
+
+            {/* Recent Usage */}
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              <h4 className="font-semibold text-slate-200 mb-3">Recent Usage</h4>
+              {tokenStats.slice().reverse().map((stat, index) => (
+                <div key={index} className="bg-slate-700/50 border border-slate-600/50 rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="font-medium text-slate-200">{stat.model}</span>
+                    <span className="text-xs text-slate-400">
+                      {new Date(stat.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-300">Input: {stat.inputTokens}</span>
+                    <span className="text-blue-300">Output: {stat.outputTokens}</span>
+                    <span className="text-purple-300">Total: {stat.totalTokens}</span>
+                    <span className="text-orange-300">
+                      Efficiency: {Math.round((stat.outputTokens / stat.inputTokens) * 100)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -195,11 +359,46 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
 
         <div className="bg-slate-800/50 p-6 rounded-xl">
           <h3 className="text-lg font-semibold text-slate-100 mb-4">Select Correction Mode</h3>
+
+          {/* API Status Indicator */}
+          {apiStatus && (
+            <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
+              apiStatus.available
+                ? 'bg-green-500/20 border border-green-500/30 text-green-300'
+                : 'bg-yellow-500/20 border border-yellow-500/30 text-yellow-300'
+            }`}>
+              <div className="flex items-center">
+                <span className="mr-2">{apiStatus.available ? '✅' : '⚠️'}</span>
+                <span className="text-sm">
+                  {apiStatus.available
+                    ? `Ready with ${apiStatus.model}`
+                    : `${apiStatus.model} unavailable - fallback mode available`}
+                </span>
+              </div>
+              <button
+                onClick={checkAPIStatus}
+                className="text-xs px-2 py-1 bg-slate-500/30 rounded hover:bg-slate-500/50 transition-colors"
+              >
+                🔄 Check
+              </button>
+            </div>
+          )}
+
+          {/* Status Message */}
+          {correctionStatus && (
+            <div className="mb-4 p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300">
+              <div className="flex items-center">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-300 border-t-transparent rounded-full mr-2"></div>
+                <span className="text-sm">{correctionStatus}</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             {[
-              { id: 'quick-fix', name: 'Quick Fix', desc: 'Fast corrections for critical errors only', icon: '⚡' },
-              { id: 'enhanced', name: 'Enhanced', desc: 'Comprehensive improvements with context', icon: '✨' },
-              { id: 'complete-rewrite', name: 'Complete Rewrite', desc: 'Full restructure for maximum impact', icon: '🔄' }
+              { id: 'quick-fix', name: 'Quick Fix', desc: 'Fast corrections for critical errors only', icon: '⚡', tokens: '~500' },
+              { id: 'enhanced', name: 'Enhanced', desc: 'Comprehensive improvements with context', icon: '✨', tokens: '~1000' },
+              { id: 'complete-rewrite', name: 'Complete Rewrite', desc: 'Full restructure for maximum impact', icon: '🔄', tokens: '~2000' }
             ].map((mode) => (
               <div
                 key={mode.id}
@@ -210,9 +409,14 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
                 }`}
                 onClick={() => setSelectedMode(mode.id as EditorMode)}
               >
-                <div className="flex items-center mb-2">
-                  <span className="text-xl mr-2">{mode.icon}</span>
-                  <span className="font-medium">{mode.name}</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center">
+                    <span className="text-xl mr-2">{mode.icon}</span>
+                    <span className="font-medium">{mode.name}</span>
+                  </div>
+                  <span className="text-xs px-2 py-1 bg-slate-600/50 rounded text-slate-400">
+                    {mode.tokens}
+                  </span>
                 </div>
                 <p className="text-xs opacity-80">{mode.desc}</p>
               </div>
@@ -253,6 +457,8 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
       );
     }
 
+    const isFallbackMode = editorResult.mode.includes('fallback');
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -273,6 +479,19 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
             <div className="text-sm text-orange-400">Processing Time</div>
           </div>
         </div>
+
+        {isFallbackMode && (
+          <div className="bg-yellow-500/20 border border-yellow-500/30 p-4 rounded-xl">
+            <div className="flex items-center">
+              <span className="text-yellow-300 mr-2">⚠️</span>
+              <span className="text-yellow-300 font-medium">Fallback Mode Used</span>
+            </div>
+            <p className="text-yellow-200/80 text-sm mt-1">
+              AI service was unavailable, so rule-based corrections were applied.
+              Try again later for AI-powered improvements.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
@@ -386,10 +605,22 @@ const AutoEditorTab: React.FC<AutoEditorTabProps> = ({ result, originalText }) =
           >
             ✏️ Editor
           </button>
+          <button
+            onClick={() => setActiveView('stats')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'stats'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-300 hover:text-slate-100'
+            }`}
+          >
+            📈 Stats
+          </button>
         </div>
       </div>
 
-      {activeView === 'analysis' ? renderAnalysisView() : renderEditorView()}
+      {activeView === 'analysis' && renderAnalysisView()}
+      {activeView === 'editor' && renderEditorView()}
+      {activeView === 'stats' && renderTokenStatsView()}
     </div>
   );
 };
