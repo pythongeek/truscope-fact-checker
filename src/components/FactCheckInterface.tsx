@@ -5,6 +5,9 @@ import { saveReportToHistory } from '../services/historyService';
 import { MethodSelector } from './MethodSelector';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
+import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
+import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
+import { TieredFactCheckService } from '../services/tieredFactCheckService';
 
 interface FactCheckInterfaceProps {
   initialReport?: FactCheckReport | null;
@@ -12,12 +15,26 @@ interface FactCheckInterfaceProps {
 }
 
 export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
+  const featureFlags = getFeatureFlags();
   const [selectedMethod, setSelectedMethod] = useState<FactCheckMethod>('comprehensive');
   const [userCategory, setUserCategory] = useState<UserCategory>('general');
   const [inputText, setInputText] = useState(initialClaimText);
   const [report, setReport] = useState<FactCheckReport | null>(initialReport);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tieredProgress, setTieredProgress] = useState<TierProgress[]>([]);
+  const [currentPhase, setCurrentPhase] = useState(0);
+
+  const availableMethods: FactCheckMethod[] = [
+    'comprehensive',
+    'temporal-verification',
+    ...(featureFlags.tieredFactChecking ? ['tiered-verification'] as FactCheckMethod[] : [])
+  ];
+
+  const toggleTieredFactChecking = () => {
+    setFeatureFlag('tieredFactChecking', !featureFlags.tieredFactChecking);
+    window.location.reload(); // Refresh to apply changes
+  };
 
   React.useEffect(() => {
     setReport(initialReport);
@@ -25,6 +42,40 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
   }, [initialReport, initialClaimText]);
 
   const factCheckService = new EnhancedFactCheckService();
+
+  const handleTieredFactCheck = async (text: string) => {
+    const initialProgress: TierProgress[] = [
+      { tier: 'direct-verification', status: 'pending' },
+      { tier: 'web-search', status: 'pending' },
+      { tier: 'specialized-analysis', status: 'pending' },
+      { tier: 'synthesis', status: 'pending' }
+    ];
+
+    setTieredProgress(initialProgress);
+    setCurrentPhase(1);
+
+    try {
+      const tieredService = TieredFactCheckService.getInstance();
+      const result = await tieredService.performTieredCheck(text);
+
+      if (result.metadata.tier_breakdown) {
+        const updatedProgress = result.metadata.tier_breakdown.map(tier => ({
+          tier: tier.tier,
+          status: tier.success ? 'completed' as const : 'failed' as const,
+          confidence: tier.confidence,
+          evidenceCount: tier.evidence_count
+        }));
+        setTieredProgress(updatedProgress);
+      }
+
+      setReport(result);
+      saveReportToHistory(text, result);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const handleAnalyze = useCallback(async () => {
     if (!inputText.trim()) {
@@ -35,22 +86,27 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
     setIsAnalyzing(true);
     setError(null);
     setReport(null);
+    setTieredProgress([]);
 
-    try {
-      const result = await factCheckService.orchestrateFactCheck(inputText, selectedMethod);
-      setReport(result);
-      saveReportToHistory(inputText, result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setIsAnalyzing(false);
+    if (selectedMethod === 'tiered-verification') {
+      await handleTieredFactCheck(inputText);
+    } else {
+      try {
+        const result = await factCheckService.orchestrateFactCheck(inputText, selectedMethod);
+        setReport(result);
+        saveReportToHistory(inputText, result);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      } finally {
+        setIsAnalyzing(false);
+      }
     }
   }, [inputText, selectedMethod, factCheckService]);
 
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8 bg-slate-900 text-white">
+    <div className="max-w-6xl mx-auto p-6 space-y-8 bg-slate-900 text-white">
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-slate-100 mb-2">
@@ -68,7 +124,25 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
           onMethodChange={setSelectedMethod}
           userCategory={userCategory}
           onUserCategoryChange={setUserCategory}
+          availableMethods={availableMethods}
         />
+        {/* DEV ONLY: Feature Flag Toggle */}
+        <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
+          <label htmlFor="tiered-toggle" className="text-sm text-slate-400">
+            Enable Tiered Fact-Checking (Dev)
+          </label>
+          <button
+            id="tiered-toggle"
+            onClick={toggleTieredFactChecking}
+            className={`px-3 py-1 text-xs rounded-full ${
+              featureFlags.tieredFactChecking
+                ? 'bg-green-500/20 text-green-300'
+                : 'bg-slate-700 text-slate-300'
+            }`}
+          >
+            {featureFlags.tieredFactChecking ? 'ON' : 'OFF'}
+          </button>
+        </div>
       </div>
 
       {/* Text Input */}
@@ -129,6 +203,15 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       )}
 
       {/* Results */}
+      {isAnalyzing && selectedMethod === 'tiered-verification' && tieredProgress.length > 0 && (
+        <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+          <TieredProgressIndicator
+            progress={tieredProgress}
+            currentPhase={currentPhase}
+          />
+        </div>
+      )}
+
       {report && (
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>

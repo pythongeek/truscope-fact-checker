@@ -1,4 +1,7 @@
 import { FactCheckReport } from '@/types/factCheck';
+import { AdvancedCacheService } from './advancedCacheService';
+
+const advancedCache = AdvancedCacheService.getInstance();
 
 interface CacheEntry {
     data: FactCheckReport;
@@ -6,17 +9,43 @@ interface CacheEntry {
 }
 
 /**
- * A simple in-memory cache for storing fact-check results to avoid redundant API calls.
+ * A simple in-memory cache that is asynchronously hydrated from and writes-through to a more persistent cache.
  */
 export class FactCheckCache {
     private cache: Map<string, CacheEntry> = new Map();
     private ttl: number; // Time-to-Live in milliseconds
+    private isHydrated: boolean = false;
 
     /**
      * @param ttl - The default Time-to-Live for cache entries, in milliseconds. Defaults to 1 hour.
      */
     constructor(ttl: number = 3600000) { // 1 hour = 60 * 60 * 1000 ms
         this.ttl = ttl;
+        this._hydrateCache();
+    }
+
+    private async _hydrateCache(): Promise<void> {
+        if (typeof localStorage === 'undefined') {
+            this.isHydrated = true;
+            return;
+        }
+        try {
+            console.log('Hydrating fact-check cache from persistent storage...');
+            const persistedEntries = await advancedCache.fetchAllFromLocalStorage();
+            for (const [key, entry] of persistedEntries) {
+                // Hydrate all valid entries into the in-memory cache
+                this.cache.set(key, {
+                    data: entry.data,
+                    timestamp: entry.timestamp
+                });
+            }
+            this.isHydrated = true;
+            console.log(`Cache hydration complete. Loaded ${persistedEntries.length} entries.`);
+        } catch (error) {
+            console.warn('Cache hydration failed:', error);
+            // Mark as hydrated even on failure to avoid blocking gets
+            this.isHydrated = true;
+        }
     }
 
     /**
@@ -52,6 +81,12 @@ export class FactCheckCache {
             timestamp: Date.now(),
         };
         this.cache.set(key, entry);
+
+        // Asynchronously write to the advanced cache without blocking.
+        // This is a "fire and forget" operation to avoid breaking the synchronous interface.
+        advancedCache.set(key, data, 'factCheckTTL').catch(err => {
+            console.warn('Advanced cache write-through failed:', err);
+        });
     }
 
     /**

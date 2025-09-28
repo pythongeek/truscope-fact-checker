@@ -7,13 +7,15 @@ interface MethodSelectorProps {
   onMethodChange: (method: FactCheckMethod) => void;
   userCategory?: UserCategory;
   onUserCategoryChange?: (category: UserCategory) => void;
+  availableMethods: FactCheckMethod[];
 }
 
 export const MethodSelector: React.FC<MethodSelectorProps> = ({
   selectedMethod,
   onMethodChange,
   userCategory = 'general',
-  onUserCategoryChange
+  onUserCategoryChange,
+  availableMethods
 }) => {
   const recommendedMethod = getRecommendedMethod(userCategory);
 
@@ -44,7 +46,7 @@ export const MethodSelector: React.FC<MethodSelectorProps> = ({
           Analysis Method:
         </label>
 
-        {(['comprehensive', 'temporal-verification'] as FactCheckMethod[]).map((method) => {
+        {availableMethods.map((method) => {
           const capability = getMethodCapabilities(method);
           const isRecommended = method === recommendedMethod;
 
