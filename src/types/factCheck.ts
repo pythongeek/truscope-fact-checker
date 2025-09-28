@@ -3,7 +3,8 @@ import { GoogleSearchResult } from '../types';
 // NEW - Replace with streamlined methods
 export type FactCheckMethod =
   | 'comprehensive'        // Default professional analysis
-  | 'temporal-verification'; // Time-focused analysis
+  | 'temporal-verification' // Time-focused analysis
+  | 'tiered-verification'; // NEW: Tiered approach
 
 export type UserCategory =
   | 'journalist'
@@ -105,6 +106,13 @@ export interface FactCheckMetadata {
         conflicting: number;
     };
     warnings: string[];
+    tier_breakdown?: {
+        tier: string;
+        success: boolean;
+        confidence: number;
+        processing_time_ms: number;
+        evidence_count: number;
+    }[];
 }
 
 export interface TemporalValidation {

@@ -1,5 +1,6 @@
 import { runFactCheckOrchestrator } from './geminiService';
 import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
+import { TieredFactCheckService } from './tieredFactCheckService';
 
 // --- Types for Batch Processing ---
 
@@ -62,7 +63,13 @@ export class BatchFactChecker {
             const chunkPromises = chunk.map(async (request): Promise<BatchResult> => {
                 const startTime = Date.now();
                 try {
-                    const report = await runFactCheckOrchestrator(request.claimText, request.method);
+                    let report: FactCheckReport;
+                    if (request.method === 'tiered-verification') {
+                        const tieredService = TieredFactCheckService.getInstance();
+                        report = await tieredService.performTieredCheck(request.claimText);
+                    } else {
+                        report = await runFactCheckOrchestrator(request.claimText, request.method);
+                    }
                     return {
                         id: request.id,
                         request,

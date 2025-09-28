@@ -74,6 +74,33 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
       biasDetection: false,
       expertValidation: false
     }
+  },
+  'tiered-verification': {
+    id: 'tiered-verification',
+    name: 'Tiered Verification',
+    description: 'A cost-effective, multi-phase approach that escalates from fast, direct checks to comprehensive analysis as needed.',
+    strengths: [
+      'Cost-efficient by design',
+      'Balances speed and accuracy',
+      'Starts with the most economical checks',
+      'Escalates automatically for complex claims'
+    ],
+    limitations: [
+      'Processing time is variable',
+      'Can be slow for claims requiring full escalation',
+      'Relies on multiple external APIs'
+    ],
+    idealFor: ['general', 'blogger', 'content-writer'],
+    processingTime: 'slow',
+    accuracyLevel: 'very-high',
+    requiresInternet: true,
+    features: {
+      sourceVerification: true,
+      temporalAnalysis: true,
+      mediaVerification: false,
+      biasDetection: false,
+      expertValidation: true
+    }
   }
 };
 
