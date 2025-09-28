@@ -234,12 +234,21 @@ export class CitationAugmentedService {
       originalText,
       enhanced_claim_text: originalText, // Use original text as a fallback
       originalTextSegments,
-      temporal_analysis: {
+      temporal_verification: {
         hasTemporalClaims: temporalAnalysis.length > 0,
         validations: temporalAnalysis,
         overallTemporalScore: temporalScore,
         temporalWarnings: temporalAnalysis.filter(t => !t.isValid).map(t => t.reasoning)
       },
+      // Add missing required properties with default values
+      source_credibility_report: {
+        overallScore: 0,
+        highCredibilitySources: 0,
+        flaggedSources: 0,
+        biasWarnings: [],
+        credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+      },
+      user_category_recommendations: [],
       metadata,
       score_breakdown: {
         final_score_formula: 'Claim Confidence (80%) + Temporal Accuracy (20%)',

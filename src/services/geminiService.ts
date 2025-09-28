@@ -428,7 +428,15 @@ Make sure your response is valid JSON.`;
                 text: normalizedClaim.normalized_claim,
                 score: parsed.final_score || 50,
                 color: (parsed.final_score || 50) >= 75 ? 'green' : (parsed.final_score || 50) >= 40 ? 'yellow' : 'red'
-            }]
+            }],
+            source_credibility_report: {
+                overallScore: 0, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [],
+                credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+            },
+            temporal_verification: {
+                hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
+            },
+            user_category_recommendations: []
         };
 
         return report;
@@ -442,7 +450,7 @@ Make sure your response is valid JSON.`;
             originalText: normalizedClaim.original_claim,
             final_verdict: 'Analysis Error',
             final_score: 0,
-            reasoning: `Unable to complete analysis: ${error.message}`,
+            reasoning: `Unable to complete analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
             score_breakdown: {
                 final_score_formula: "error occurred",
                 metrics: [
@@ -463,14 +471,22 @@ Make sure your response is valid JSON.`;
                     high_credibility: 0,
                     conflicting: 0
                 },
-                warnings: [`Analysis failed: ${error.message}`]
+                warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
             },
             enhanced_claim_text: normalizedClaim.normalized_claim,
             originalTextSegments: [{
                 text: normalizedClaim.normalized_claim,
                 score: 0,
                 color: 'red'
-            }]
+            }],
+            source_credibility_report: {
+                overallScore: 0, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [],
+                credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+            },
+            temporal_verification: {
+                hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
+            },
+            user_category_recommendations: []
         };
     }
 };
@@ -714,7 +730,15 @@ async function convertFactToReport(fact: FactDatabase, originalText: string): Pr
         conflicting: 0
       },
       warnings: new Date(fact.verification.nextVerificationDue) < new Date() ? ['Fact may need re-verification'] : []
-    }
+    },
+    source_credibility_report: {
+        overallScore: 0, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [],
+        credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+    },
+    temporal_verification: {
+        hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
+    },
+    user_category_recommendations: []
   };
 }
 

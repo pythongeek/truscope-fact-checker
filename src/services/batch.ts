@@ -1,13 +1,12 @@
 import { runFactCheckOrchestrator } from './geminiService';
-import { FactCheckReport } from '@/types/factCheck';
-import { AnalysisMethod } from '../components/InputSection';
+import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
 
 // --- Types for Batch Processing ---
 
 export interface BatchRequest {
     id: string; // A unique identifier for the request
     claimText: string;
-    method: AnalysisMethod;
+    method: FactCheckMethod;
 }
 
 export interface BatchResult {
@@ -63,7 +62,7 @@ export class BatchFactChecker {
             const chunkPromises = chunk.map(async (request): Promise<BatchResult> => {
                 const startTime = Date.now();
                 try {
-                    const report = await runFactCheckOrchestrator(request.claimText, request.method as any);
+                    const report = await runFactCheckOrchestrator(request.claimText, request.method);
                     return {
                         id: request.id,
                         request,
