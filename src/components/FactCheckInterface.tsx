@@ -50,19 +50,19 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8 bg-slate-900 text-white">
+    <div className="max-w-7xl mx-auto p-8 space-y-10">
       {/* Header */}
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-slate-100 mb-2">
+      <div className="text-center border-b border-slate-700/50 pb-8">
+        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 mb-3">
           Professional Fact-Checking Tool
         </h1>
-        <p className="text-slate-400">
-          Advanced AI-powered verification with source credibility analysis
+        <p className="text-lg text-slate-400 max-w-3xl mx-auto">
+          Leveraging advanced AI for in-depth verification, source credibility analysis, and temporal consistency checking.
         </p>
       </div>
 
       {/* Method Selection */}
-      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+      <div className="bg-slate-800/40 rounded-xl border border-slate-700/80 p-8 shadow-2xl shadow-black/30">
         <MethodSelector
           selectedMethod={selectedMethod}
           onMethodChange={setSelectedMethod}
@@ -72,24 +72,24 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       </div>
 
       {/* Text Input */}
-      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
-          Text to Fact-Check:
+      <div className="bg-slate-800/40 rounded-xl border border-slate-700/80 p-8 shadow-2xl shadow-black/30">
+        <label className="block text-lg font-semibold text-slate-200 mb-4">
+          Text to Fact-Check
         </label>
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          className="w-full p-4 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+          className="w-full p-4 bg-slate-900/80 border border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y text-lg"
           rows={6}
           placeholder="Enter the claim or statement you want to fact-check..."
         />
 
         {/* Analysis Button */}
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-slate-400">
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-slate-500">
             {selectedCapability.requiresInternet && (
               <span className="flex items-center">
-                <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2 text-sky-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>
                 Requires internet connection
               </span>
             )}
@@ -98,10 +98,10 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
           <button
             onClick={handleAnalyze}
             disabled={isAnalyzing || !inputText.trim()}
-            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            className={`px-8 py-3 rounded-lg font-semibold text-base transition-all duration-300 shadow-lg hover:shadow-indigo-500/40 ${
               isAnalyzing || !inputText.trim()
-                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:-translate-y-1'
             }`}
           >
             {isAnalyzing ? (
