@@ -106,6 +106,13 @@ export interface FactCheckMetadata {
         conflicting: number;
     };
     warnings: string[];
+    tier_breakdown?: {
+        tier: string;
+        success: boolean;
+        confidence: number;
+        processing_time_ms: number;
+        evidence_count: number;
+    }[];
 }
 
 export interface TemporalValidation {
