@@ -643,7 +643,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
 // --- Main Orchestrator ---
 export async function runFactCheckOrchestrator(
   text: string,
-  method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented'
+  method: 'comprehensive' | 'temporal-verification' = 'comprehensive'
 ): Promise<FactCheckReport> {
   const factDB = RealTimeFactDBService.getInstance();
 
@@ -730,10 +730,10 @@ function mapVerdictToString(verdict: FactVerdict): string {
   return verdictMap[verdict];
 }
 
-// Keep original function for new analysis
+// Keep original function for new analysis, but simplify it as orchestration is now handled by EnhancedFactCheckService.
 async function originalFactCheckOrchestrator(
     claimText: string,
-    method: 'gemini-only' | 'google-ai' | 'hybrid' | 'citation-augmented',
+    method: 'comprehensive' | 'temporal-verification',
     context?: string
 ): Promise<FactCheckReport> {
     const factCheckId = await generateSHA256(`${method}::${claimText.trim().toLowerCase()}`);
@@ -755,24 +755,10 @@ async function originalFactCheckOrchestrator(
         const startTime = Date.now();
         const normalizedClaim = await normalizeClaim(claimText);
 
-        let report: FactCheckReport;
-
-        switch (method) {
-            case 'gemini-only':
-                report = await enhancedFactCheck(claimText, method, () => runGeminiOnlyCheckWithFallback(normalizedClaim, context));
-                break;
-            case 'google-ai':
-                report = await enhancedFactCheck(claimText, method, () => runGoogleSearchAndAiCheck(normalizedClaim, context));
-                break;
-            case 'hybrid':
-                report = await enhancedFactCheck(claimText, method, () => runHybridCheck(normalizedClaim, context));
-                break;
-            case 'citation-augmented':
-                report = await enhancedFactCheck(claimText, method, () => runCitationAugmentedCheck(normalizedClaim, context));
-                break;
-            default:
-                throw new Error(`Unsupported analysis method: ${method}`);
-        }
+        // The core logic for both new methods is based on citation-augmented analysis.
+        // The EnhancedFactCheckService will handle the specific layering.
+        // This service now just provides the base report.
+        const report = await enhancedFactCheck(claimText, 'citation-augmented', () => runCitationAugmentedCheck(normalizedClaim, context));
 
         report.id = factCheckId;
         report.metadata.processing_time_ms = Date.now() - startTime;
