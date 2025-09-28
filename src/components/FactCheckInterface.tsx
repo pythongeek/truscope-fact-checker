@@ -1,0 +1,155 @@
+import React, { useState, useCallback } from 'react';
+import { FactCheckMethod, UserCategory, FactCheckReport } from '../types/factCheck';
+import { EnhancedFactCheckService } from '../services/enhancedFactCheckService';
+import { saveReportToHistory } from '../services/historyService';
+import { MethodSelector } from './MethodSelector';
+import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
+import { getMethodCapabilities } from '../services/methodCapabilities';
+
+interface FactCheckInterfaceProps {
+  initialReport?: FactCheckReport | null;
+  initialClaimText?: string;
+}
+
+export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
+  const [selectedMethod, setSelectedMethod] = useState<FactCheckMethod>('comprehensive');
+  const [userCategory, setUserCategory] = useState<UserCategory>('general');
+  const [inputText, setInputText] = useState(initialClaimText);
+  const [report, setReport] = useState<FactCheckReport | null>(initialReport);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setReport(initialReport);
+    setInputText(initialClaimText);
+  }, [initialReport, initialClaimText]);
+
+  const factCheckService = new EnhancedFactCheckService();
+
+  const handleAnalyze = useCallback(async () => {
+    if (!inputText.trim()) {
+      setError('Please enter some text to analyze');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError(null);
+    setReport(null);
+
+    try {
+      const result = await factCheckService.orchestrateFactCheck(inputText, selectedMethod);
+      setReport(result);
+      saveReportToHistory(inputText, result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [inputText, selectedMethod, factCheckService]);
+
+  const selectedCapability = getMethodCapabilities(selectedMethod);
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 space-y-8 bg-slate-900 text-white">
+      {/* Header */}
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-slate-100 mb-2">
+          Professional Fact-Checking Tool
+        </h1>
+        <p className="text-slate-400">
+          Advanced AI-powered verification with source credibility analysis
+        </p>
+      </div>
+
+      {/* Method Selection */}
+      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+        <MethodSelector
+          selectedMethod={selectedMethod}
+          onMethodChange={setSelectedMethod}
+          userCategory={userCategory}
+          onUserCategoryChange={setUserCategory}
+        />
+      </div>
+
+      {/* Text Input */}
+      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+        <label className="block text-sm font-medium text-slate-300 mb-3">
+          Text to Fact-Check:
+        </label>
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          className="w-full p-4 bg-slate-900/70 border border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y"
+          rows={6}
+          placeholder="Enter the claim or statement you want to fact-check..."
+        />
+
+        {/* Analysis Button */}
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-slate-400">
+            {selectedCapability.requiresInternet && (
+              <span className="flex items-center">
+                <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
+                Requires internet connection
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing || !inputText.trim()}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+              isAnalyzing || !inputText.trim()
+                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+          >
+            {isAnalyzing ? (
+              <div className="flex items-center">
+                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                Analyzing...
+              </div>
+            ) : (
+              `Run ${selectedCapability.name}`
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-bold">!</span>
+            </div>
+            <p className="ml-3 text-red-300">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Results */}
+      {report && (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>
+          <EnhancedFactCheckReport report={report} />
+        </div>
+      )}
+
+      {/* Processing Indicator */}
+      {isAnalyzing && (
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-6 text-center">
+          <div className="animate-spin w-8 h-8 border-3 border-blue-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <h3 className="text-lg font-medium text-blue-300 mb-2">
+            Running {selectedCapability.name}
+          </h3>
+          <p className="text-blue-400">
+            {selectedCapability.processingTime === 'fast' && 'This should take just a few seconds...'}
+            {selectedCapability.processingTime === 'medium' && 'This may take up to a minute...'}
+            {selectedCapability.processingTime === 'slow' && 'This may take several minutes for thorough analysis...'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};

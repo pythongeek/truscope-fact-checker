@@ -398,7 +398,7 @@ export class AutoEditorIntegrationService {
     console.log('🔍 Starting comprehensive fact-check analysis...');
 
     try {
-      const factCheckReport = await runFactCheckOrchestrator(text, 'citation-augmented');
+      const factCheckReport = await runFactCheckOrchestrator(text, 'comprehensive');
       const segments = this.convertToColorCodedSegments(text, factCheckReport);
       const corrections = this.extractCorrections(factCheckReport);
 

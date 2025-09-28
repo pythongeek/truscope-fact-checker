@@ -1,5 +1,51 @@
 import { GoogleSearchResult } from '../types';
 
+// NEW - Replace with streamlined methods
+export type FactCheckMethod =
+  | 'comprehensive'        // Default professional analysis
+  | 'temporal-verification'; // Time-focused analysis
+
+export type UserCategory =
+  | 'journalist'
+  | 'content-writer'
+  | 'blogger'
+  | 'technical-writer'
+  | 'researcher'
+  | 'general';
+
+// Add new interfaces for integrated components
+export interface SourceCredibilityReport {
+  overallScore: number;
+  highCredibilitySources: number;
+  flaggedSources: number;
+  biasWarnings: string[];
+  credibilityBreakdown: {
+    academic: number;
+    news: number;
+    government: number;
+    social: number;
+  };
+}
+
+export interface MediaVerificationReport {
+  hasVisualContent: boolean;
+  reverseImageResults: {
+    matchFound: boolean;
+    originalSource?: string;
+    firstAppearance?: string;
+  }[];
+  videoAnalysis?: {
+    frameAnalysis: string[];
+    metadataCheck: string;
+  };
+}
+
+export interface TimelineEvent {
+    event: string;
+    date: string;
+}
+
+
 // New interface for preliminary analysis from AI
 export interface PreliminaryAnalysis {
     preliminaryVerdict: string;
@@ -105,6 +151,7 @@ export interface SourceCredibilityAnalysis {
   flaggedSources?: number;
 }
 
+// Enhanced FactCheckReport
 export interface FactCheckReport {
     id: string;
     originalText: string;
@@ -119,11 +166,30 @@ export interface FactCheckReport {
     enhanced_claim_text: string;
     correctionAnalysis?: any;
     availableCorrections?: number;
-    // ADD these new fields
-    temporal_analysis?: TemporalAnalysis;
     category_rating?: CategoryRating;
-    source_credibility_analysis?: SourceCredibilityAnalysis;
+
+    // NEW: Integrated components
+    source_credibility_report: SourceCredibilityReport;
+    media_verification_report?: MediaVerificationReport;
+    temporal_verification: {
+        hasTemporalClaims: boolean;
+        validations: TemporalValidation[];
+        overallTemporalScore: number;
+        temporalWarnings: string[];
+        timelineAnalysis?: {
+            events: TimelineEvent[];
+            consistency: number;
+        };
+    };
+
+    // Enhanced metadata
+    user_category_recommendations: {
+        category: UserCategory;
+        suitabilityScore: number;
+        reasoning: string;
+    }[];
 }
+
 
 // --- New Types for Backend Logic & Orchestration ---
 

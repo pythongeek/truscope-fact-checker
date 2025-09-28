@@ -1,14 +1,11 @@
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
-import InputSection, { AnalysisMethod } from './components/InputSection';
-import Dashboard from './components/Dashboard';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
+import { FactCheckInterface } from './components/FactCheckInterface';
 import { FactCheckReport } from '@/types/factCheck';
-import { EnhancedFactCheckService } from './services/enhancedFactCheckService';
-import { saveReportToHistory } from './services/historyService';
-import { parseAIJsonResponse } from './utils/jsonParser'; // Added import
+import { parseAIJsonResponse } from './utils/jsonParser';
 
 // Initialize the global JSON fix on app startup
 function initializeGlobalJsonFix() {
@@ -60,142 +57,25 @@ const App: React.FC = () => {
     }, []);
 
     const [currentView, setCurrentView] = useState<View>('checker');
-    const [inputText, setInputText] = useState('');
-    const [result, setResult] = useState<FactCheckReport | null>(null);
-    const [currentClaimText, setCurrentClaimText] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    // These two states are now used to pass data from history to the checker
+    const [selectedReport, setSelectedReport] = useState<FactCheckReport | null>(null);
+    const [selectedClaim, setSelectedClaim] = useState('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-    const mapAnalysisMethod = (method: string): string => {
-      const methodMap: Record<string, string> = {
-        'citation-augmented': 'citation-augmented',
-        'hybrid': 'comprehensive',
-        'temporal-focus': 'temporal-focus',
-        'source-priority': 'source-priority',
-        'google-ai': 'citation-augmented', // fallback
-        'newsdata': 'citation-augmented', // fallback
-        'gemini-only': 'citation-augmented' // fallback
-      };
-
-      return methodMap[method] || 'citation-augmented';
-    };
-
-    const handleAnalyze = async (method: AnalysisMethod) => {
-        if (!inputText.trim()) {
-            setError('Please enter some text to analyze.');
-            return;
-        }
-
-        setIsLoading(true);
-        setError(null);
-        setResult(null);
-
-        try {
-            const enhancedService = new EnhancedFactCheckService();
-            const mappedMethod = mapAnalysisMethod(method);
-
-            const report = await enhancedService.orchestrateFactCheck(
-                inputText,
-                mappedMethod as any
-            );
-
-            setResult(report);
-            setCurrentClaimText(inputText);
-            saveReportToHistory(inputText, report);
-
-        } catch (err) {
-            console.error('Analysis failed:', err);
-            setError(err instanceof Error ? err.message : 'An unexpected error occurred during analysis.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleSelectReport = (report: FactCheckReport, claimText: string) => {
-        setResult(report);
-        setCurrentClaimText(claimText);
+        setSelectedReport(report);
+        setSelectedClaim(claimText);
         setCurrentView('checker');
-    };
-
-    const handleClearResults = () => {
-        setResult(null);
-        setCurrentClaimText('');
-        setInputText('');
-        setError(null);
     };
 
     const renderContent = () => {
         switch (currentView) {
             case 'checker':
                 return (
-                    <div className="max-w-6xl mx-auto space-y-8">
-                        <header className="text-center">
-                            <h1 className="text-4xl font-bold text-slate-100 mb-2">
-                                Fact-Checker Dashboard
-                            </h1>
-                            <p className="text-slate-300 max-w-2xl mx-auto">
-                                Analyze content to uncover insights and verify claims with our advanced
-                                Citation-Augmented Analysis powered by external source verification.
-                            </p>
-                        </header>
-
-                        <InputSection
-                            inputText={inputText}
-                            onTextChange={setInputText}
-                            onAnalyze={handleAnalyze}
-                            isLoading={isLoading}
-                        />
-
-                        {error && (
-                            <div className="bg-red-500/10 border border-red-500/20 text-red-300 px-4 py-3 rounded-lg">
-                                <div className="flex items-start gap-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <div>
-                                        <h4 className="font-semibold mb-1">Analysis Error</h4>
-                                        <p className="text-sm">{error}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {result && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-slate-100">Analysis Results</h2>
-                                        {currentClaimText && (
-                                            <p className="text-slate-400 text-sm mt-1">
-                                                Original claim: "{currentClaimText.length > 100 ? currentClaimText.slice(0, 100) + '...' : currentClaimText}"
-                                            </p>
-                                        )}
-                                    </div>
-                                    <button
-                                        onClick={handleClearResults}
-                                        className="px-4 py-2 text-sm text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors"
-                                    >
-                                        Clear Results
-                                    </button>
-                                </div>
-                                <Dashboard result={result} isLoading={isLoading} />
-                            </div>
-                        )}
-
-                        {!result && !isLoading && !error && (
-                            <div className="text-center py-16 text-slate-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <h3 className="text-xl font-semibold text-slate-300 mb-2">Ready to Analyze</h3>
-                                <p className="max-w-md mx-auto">
-                                    Enter a claim or statement above and select an analysis method to get started.
-                                    The Citation-Augmented method is recommended for the most verifiable results.
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                    <FactCheckInterface
+                        initialReport={selectedReport}
+                        initialClaimText={selectedClaim}
+                    />
                 );
             case 'history':
                 return (
