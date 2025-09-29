@@ -110,7 +110,7 @@ export class TieredFactCheckService {
           apis_used: this.getUsedApis(tierResults),
           sources_consulted: {
             total: finalEvidence.length,
-            high_credibility: finalEvidence.filter(e => e.score >= 80).length,
+            high_credibility: finalEvidence.filter(e => Number(e.score) >= 80).length,
             conflicting: 0
           },
           warnings: this.generateWarnings(tierResults),
@@ -257,7 +257,7 @@ export class TieredFactCheckService {
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
 
       // Check if sources agree (simple consensus check)
-      const highScoreCount = evidence.filter(e => e.score >= 70).length;
+      const highScoreCount = evidence.filter(e => Number(e.score) >= 70).length;
       const lowScoreCount = evidence.filter(e => e.score <= 40).length;
       const clearConsensus = (highScoreCount >= 5 && lowScoreCount <= 1) || (lowScoreCount >= 5 && highScoreCount <= 1);
 
