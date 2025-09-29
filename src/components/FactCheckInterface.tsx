@@ -106,19 +106,19 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8 bg-slate-900 text-white">
+    <div className="max-w-6xl mx-auto p-2 md:p-6 space-y-6 md:space-y-8 bg-slate-900 text-white">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-slate-100 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-2">
           Professional Fact-Checking Tool
         </h1>
-        <p className="text-slate-400">
+        <p className="text-slate-400 text-sm sm:text-base">
           Advanced AI-powered verification with source credibility analysis
         </p>
       </div>
 
       {/* Method Selection */}
-      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
         <MethodSelector
           selectedMethod={selectedMethod}
           onMethodChange={setSelectedMethod}
@@ -146,7 +146,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       </div>
 
       {/* Text Input */}
-      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
         <label className="block text-sm font-medium text-slate-300 mb-3">
           Text to Fact-Check:
         </label>

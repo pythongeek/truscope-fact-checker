@@ -61,6 +61,7 @@ const App: React.FC = () => {
     const [selectedReport, setSelectedReport] = useState<FactCheckReport | null>(null);
     const [selectedClaim, setSelectedClaim] = useState('');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const handleSelectReport = (report: FactCheckReport, claimText: string) => {
         setSelectedReport(report);
@@ -101,9 +102,20 @@ const App: React.FC = () => {
                     onSettingsClick={() => setIsSettingsOpen(true)}
                     currentView={currentView}
                     onNavigate={setCurrentView}
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
                 />
 
-                <main className="flex-1 p-6 overflow-hidden">
+                <main className="flex-1 p-2 md:p-6 overflow-hidden">
+                    <button
+                        type="button"
+                        className="md:hidden p-2 text-slate-300"
+                        onClick={() => setIsSidebarOpen(true)}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                    </button>
                     {renderContent()}
                 </main>
             </div>
