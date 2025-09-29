@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { FactCheckMethod, UserCategory, FactCheckReport } from '../types/factCheck';
-import { EnhancedFactCheckService } from '../services/enhancedFactCheckService';
+import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
 import { MethodSelector } from './MethodSelector';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
