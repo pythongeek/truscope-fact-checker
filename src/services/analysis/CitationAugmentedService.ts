@@ -305,4 +305,102 @@ export class CitationAugmentedService {
 
     return reasoning;
   }
+
+  public async processSearchResults(claimText: string, searchResults: any[]): Promise<FactCheckReport> {
+    const evidenceItems: (EvidenceItem | null)[] = await Promise.all(
+        searchResults.map(async (result) => {
+            if (!result || !result.link) return null;
+
+            const credibilityData = await this.credibilityService.analyzeSource(result.link);
+            const evidenceId = await generateSHA256(result.link);
+
+            return {
+                id: evidenceId,
+                quote: result.snippet,
+                publisher: result.source,
+                url: result.link,
+                score: credibilityData.credibilityScore,
+                type: 'search_result',
+            } as EvidenceItem;
+        })
+    );
+
+    const evidence = evidenceItems.filter((item): item is EvidenceItem => item !== null);
+
+    const combinedScores = this.combineScores(evidence);
+    const finalScore = this.calculateFinalScore(combinedScores);
+    const finalVerdict = this.getVerdict(finalScore);
+
+    const report: FactCheckReport = {
+        id: `report-${Date.now()}`,
+        originalText: claimText,
+        final_verdict: finalVerdict,
+        final_score: finalScore,
+        reasoning: `Analysis based on ${evidence.length} search results.`,
+        evidence: evidence,
+        score_breakdown: {
+            final_score_formula: "Weighted average of search metrics.",
+            metrics: [
+                { name: 'Source Reliability', score: combinedScores.source_reliability, description: 'Average reliability of sources' },
+                { name: 'Corroboration', score: combinedScores.corroboration, description: 'Number of sources found' }
+            ]
+        },
+        metadata: {
+            method_used: 'citation-augmented-search',
+            processing_time_ms: 0,
+            apis_used: ['google-search'],
+            sources_consulted: { total: evidence.length, high_credibility: evidence.filter(e => e.score >= 80).length, conflicting: 0 },
+            warnings: []
+        },
+        // Add missing required properties with default values
+        enhanced_claim_text: claimText,
+        originalTextSegments: [],
+        temporal_verification: {
+            hasTemporalClaims: false,
+            validations: [],
+            overallTemporalScore: 0,
+            temporalWarnings: []
+        },
+        source_credibility_report: {
+            overallScore: 0,
+            highCredibilitySources: 0,
+            flaggedSources: 0,
+            biasWarnings: [],
+            credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+        },
+        user_category_recommendations: []
+    };
+
+    return report;
+  }
+
+  private combineScores(evidence: EvidenceItem[]): any {
+    if (evidence.length === 0) {
+        return {
+            source_reliability: 0,
+            corroboration: 0
+        };
+    }
+
+    const source_reliability = Math.round(evidence.reduce((acc, item) => acc + (item.score || 0), 0) / evidence.length);
+    const corroboration = Math.min(100, evidence.length * 10);
+    return {
+        source_reliability,
+        corroboration
+    };
+  }
+
+  private calculateFinalScore(combinedScores: any): number {
+    const { source_reliability, corroboration } = combinedScores;
+    // 60% for reliability, 40% for corroboration
+    return Math.round((source_reliability * 0.6) + (corroboration * 0.4));
+  }
+
+  private getVerdict(score: number): string {
+    if (score >= 85) return 'Highly credible';
+    if (score >= 70) return 'Credible';
+    if (score >= 50) return 'Mixed';
+    if (score >= 30) return 'Not credible';
+    return 'Highly not credible';
+  }
 }
