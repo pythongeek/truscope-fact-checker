@@ -121,6 +121,7 @@ export interface TemporalValidation {
   confidence: number;
   dateType: 'past' | 'present' | 'near_future' | 'far_future';
   reasoning: string;
+  date?: string;
 }
 
 export interface TemporalAnalysis {
