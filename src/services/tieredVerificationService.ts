@@ -4,46 +4,57 @@ import { NewsDataService } from './newsDataService';
 import { QueryExtractorService } from './queryExtractor';
 import { FactCheckReport } from '@/types/factCheck';
 
+export interface ProgressUpdate {
+  tier: 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
+  status: 'in_progress' | 'completed' | 'failed';
+}
+
+export type ProgressCallback = (update: ProgressUpdate) => void;
+
 export class TieredVerificationService {
   private googleFactCheck = GoogleFactCheckService.getInstance();
   private serpApi = SerpApiService.getInstance();
   private newsData = NewsDataService.getInstance();
   private queryExtractor = QueryExtractorService.getInstance();
 
-  async performTieredCheck(text: string): Promise<FactCheckReport> {
+  async performTieredCheck(text: string, onProgress?: ProgressCallback): Promise<FactCheckReport> {
     console.log('🎯 Starting Tiered Fact Check Process');
 
     try {
       // Phase 1: Direct Verification (Google Fact Check API)
-      console.log('📋 Phase 1: Direct Verification');
+      onProgress?.({ tier: 'direct-verification', status: 'in_progress' });
       const phase1Result = await this.runPhase1(text);
+      onProgress?.({ tier: 'direct-verification', status: phase1Result ? 'completed' : 'failed' });
 
       if (phase1Result && phase1Result.confidence > 0.8) {
         console.log('✅ Phase 1 Success - High confidence result');
+        onProgress?.({ tier: 'synthesis', status: 'completed' });
         return phase1Result;
       }
 
-      console.log('⏭️  Phase 1 Escalating to Phase 2');
-
       // Phase 2: Broad Web Search
-      console.log('🔍 Phase 2: Broad Web Search & Initial Grounding');
+      onProgress?.({ tier: 'web-search', status: 'in_progress' });
       const phase2Result = await this.runPhase2(text, phase1Result);
+      onProgress?.({ tier: 'web-search', status: phase2Result !== phase1Result ? 'completed' : 'failed' });
 
       if (phase2Result && phase2Result.confidence > 0.7) {
         console.log('✅ Phase 2 Success - Good confidence result');
+        onProgress?.({ tier: 'synthesis', status: 'completed' });
         return phase2Result;
       }
 
-      console.log('⏭️  Phase 2 Escalating to Phase 3');
-
       // Phase 3: Specialized & Temporal Analysis
-      console.log('🎯 Phase 3: Specialized & Temporal Analysis');
+      onProgress?.({ tier: 'specialized-analysis', status: 'in_progress' });
       const phase3Result = await this.runPhase3(text, phase2Result);
+      onProgress?.({ tier: 'specialized-analysis', status: 'completed' });
 
+      onProgress?.({ tier: 'synthesis', status: 'in_progress' });
+      onProgress?.({ tier: 'synthesis', status: 'completed' });
       return phase3Result;
 
     } catch (error) {
       console.error('❌ Tiered verification failed:', error);
+      onProgress?.({ tier: 'synthesis', status: 'failed' });
       throw error;
     }
   }
