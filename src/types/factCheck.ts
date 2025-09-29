@@ -72,7 +72,7 @@ export interface Segment {
 // --- Core Report Structure ---
 
 export interface ScoreMetric {
-    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status' | 'Claim Verification' | 'Temporal Accuracy';
+    name: 'Source Reliability' | 'Corroboration' | 'Directness' | 'Freshness' | 'Contradiction' | 'Cached Confidence' | 'Internal Knowledge' | 'Error Status' | 'Claim Verification' | 'Temporal Accuracy' | 'Direct Fact Check' | 'Verification Failed';
     score: number; // 0-100
     description: string;
 }
@@ -166,6 +166,7 @@ export interface FactCheckReport {
     originalText: string;
     final_verdict: string;
     final_score: number; // 0-100
+    confidence: 'Low Confidence' | 'Medium Confidence' | 'High Confidence';
     score_breakdown: ScoreBreakdown;
     evidence: EvidenceItem[];
     metadata: FactCheckMetadata;

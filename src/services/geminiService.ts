@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '@/types/factCheck';
+import { getConfidenceLevel } from '../utils/scoring';
 import { getGeminiApiKey, getNewsDataApiKey, getGeminiModel } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
@@ -105,6 +106,7 @@ const FACT_CHECK_REPORT_TYPE_DEFINITION = `
 interface FactCheckReport {
     final_verdict: string;
     final_score: number; // 0-100
+    confidence: string; // "High Confidence", "Medium Confidence", or "Low Confidence"
     score_breakdown: {
         final_score_formula: string;
         metrics: {
@@ -396,6 +398,7 @@ Make sure your response is valid JSON.`;
             originalText: normalizedClaim.original_claim,
             final_verdict: parsed.final_verdict || 'Unverified',
             final_score: parsed.final_score || 50,
+            confidence: getConfidenceLevel(parsed.final_score || 50),
             reasoning: parsed.reasoning || 'Analysis completed with limited information',
             score_breakdown: {
                 final_score_formula: "AI assessment based on internal knowledge",
@@ -450,6 +453,7 @@ Make sure your response is valid JSON.`;
             originalText: normalizedClaim.original_claim,
             final_verdict: 'Analysis Error',
             final_score: 0,
+            confidence: getConfidenceLevel(0),
             reasoning: `Unable to complete analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
             score_breakdown: {
                 final_score_formula: "error occurred",
@@ -696,6 +700,7 @@ async function convertFactToReport(fact: FactDatabase, originalText: string): Pr
     originalText,
     final_verdict: mapVerdictToString(fact.verdict),
     final_score: Math.round(fact.confidence * 100),
+    confidence: getConfidenceLevel(Math.round(fact.confidence * 100)),
     evidence: fact.sources.map(source => ({
       id: Math.random().toString(36).substr(2, 9),
       publisher: source.publisher,

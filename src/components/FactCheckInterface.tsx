@@ -7,7 +7,7 @@ import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
 import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
-import { TieredFactCheckService } from '../services/tieredFactCheckService';
+import { TieredVerificationService, ProgressCallback, ProgressUpdate } from '../services/tieredVerificationService';
 
 interface FactCheckInterfaceProps {
   initialReport?: FactCheckReport | null;
@@ -50,23 +50,18 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       { tier: 'specialized-analysis', status: 'pending' },
       { tier: 'synthesis', status: 'pending' }
     ];
-
     setTieredProgress(initialProgress);
     setCurrentPhase(1);
 
-    try {
-      const tieredService = TieredFactCheckService.getInstance();
-      const result = await tieredService.performTieredCheck(text);
+    const handleProgressUpdate: ProgressCallback = (update) => {
+      setTieredProgress(prev =>
+        prev.map(p => p.tier === update.tier ? { ...p, status: update.status } : p)
+      );
+    };
 
-      if (result.metadata.tier_breakdown) {
-        const updatedProgress = result.metadata.tier_breakdown.map(tier => ({
-          tier: tier.tier,
-          status: tier.success ? 'completed' as const : 'failed' as const,
-          confidence: tier.confidence,
-          evidenceCount: tier.evidence_count
-        }));
-        setTieredProgress(updatedProgress);
-      }
+    try {
+      const tieredService = new TieredVerificationService();
+      const result = await tieredService.performTieredCheck(text, handleProgressUpdate);
 
       setReport(result);
       saveReportToHistory(text, result);
