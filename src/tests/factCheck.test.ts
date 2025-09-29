@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from 'vitest';
-import { EnhancedFactCheckService } from '../services/enhancedFactCheckService';
+import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 
 // Mock dependent services to isolate the test to the orchestration logic
