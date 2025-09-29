@@ -25,7 +25,6 @@ export class NewsDataService {
   private static instance: NewsDataService;
   private httpClient = RobustHttpClient.getInstance();
   private cache = AdvancedCacheService.getInstance();
-  private apiKey: string;
 
   static getInstance(): NewsDataService {
     if (!NewsDataService.instance) {
@@ -35,8 +34,7 @@ export class NewsDataService {
   }
 
   constructor() {
-    this.apiKey = import.meta.env.VITE_NEWSDATA_API_KEY ||
-                   localStorage.getItem('newsdata_api_key') || '';
+    // API key is now handled server-side.
   }
 
   async searchNews(query: string, options: {
@@ -46,9 +44,6 @@ export class NewsDataService {
     language?: string;
     country?: string;
   } = {}): Promise<NewsDataResponse> {
-    if (!this.apiKey) {
-      throw new Error('NewsData.io API key not configured');
-    }
 
     const {
       fromDate,
@@ -71,26 +66,29 @@ export class NewsDataService {
     }
 
     try {
-      const url = 'https://newsdata.io/api/1/news';
-      const params = new URLSearchParams({
-        apikey: this.apiKey,
-        q: query,
+      const url = '/api/newsdata-search';
+      const body = {
+        query,
+        fromDate,
+        toDate,
+        maxResults,
         language,
         country,
-        size: Math.min(maxResults, 50).toString() // API limit
-      });
-
-      if (fromDate) params.append('from_date', fromDate);
-      if (toDate) params.append('to_date', toDate);
+      };
 
       const data = await this.httpClient.request<{
         status: string;
         totalResults: number;
         results: any[];
         nextPage?: string;
-      }>(`${url}?${params}`, {
+      }>(url, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Content-Type': 'application/json',
+        },
         timeout: 25000,
-        retryConfig: { maxRetries: 2 }
+        retryConfig: { maxRetries: 2 },
       });
 
       if (data.status !== 'success') {

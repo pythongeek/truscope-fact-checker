@@ -20,7 +20,6 @@ export class SerpApiService {
   private static instance: SerpApiService;
   private httpClient = RobustHttpClient.getInstance();
   private cache = AdvancedCacheService.getInstance();
-  private apiKey: string;
 
   static getInstance(): SerpApiService {
     if (!SerpApiService.instance) {
@@ -30,15 +29,10 @@ export class SerpApiService {
   }
 
   constructor() {
-    this.apiKey = import.meta.env.VITE_SERP_API_KEY ||
-                   localStorage.getItem('serp_api_key') || '';
+    // API key is now handled server-side, so no need to manage it here.
   }
 
   async search(query: string, maxResults: number = 10): Promise<SerpApiResponse> {
-    if (!this.apiKey) {
-      throw new Error('SERP API key not configured');
-    }
-
     const cacheKey = this.cache.generateKey('serp_api', await generateSHA256(query));
 
     // Check cache first
@@ -49,19 +43,20 @@ export class SerpApiService {
     }
 
     try {
-      const url = 'https://serpapi.com/search.json';
-      const params = new URLSearchParams({
-        api_key: this.apiKey,
-        q: query,
-        num: maxResults.toString(),
-        engine: 'google',
-        gl: 'us',
-        hl: 'en'
-      });
+      const url = '/api/serp-search';
+      const body = {
+        query,
+        num: maxResults,
+      };
 
-      const data = await this.httpClient.request<any>(`${url}?${params}`, {
+      const data = await this.httpClient.request<any>(url, {
+        method: 'POST',
+        body: JSON.stringify(body),
+        headers: {
+          'Content-Type': 'application/json',
+        },
         timeout: 20000,
-        retryConfig: { maxRetries: 2 }
+        retryConfig: { maxRetries: 2 },
       });
 
       // Process results
