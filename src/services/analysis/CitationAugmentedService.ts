@@ -3,6 +3,7 @@ import { SourceCredibilityService } from '../core/SourceCredibilityService';
 import { FactCheckReport, EvidenceItem } from '../../types/factCheck';
 import { executeMultiStrategySearch } from '../webSearch';
 import { generateSHA256 } from '../../utils/hashUtils';
+import { getConfidenceLevel } from '../../utils/scoring';
 
 export interface CitationContext {
   claimSegment: string;
@@ -229,6 +230,7 @@ export class CitationAugmentedService {
       id: `report-${Date.now()}`,
       final_verdict: this.generateVerdict(finalScore, segmentAnalyses),
       final_score: finalScore,
+      confidence: getConfidenceLevel(finalScore),
       reasoning: this.generateReasoning(segmentAnalyses, temporalAnalysis),
       evidence: allEvidence,
       originalText,
@@ -336,6 +338,7 @@ export class CitationAugmentedService {
         originalText: claimText,
         final_verdict: finalVerdict,
         final_score: finalScore,
+        confidence: getConfidenceLevel(finalScore),
         reasoning: `Analysis based on ${evidence.length} search results.`,
         evidence: evidence,
         score_breakdown: {

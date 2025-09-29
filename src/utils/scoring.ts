@@ -76,3 +76,18 @@ export class FactCheckScoring {
         return 'Medium';
     }
 }
+
+/**
+ * Maps the numerical fact-check score to a defined confidence level string.
+ * @param score The final numerical score (0-100).
+ * @returns The confidence level string.
+ */
+export const getConfidenceLevel = (score: number): 'Low Confidence' | 'Medium Confidence' | 'High Confidence' => {
+  if (score >= 80) {
+    return 'High Confidence';
+  } else if (score >= 50) {
+    return 'Medium Confidence';
+  } else {
+    return 'Low Confidence';
+  }
+};

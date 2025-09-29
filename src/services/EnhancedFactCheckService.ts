@@ -1,4 +1,5 @@
 import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, UserCategory, TimelineEvent, TemporalValidation, CategoryRating } from '../types/factCheck';
+import { getConfidenceLevel } from '../utils/scoring';
 import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
 import { SourceCredibilityService } from './core/SourceCredibilityService';
@@ -97,6 +98,7 @@ export class EnhancedFactCheckService {
     return {
       ...baseReport,
       final_score: finalScore,
+      confidence: getConfidenceLevel(finalScore),
       final_verdict: `Comprehensive Analysis: ${categoryRating.reasoning}`,
       category_rating: categoryRating,
       source_credibility_report: sourceCredibilityReport,
@@ -149,6 +151,7 @@ export class EnhancedFactCheckService {
     return {
       ...baseReport,
       final_score: finalScore,
+      confidence: getConfidenceLevel(finalScore),
       final_verdict: `Temporal Verification: ${this.generateTemporalVerdict(finalScore, temporalValidations)}`,
       category_rating: categoryRating,
       source_credibility_report: sourceCredibilityReport,
@@ -290,6 +293,7 @@ export class EnhancedFactCheckService {
       originalText: text,
       final_verdict: 'Analysis failed due to technical error',
       final_score: 0,
+      confidence: getConfidenceLevel(0),
       reasoning: `Error during ${method} analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
       evidence: [],
       enhanced_claim_text: text,

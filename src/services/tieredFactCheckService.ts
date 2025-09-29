@@ -1,4 +1,5 @@
 import { FactCheckReport, EvidenceItem } from '../types/factCheck';
+import { getConfidenceLevel } from '../utils/scoring';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { NewsDataService } from './newsDataService';
@@ -93,6 +94,7 @@ export class TieredFactCheckService {
         originalText: claimText,
         final_verdict: finalVerdict,
         final_score: finalScore,
+        confidence: getConfidenceLevel(finalScore),
         evidence: finalEvidence,
         reasoning: this.generateReasoning(tierResults),
         enhanced_claim_text: claimText,
@@ -626,6 +628,7 @@ export class TieredFactCheckService {
       originalText: claimText,
       final_verdict: 'ANALYSIS ERROR',
       final_score: 0,
+      confidence: getConfidenceLevel(0),
       evidence: [],
       reasoning: `Tiered analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       enhanced_claim_text: claimText,

@@ -166,7 +166,7 @@ export interface FactCheckReport {
     originalText: string;
     final_verdict: string;
     final_score: number; // 0-100
-    confidence: number;
+    confidence: 'Low Confidence' | 'Medium Confidence' | 'High Confidence';
     score_breakdown: ScoreBreakdown;
     evidence: EvidenceItem[];
     metadata: FactCheckMetadata;

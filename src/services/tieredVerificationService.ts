@@ -3,10 +3,11 @@ import { SerpApiService } from './serpApiService';
 import { NewsDataService } from './newsDataService';
 import { QueryExtractorService } from './queryExtractor';
 import { FactCheckReport } from '@/types/factCheck';
+import { getConfidenceLevel } from '../utils/scoring';
 
 export interface ProgressUpdate {
   tier: 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
-  status: 'in_progress' | 'completed' | 'failed';
+  status: 'active' | 'completed' | 'failed';
 }
 
 export type ProgressCallback = (update: ProgressUpdate) => void;
@@ -22,7 +23,7 @@ export class TieredVerificationService {
 
     try {
       // Phase 1: Direct Verification (Google Fact Check API)
-      onProgress?.({ tier: 'direct-verification', status: 'in_progress' });
+      onProgress?.({ tier: 'direct-verification', status: 'active' });
       const phase1Result = await this.runPhase1(text);
       onProgress?.({ tier: 'direct-verification', status: phase1Result ? 'completed' : 'failed' });
 
@@ -33,7 +34,7 @@ export class TieredVerificationService {
       }
 
       // Phase 2: Broad Web Search
-      onProgress?.({ tier: 'web-search', status: 'in_progress' });
+      onProgress?.({ tier: 'web-search', status: 'active' });
       const phase2Result = await this.runPhase2(text, phase1Result);
       onProgress?.({ tier: 'web-search', status: phase2Result !== phase1Result ? 'completed' : 'failed' });
 
@@ -44,11 +45,11 @@ export class TieredVerificationService {
       }
 
       // Phase 3: Specialized & Temporal Analysis
-      onProgress?.({ tier: 'specialized-analysis', status: 'in_progress' });
+      onProgress?.({ tier: 'specialized-analysis', status: 'active' });
       const phase3Result = await this.runPhase3(text, phase2Result);
       onProgress?.({ tier: 'specialized-analysis', status: 'completed' });
 
-      onProgress?.({ tier: 'synthesis', status: 'in_progress' });
+      onProgress?.({ tier: 'synthesis', status: 'active' });
       onProgress?.({ tier: 'synthesis', status: 'completed' });
       return phase3Result;
 
@@ -150,7 +151,7 @@ export class TieredVerificationService {
       originalText: text,
       final_verdict: this.ratingToVerdict(averageRating),
       final_score: Math.round((averageRating / 5) * 100),
-      confidence: 0.85,
+      confidence: getConfidenceLevel(Math.round((averageRating / 5) * 100)),
       evidence: results.map(r => ({
         id: Math.random().toString(36).substr(2, 9),
         publisher: r.claimReview[0]?.publisher || 'Unknown',
@@ -221,6 +222,7 @@ export class TieredVerificationService {
       originalText: text,
       final_verdict: 'UNVERIFIED',
       final_score: 50,
+      confidence: getConfidenceLevel(50),
       evidence: [],
       score_breakdown: {
         final_score_formula: 'Unable to verify',
