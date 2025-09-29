@@ -1,8 +1,9 @@
-import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, UserCategory, TimelineEvent, TemporalValidation } from '../types/factCheck';
+import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, UserCategory, TimelineEvent, TemporalValidation, CategoryRating } from '../types/factCheck';
 import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
 import { SourceCredibilityService } from './core/SourceCredibilityService';
 import { CategoryRatingService } from './core/CategoryRatingService';
+import { search as webSearch } from './webSearch';
 
 export class EnhancedFactCheckService {
   private citationService: CitationAugmentedService;
@@ -35,11 +36,38 @@ export class EnhancedFactCheckService {
     }
   }
 
-  private async runComprehensiveAnalysis(text: string): Promise<FactCheckReport> {
-    console.log('🔍 Running Comprehensive Analysis...');
+  private async _fetchAndAugmentWithSearch(text: string): Promise<FactCheckReport> {
+    // Step 1: Normalize the claim and generate search queries.
+    // This part is missing in the current implementation, but is crucial.
+    // You can adapt the logic from geminiService.ts's `normalizeClaim` and `generateSearchQueries`.
+    const searchQueries = [
+        `fact check "${text}"`,
+        `${text} controversy`,
+        `is ${text} true`
+    ];
 
-    // 1. Base citation-augmented analysis
-    const baseReport = await this.citationService.performCitationAugmentedAnalysis(text);
+    const searchEvidence = await Promise.all(
+      searchQueries.map(query => webSearch(query, 10))
+    );
+
+    // Flatten search results and filter for uniqueness
+    const allSearchResults = searchEvidence.flat().filter((result, index, self) =>
+        index === self.findIndex((r) => r.link === result.link)
+    );
+
+    // Now, feed these search results into the citation service for processing
+    // You'll need to create a helper function in CitationAugmentedService to process raw search results.
+    // This is a simplified example, demonstrating the flow.
+    const processedReport = await this.citationService.processSearchResults(text, allSearchResults);
+
+    return processedReport;
+  }
+
+  private async runComprehensiveAnalysis(text: string): Promise<FactCheckReport> {
+    console.log('🔍 Running Comprehensive Analysis with Web Search...');
+
+    // 1. Base analysis using web search
+    const baseReport = await this._fetchAndAugmentWithSearch(text);
 
     // 2. Enhanced source credibility analysis
     const sourceCredibilityReport = await this.generateSourceCredibilityReport(baseReport.evidence);
