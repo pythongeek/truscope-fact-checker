@@ -1,26 +1,11 @@
-import { RobustHttpClient } from './httpClient';
+import { QueryExtractorService } from './queryExtractor';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
 
-export interface SerpApiResult {
-  title: string;
-  link: string;
-  snippet: string;
-  source: string;
-  position: number;
-}
-
-export interface SerpApiResponse {
-  results: SerpApiResult[];
-  aiOverview: string | null;
-  totalResults: number;
-}
-
 export class SerpApiService {
   private static instance: SerpApiService;
-  private httpClient = RobustHttpClient.getInstance();
   private cache = AdvancedCacheService.getInstance();
-  private apiKey: string;
+  private queryExtractor = QueryExtractorService.getInstance();
 
   static getInstance(): SerpApiService {
     if (!SerpApiService.instance) {
@@ -29,91 +14,57 @@ export class SerpApiService {
     return SerpApiService.instance;
   }
 
-  constructor() {
-    this.apiKey = import.meta.env.VITE_SERP_API_KEY ||
-                   localStorage.getItem('serp_api_key') || '';
-  }
-
-  async search(query: string, maxResults: number = 10): Promise<SerpApiResponse> {
-    if (!this.apiKey) {
-      throw new Error('SERP API key not configured');
-    }
-
-    const cacheKey = this.cache.generateKey('serp_api', await generateSHA256(query));
-
-    // Check cache first
-    const cached = await this.cache.get<SerpApiResponse>(cacheKey);
-    if (cached) {
-      console.log('✅ Using cached SERP API results');
-      return cached;
-    }
-
+  async search(text: string, maxResults: number = 10): Promise<any> {
     try {
-      const url = 'https://serpapi.com/search.json';
-      const params = new URLSearchParams({
-        api_key: this.apiKey,
-        q: query,
-        num: maxResults.toString(),
-        engine: 'google',
-        gl: 'us',
-        hl: 'en'
-      });
+      // Extract optimized search queries
+      const queries = await this.queryExtractor.extractSearchQueries(text);
 
-      const data = await this.httpClient.request<any>(`${url}?${params}`, {
-        timeout: 20000,
-        retryConfig: { maxRetries: 2 }
-      });
+      console.log('🔍 Executing search with query:', queries.primaryQuery);
 
-      // Process results
-      const results: SerpApiResult[] = (data.organic_results || []).map((result: any, index: number) => ({
-        title: result.title || 'No title',
-        link: result.link || '#',
-        snippet: result.snippet || result.description || 'No description available',
-        source: this.extractDomain(result.link),
-        position: index + 1
-      }));
+      const cacheKey = this.cache.generateKey('serp', await generateSHA256(queries.primaryQuery));
+      const cached = await this.cache.get(cacheKey);
 
-      // Extract AI Overview if available
-      let aiOverview: string | null = null;
-      if (data.ai_overview && data.ai_overview.text_blocks) {
-        aiOverview = data.ai_overview.text_blocks
-          .map((block: any) => block.snippet || '')
-          .join('\n');
+      if (cached) {
+        console.log('✅ Using cached SERP results');
+        return cached;
       }
 
-      const response: SerpApiResponse = {
-        results,
-        aiOverview,
-        totalResults: data.search_information?.total_results || 0
+      // Call server-side API
+      const response = await fetch('/api/serp-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: queries.primaryQuery,
+          num: maxResults
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`SERP API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Extract relevant results
+      const processedResults = {
+        organic_results: data.organic_results || [],
+        answer_box: data.answer_box,
+        knowledge_graph: data.knowledge_graph,
+        related_questions: data.related_questions || [],
+        queries: queries // Include extracted queries for reference
       };
 
-      // Cache results
-      await this.cache.set(cacheKey, response, 'serpApiTTL');
+      await this.cache.set(cacheKey, processedResults, 'searchTTL');
 
-      console.log(`✅ SERP API returned ${results.length} results`);
-      return response;
+      console.log(`✅ SERP API returned ${processedResults.organic_results.length} results`);
+      return processedResults;
 
     } catch (error) {
-      console.error('SERP API error:', error);
-
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        throw new Error('Invalid SERP API key. Please check your settings.');
-      }
-
-      // Graceful fallback
+      console.error('SERP search failed:', error);
       return {
-        results: [],
-        aiOverview: null,
-        totalResults: 0
+        organic_results: [],
+        error: error instanceof Error ? error.message : 'Search failed'
       };
-    }
-  }
-
-  private extractDomain(url: string): string {
-    try {
-      return new URL(url).hostname.replace('www.', '');
-    } catch {
-      return 'Unknown';
     }
   }
 }
