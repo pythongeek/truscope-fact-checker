@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
-interface ExtractedQueries {
+export interface ExtractedQueries {
   primaryQuery: string;
   subQueries: string[];
   keywords: string[];
