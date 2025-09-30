@@ -1,25 +1,47 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 
 // Mock dependent services to isolate the test to the orchestration logic
+vi.mock('../services/webSearch', () => ({
+  search: vi.fn().mockResolvedValue([
+    {
+      title: 'Mock Search Result: High Credibility',
+      link: 'https://www.factcheck.org/mock-article/',
+      snippet: 'This is a mocked search result from a credible source.',
+      source: 'factcheck.org',
+    },
+  ]),
+  executeMultiStrategySearch: vi.fn().mockResolvedValue([
+    {
+      title: 'Mock Search Result: High Credibility',
+      link: 'https://www.factcheck.org/mock-article/',
+      snippet: 'This is a mocked search result from a credible source.',
+      source: 'factcheck.org',
+    },
+  ]),
+  assessSourceCredibility: vi.fn().mockReturnValue(95),
+}));
+
 vi.mock('../services/analysis/CitationAugmentedService', () => {
   return {
     CitationAugmentedService: vi.fn().mockImplementation(() => {
+      const mockReport = {
+        id: 'base-report',
+        final_score: 75,
+        final_verdict: 'Base analysis verdict',
+        evidence: [{ id: 'e1', url: 'http://example.com/source1', publisher: 'Source 1', quote: 'q1', score: 80, type: 'news' }],
+        metadata: {
+          method_used: 'citation-augmented',
+          processing_time_ms: 100,
+          apis_used: ['base-api'],
+          sources_consulted: { total: 1, high_credibility: 1, conflicting: 0 },
+          warnings: []
+        }
+      };
       return {
-        performCitationAugmentedAnalysis: vi.fn().mockResolvedValue({
-          id: 'base-report',
-          final_score: 75,
-          final_verdict: 'Base analysis verdict',
-          evidence: [{ id: 'e1', url: 'http://example.com/source1', publisher: 'Source 1', quote: 'q1', score: 80, type: 'news' }],
-          metadata: {
-            method_used: 'citation-augmented',
-            processing_time_ms: 100,
-            apis_used: ['base-api'],
-            sources_consulted: { total: 1, high_credibility: 1, conflicting: 0 },
-            warnings: []
-          }
-        })
+        performCitationAugmentedAnalysis: vi.fn().mockResolvedValue(mockReport),
+        processSearchResults: vi.fn().mockResolvedValue(mockReport),
       };
     })
   };
@@ -66,6 +88,23 @@ vi.mock('../services/core/CategoryRatingService', () => {
 
 
 describe('Streamlined Fact Check System', () => {
+  beforeEach(() => {
+    // Mock localStorage for API keys
+    const mockLocalStorage = {
+      getItem: (key: string) => {
+        if (key === 'search_api_key' || key === 'serp_api_key' || key === 'newsdata_api_key' || key === 'fact_check_api_key' || key === 'search_id') {
+          return 'test-api-key';
+        }
+        return null;
+      },
+      setItem: vi.fn(),
+      clear: vi.fn(),
+      removeItem: vi.fn(),
+      length: 0,
+    };
+    vi.stubGlobal('localStorage', mockLocalStorage);
+  });
+
   test('Comprehensive analysis includes all components', async () => {
     const service = new EnhancedFactCheckService();
     const result = await service.orchestrateFactCheck(

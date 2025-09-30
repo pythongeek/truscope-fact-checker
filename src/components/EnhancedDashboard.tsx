@@ -2,11 +2,10 @@
 
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { EvidenceItem } from '../types';
+import { EvidenceItem } from '../types/factCheck';
 import { fetchAllEvidence } from '../services/evidenceService';
 import { computeValidatedScore } from '../services/validator';
 import { EvidenceList } from './EvidenceList';
-import { ScoreBreakdown } from './ScoreBreakdown'; // Assuming this component can display a simple score
 
 export const EnhancedDashboard: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -79,7 +78,6 @@ export const EnhancedDashboard: React.FC = () => {
         <div className="md:col-span-1 bg-white p-4 rounded-lg shadow">
           <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Validation Score</h3>
           {/* Using ScoreBreakdown or a simple display */}
-          <ScoreBreakdown score={validationScore} />
           <div className="text-center text-6xl font-bold text-gray-800 mt-4">{validationScore}</div>
           <p className="text-center text-gray-500">out of 100</p>
         </div>

@@ -1,13 +1,15 @@
 // src/components/EvidenceList.tsx
 
 import React from 'react';
-import { EvidenceItem } from '../types';
+import { EvidenceItem } from '../types/factCheck';
 import { ExternalLink, CheckCircle, Newspaper, Search } from 'lucide-react';
 
 const SOURCE_ICONS = {
-    serp: <Search className="w-4 h-4 text-blue-500" />,
-    newsdata: <Newspaper className="w-4 h-4 text-green-500" />,
-    google: <CheckCircle className="w-4 h-4 text-red-500" />,
+    search_result: <Search className="w-4 h-4 text-blue-500" />,
+    news: <Newspaper className="w-4 h-4 text-green-500" />,
+    claim: <CheckCircle className="w-4 h-4 text-purple-500" />,
+    'cached-database': <CheckCircle className="w-4 h-4 text-gray-500" />,
+    academic: <CheckCircle className="w-4 h-4 text-yellow-500" />,
     other: <Search className="w-4 h-4 text-gray-500" />,
 };
 
@@ -28,22 +30,22 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({ evidence }) => {
           <li key={item.id} className="py-4">
             <div className="flex items-start space-x-3">
                 <div className="flex-shrink-0 pt-1">
-                    {SOURCE_ICONS[item.metadata.api_source] || SOURCE_ICONS.other}
+                    {SOURCE_ICONS[item.type as keyof typeof SOURCE_ICONS] || SOURCE_ICONS.other}
                 </div>
               <div className="flex-1">
                 <a
-                  href={item.source_url}
+                  href={item.url || '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline font-semibold"
                 >
-                  {item.title} <ExternalLink className="inline-block w-4 h-4 ml-1" />
+                  {item.publisher} <ExternalLink className="inline-block w-4 h-4 ml-1" />
                 </a>
-                <p className="text-sm text-gray-500">{item.source_name}</p>
-                <p className="mt-2 text-gray-700">{item.snippet}</p>
-                {item.published_at && (
+                <p className="text-sm text-gray-500">{item.publisher}</p>
+                <p className="mt-2 text-gray-700">{item.quote}</p>
+                {item.publishedDate && (
                     <p className="text-xs text-gray-400 mt-2">
-                        Published on: {new Date(item.published_at).toLocaleDateString()}
+                        Published on: {new Date(item.publishedDate).toLocaleDateString()}
                     </p>
                 )}
               </div>
