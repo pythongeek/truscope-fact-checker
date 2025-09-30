@@ -248,7 +248,6 @@ export class CitationAugmentedService {
         biasWarnings: [],
         credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
       },
-      user_category_recommendations: [],
       metadata,
       score_breakdown: {
         final_score_formula: 'Claim Confidence (80%) + Temporal Accuracy (20%)',
@@ -367,8 +366,7 @@ export class CitationAugmentedService {
             flaggedSources: 0,
             biasWarnings: [],
             credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
-        },
-        user_category_recommendations: []
+        }
     };
 
     return report;

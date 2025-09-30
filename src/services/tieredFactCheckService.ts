@@ -136,8 +136,7 @@ export class TieredFactCheckService {
           validations: [],
           overallTemporalScore: 100,
           temporalWarnings: []
-        },
-        user_category_recommendations: []
+        }
       };
 
       // Upload to blob storage
@@ -677,8 +676,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
         validations: [],
         overallTemporalScore: 0,
         temporalWarnings: []
-      },
-      user_category_recommendations: []
+      }
     };
   }
 }

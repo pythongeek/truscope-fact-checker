@@ -435,8 +435,7 @@ Make sure your response is valid JSON.`;
             },
             temporal_verification: {
                 hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-            },
-            user_category_recommendations: []
+            }
         };
 
         return report;
@@ -485,8 +484,7 @@ Make sure your response is valid JSON.`;
             },
             temporal_verification: {
                 hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-            },
-            user_category_recommendations: []
+            }
         };
     }
 };
@@ -785,8 +783,7 @@ async function convertFactToReport(fact: FactDatabase, originalText: string): Pr
     },
     temporal_verification: {
         hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-    },
-    user_category_recommendations: []
+    }
   };
 }
 

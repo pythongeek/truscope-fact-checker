@@ -18,7 +18,7 @@ export const TieredFactCheckTester: React.FC = () => {
     setResult(null);
 
     try {
-      const report = await tieredService.performTieredCheck(testClaim);
+      const report = await tieredService.performTieredCheck(testClaim, 'journalism');
       setResult(report);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');

@@ -152,28 +152,6 @@ export const EnhancedFactCheckReport: React.FC<EnhancedFactCheckReportProps> = (
         </div>
       )}
 
-      {/* User Category Recommendations */}
-      {report.user_category_recommendations && report.user_category_recommendations.length > 0 && (
-        <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
-          <h3 className="text-lg font-semibold mb-4 text-slate-200">Suitability for Different Users</h3>
-
-          <div className="space-y-3">
-            {report.user_category_recommendations.map((rec, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-slate-900/70 rounded">
-                <div>
-                  <div className="font-medium capitalize text-slate-200">{rec.category.replace('-', ' ')}</div>
-                  <div className="text-sm text-slate-400">{rec.reasoning}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-indigo-400">{rec.suitabilityScore}</div>
-                  <div className="text-xs text-slate-500">Suitability</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Evidence Section */}
       {report.evidence && report.evidence.length > 0 && (
         <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">

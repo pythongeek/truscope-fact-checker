@@ -1,4 +1,4 @@
-import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, UserCategory, TimelineEvent, TemporalValidation, CategoryRating } from '../types/factCheck';
+import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, TimelineEvent, TemporalValidation, CategoryRating } from '../types/factCheck';
 import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
 import { SourceCredibilityService } from './core/SourceCredibilityService';
@@ -107,7 +107,6 @@ export class EnhancedFactCheckService {
         overallTemporalScore: temporalScore,
         temporalWarnings: temporalValidations.filter(v => !v.isValid).map(v => v.reasoning)
       },
-      user_category_recommendations: this.generateUserCategoryRecommendations(finalScore, sourceCredibilityReport),
       metadata: {
         ...baseReport.metadata,
         method_used: 'comprehensive',
@@ -159,7 +158,6 @@ export class EnhancedFactCheckService {
         temporalWarnings: temporalValidations.filter(v => !v.isValid).map(v => v.reasoning),
         timelineAnalysis: await this.generateTimelineAnalysis(text, temporalValidations)
       },
-      user_category_recommendations: this.generateUserCategoryRecommendations(finalScore, sourceCredibilityReport),
       metadata: {
         ...baseReport.metadata,
         method_used: 'temporal-verification',
@@ -259,30 +257,6 @@ export class EnhancedFactCheckService {
     };
   }
 
-  private generateUserCategoryRecommendations(score: number, credibilityReport: SourceCredibilityReport): { category: UserCategory, suitabilityScore: number, reasoning: string }[] {
-    const recommendations: { category: UserCategory, suitabilityScore: number, reasoning: string }[] = [];
-
-    // Journalist recommendation
-    recommendations.push({
-      category: 'journalist',
-      suitabilityScore: credibilityReport.highCredibilitySources >= 3 ? 95 : 75,
-      reasoning: credibilityReport.highCredibilitySources >= 3
-        ? 'High-quality sources suitable for professional journalism'
-        : 'Adequate sources but may need additional verification'
-    });
-
-    // Researcher recommendation
-    recommendations.push({
-      category: 'researcher',
-      suitabilityScore: credibilityReport.credibilityBreakdown.academic > 0 ? 90 : 70,
-      reasoning: credibilityReport.credibilityBreakdown.academic > 0
-        ? 'Contains academic sources suitable for research'
-        : 'Limited academic sources - consider additional peer-reviewed references'
-    });
-
-    return recommendations;
-  }
-
   private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
     // Implementation from original file...
     return {
@@ -306,7 +280,6 @@ export class EnhancedFactCheckService {
         overallTemporalScore: 0,
         temporalWarnings: []
       },
-      user_category_recommendations: [],
       metadata: {
         method_used: method,
         processing_time_ms: processingTime,
