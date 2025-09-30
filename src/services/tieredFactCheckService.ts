@@ -1,4 +1,4 @@
-import { FactCheckReport, EvidenceItem } from '../types/factCheck';
+import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { NewsDataService } from './newsDataService';
@@ -36,7 +36,7 @@ export class TieredFactCheckService {
     return TieredFactCheckService.instance;
   }
 
-  async performTieredCheck(claimText: string): Promise<FactCheckReport> {
+  async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<FactCheckReport> {
     const startTime = Date.now();
     const reportId = await generateSHA256(`tiered_${claimText}_${startTime}`);
 
@@ -80,7 +80,7 @@ export class TieredFactCheckService {
           console.log('⏭️  Proceeding to Phase 4 - Synthesis');
 
           // Phase 4: Multi-Source Synthesis & Final Verdict
-          const phase4Result = await this.runSynthesisPhase(claimText, finalEvidence);
+          const phase4Result = await this.runSynthesisPhase(claimText, finalEvidence, publishingContext);
           tierResults.push(phase4Result);
 
           finalScore = phase4Result.confidence;
@@ -352,12 +352,12 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runSynthesisPhase(claimText: string, allEvidence: EvidenceItem[]): Promise<TierResult> {
+  private async runSynthesisPhase(claimText: string, allEvidence: EvidenceItem[], publishingContext: PublishingContext): Promise<TierResult> {
     const startTime = Date.now();
     console.log('🧠 Phase 4: Gemini-Powered Synthesis');
 
     try {
-        const synthesisReport = await synthesizeEvidenceWithGemini(claimText, allEvidence);
+        const synthesisReport = await synthesizeEvidenceWithGemini(claimText, allEvidence, publishingContext);
 
         // If Gemini returns new evidence, you might want to add it to the final report.
         // For now, we'll use the score and verdict from Gemini's synthesis.

@@ -6,13 +6,7 @@ export type FactCheckMethod =
   | 'temporal-verification' // Time-focused analysis
   | 'tiered-verification'; // NEW: Tiered approach
 
-export type UserCategory =
-  | 'journalist'
-  | 'content-writer'
-  | 'blogger'
-  | 'technical-writer'
-  | 'researcher'
-  | 'general';
+export type PublishingContext = 'journalism' | 'editorial' | 'content' | 'technical';
 
 // Add new interfaces for integrated components
 export interface SourceCredibilityReport {
@@ -192,11 +186,6 @@ export interface FactCheckReport {
     };
 
     // Enhanced metadata
-    user_category_recommendations: {
-        category: UserCategory;
-        suitabilityScore: number;
-        reasoning: string;
-    }[];
 }
 
 
