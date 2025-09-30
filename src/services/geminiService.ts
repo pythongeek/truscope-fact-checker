@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis } from '@/types/factCheck';
+import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis, EvidenceItem } from '@/types/factCheck';
 import { getGeminiApiKey, getNewsDataApiKey, getGeminiModel } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
@@ -656,6 +656,52 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
     return finalReport;
 };
 
+// --- Synthesis Method ---
+export const synthesizeEvidenceWithGemini = async (claimText: string, evidence: EvidenceItem[]): Promise<FactCheckReport> => {
+    const ai = getAiClient();
+    const synthesisPrompt = `
+        You are a fact-checking AI responsible for the final synthesis step.
+        Analyze the provided claim and the collected evidence to form a conclusive fact-check report.
+
+        **Claim:** "${claimText}"
+
+        **Collected Evidence:**
+        ${JSON.stringify(evidence, null, 2)}
+
+        **Your Task:**
+        1.  **Synthesize Evidence:** Evaluate the evidence, noting corroboration, contradiction, and source quality.
+        2.  **Formulate a Verdict:** Based on the synthesis, determine a final verdict (e.g., "TRUE", "MOSTLY FALSE", "MISLEADING").
+        3.  **Calculate a Score:** Assign a final confidence score from 0 to 100.
+        4.  **Provide Reasoning:** Write a detailed explanation for your verdict and score, referencing specific evidence.
+        5.  **Structure the Output:** Respond ONLY with a valid JSON object conforming to the FactCheckReport schema.
+
+        Respond ONLY with a valid JSON object that conforms to this TypeScript interface:
+        ${FACT_CHECK_REPORT_TYPE_DEFINITION}
+    `;
+
+    try {
+        const result = await ai.models.generateContent({
+            model: getGeminiModel(),
+            contents: synthesisPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: factCheckReportSchema,
+            },
+        });
+        const jsonString = result.text.trim();
+        const report = parseAIJsonResponse(jsonString) as FactCheckReport;
+
+        // Populate metadata that the AI cannot determine
+        report.metadata.method_used = 'gemini-synthesis';
+        report.metadata.apis_used = ['gemini'];
+        report.originalText = claimText;
+
+        return report;
+    } catch (error) {
+        console.error("Error in Gemini synthesis:", error);
+        throw new Error(`Gemini synthesis failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+};
 // --- Main Orchestrator ---
 export async function runFactCheckOrchestrator(
   text: string,
