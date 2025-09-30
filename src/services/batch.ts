@@ -66,7 +66,7 @@ export class BatchFactChecker {
                     let report: FactCheckReport;
                     if (request.method === 'tiered-verification') {
                         const tieredService = TieredFactCheckService.getInstance();
-                        report = await tieredService.performTieredCheck(request.claimText);
+                        report = await tieredService.performTieredCheck(request.claimText, 'journalism');
                     } else {
                         report = await runFactCheckOrchestrator(request.claimText, request.method);
                     }

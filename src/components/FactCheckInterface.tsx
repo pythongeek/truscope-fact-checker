@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckMethod, UserCategory, FactCheckReport } from '../types/factCheck';
+import { FactCheckReport, PublishingContext } from '../types/factCheck';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
 import { MethodSelector } from './MethodSelector';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
-import { getFeatureFlags, setFeatureFlag } from '../utils/featureFlags';
 import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
 import { TieredFactCheckService } from '../services/tieredFactCheckService';
 
@@ -15,9 +14,7 @@ interface FactCheckInterfaceProps {
 }
 
 export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
-  const featureFlags = getFeatureFlags();
-  const [selectedMethod, setSelectedMethod] = useState<FactCheckMethod>('comprehensive');
-  const [userCategory, setUserCategory] = useState<UserCategory>('general');
+  const [publishingContext, setPublishingContext] = useState<PublishingContext>('journalism');
   const [inputText, setInputText] = useState(initialClaimText);
   const [report, setReport] = useState<FactCheckReport | null>(initialReport);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -25,16 +22,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
   const [tieredProgress, setTieredProgress] = useState<TierProgress[]>([]);
   const [currentPhase, setCurrentPhase] = useState(0);
 
-  const availableMethods: FactCheckMethod[] = [
-    'comprehensive',
-    'temporal-verification',
-    ...(featureFlags.tieredFactChecking ? ['tiered-verification'] as FactCheckMethod[] : [])
-  ];
-
-  const toggleTieredFactChecking = () => {
-    setFeatureFlag('tieredFactChecking', !featureFlags.tieredFactChecking);
-    window.location.reload(); // Refresh to apply changes
-  };
+  const selectedMethod = 'tiered-verification';
 
   React.useEffect(() => {
     setReport(initialReport);
@@ -43,7 +31,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
 
   const factCheckService = new EnhancedFactCheckService();
 
-  const handleTieredFactCheck = async (text: string) => {
+  const handleTieredFactCheck = async (text: string, context: PublishingContext) => {
     const initialProgress: TierProgress[] = [
       { tier: 'direct-verification', status: 'pending' },
       { tier: 'web-search', status: 'pending' },
@@ -56,7 +44,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
 
     try {
       const tieredService = TieredFactCheckService.getInstance();
-      const result = await tieredService.performTieredCheck(text);
+      const result = await tieredService.performTieredCheck(text, context);
 
       if (result.metadata.tier_breakdown) {
         const updatedProgress = result.metadata.tier_breakdown.map(tier => ({
@@ -88,20 +76,8 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
     setReport(null);
     setTieredProgress([]);
 
-    if (selectedMethod === 'tiered-verification') {
-      await handleTieredFactCheck(inputText);
-    } else {
-      try {
-        const result = await factCheckService.orchestrateFactCheck(inputText, selectedMethod);
-        setReport(result);
-        saveReportToHistory(inputText, result);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-      } finally {
-        setIsAnalyzing(false);
-      }
-    }
-  }, [inputText, selectedMethod, factCheckService]);
+    await handleTieredFactCheck(inputText, publishingContext);
+  }, [inputText, publishingContext, factCheckService]);
 
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
@@ -120,29 +96,9 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       {/* Method Selection */}
       <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
         <MethodSelector
-          selectedMethod={selectedMethod}
-          onMethodChange={setSelectedMethod}
-          userCategory={userCategory}
-          onUserCategoryChange={setUserCategory}
-          availableMethods={availableMethods}
+          publishingContext={publishingContext}
+          onPublishingContextChange={setPublishingContext}
         />
-        {/* DEV ONLY: Feature Flag Toggle */}
-        <div className="mt-4 pt-4 border-t border-slate-700/50 flex items-center justify-between">
-          <label htmlFor="tiered-toggle" className="text-sm text-slate-400">
-            Enable Tiered Fact-Checking (Dev)
-          </label>
-          <button
-            id="tiered-toggle"
-            onClick={toggleTieredFactChecking}
-            className={`px-3 py-1 text-xs rounded-full ${
-              featureFlags.tieredFactChecking
-                ? 'bg-green-500/20 text-green-300'
-                : 'bg-slate-700 text-slate-300'
-            }`}
-          >
-            {featureFlags.tieredFactChecking ? 'ON' : 'OFF'}
-          </button>
-        </div>
       </div>
 
       {/* Text Input */}
@@ -203,7 +159,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       )}
 
       {/* Results */}
-      {isAnalyzing && selectedMethod === 'tiered-verification' && tieredProgress.length > 0 && (
+      {isAnalyzing && tieredProgress.length > 0 && (
         <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
           <TieredProgressIndicator
             progress={tieredProgress}

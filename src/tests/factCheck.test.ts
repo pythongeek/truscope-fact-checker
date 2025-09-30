@@ -114,7 +114,6 @@ describe('Streamlined Fact Check System', () => {
 
     expect(result.source_credibility_report).toBeDefined();
     expect(result.temporal_verification).toBeDefined();
-    expect(result.user_category_recommendations).toBeDefined();
     expect(result.final_verdict).toContain('Comprehensive Analysis');
     expect(result.source_credibility_report.biasWarnings).toContain('Potential political bias detected');
     expect(result.temporal_verification.temporalWarnings).toContain('Date is out of context');

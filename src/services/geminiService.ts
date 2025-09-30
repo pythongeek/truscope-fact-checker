@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis, EvidenceItem } from '@/types/factCheck';
+import { FactCheckReport, ClaimNormalization, PreliminaryAnalysis, EvidenceItem, PublishingContext } from '@/types/factCheck';
 import { getGeminiApiKey, getNewsDataApiKey, getGeminiModel } from './apiKeyService';
 import { NewsArticle, GoogleSearchResult } from "../types";
 import { factCheckCache } from './caching';
@@ -435,8 +435,7 @@ Make sure your response is valid JSON.`;
             },
             temporal_verification: {
                 hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-            },
-            user_category_recommendations: []
+            }
         };
 
         return report;
@@ -485,8 +484,7 @@ Make sure your response is valid JSON.`;
             },
             temporal_verification: {
                 hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-            },
-            user_category_recommendations: []
+            }
         };
     }
 };
@@ -657,13 +655,15 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
 };
 
 // --- Synthesis Method ---
-export const synthesizeEvidenceWithGemini = async (claimText: string, evidence: EvidenceItem[]): Promise<FactCheckReport> => {
+export const synthesizeEvidenceWithGemini = async (claimText: string, evidence: EvidenceItem[], publishingContext: PublishingContext): Promise<FactCheckReport> => {
     const ai = getAiClient();
     const synthesisPrompt = `
         You are a fact-checking AI responsible for the final synthesis step.
         Analyze the provided claim and the collected evidence to form a conclusive fact-check report.
 
         **Claim:** "${claimText}"
+
+        **Publishing Context:** "${publishingContext}"
 
         **Collected Evidence:**
         ${JSON.stringify(evidence, null, 2)}
@@ -783,8 +783,7 @@ async function convertFactToReport(fact: FactDatabase, originalText: string): Pr
     },
     temporal_verification: {
         hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: []
-    },
-    user_category_recommendations: []
+    }
   };
 }
 
