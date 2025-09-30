@@ -27,13 +27,6 @@ export const TieredFactCheckTester: React.FC = () => {
     }
   };
 
-  const testClaims = [
-    "Who won the 2024 Euro Championship?",
-    "COVID-19 vaccines contain microchips",
-    "The Earth is flat",
-    "Joe Biden is the current US President"
-  ];
-
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold mb-6">Tiered Fact Check Tester</h2>
@@ -50,21 +43,6 @@ export const TieredFactCheckTester: React.FC = () => {
             placeholder="Enter a claim to test..."
             className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-        </div>
-
-        <div>
-          <p className="text-sm text-gray-600 mb-2">Quick test claims:</p>
-          <div className="flex flex-wrap gap-2">
-            {testClaims.map((claim, index) => (
-              <button
-                key={index}
-                onClick={() => setTestClaim(claim)}
-                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
-              >
-                {claim}
-              </button>
-            ))}
-          </div>
         </div>
 
         <button

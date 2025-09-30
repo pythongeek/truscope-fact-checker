@@ -6,20 +6,22 @@ import { getMethodCapabilities } from '../services/methodCapabilities';
 vi.mock('../services/analysis/CitationAugmentedService', () => {
   return {
     CitationAugmentedService: vi.fn().mockImplementation(() => {
+      const mockReport = {
+        id: 'base-report',
+        final_score: 75,
+        final_verdict: 'Base analysis verdict',
+        evidence: [{ id: 'e1', url: 'http://example.com/source1', publisher: 'Source 1', quote: 'q1', score: 80, type: 'news' }],
+        metadata: {
+          method_used: 'citation-augmented',
+          processing_time_ms: 100,
+          apis_used: ['base-api'],
+          sources_consulted: { total: 1, high_credibility: 1, conflicting: 0 },
+          warnings: []
+        }
+      };
       return {
-        performCitationAugmentedAnalysis: vi.fn().mockResolvedValue({
-          id: 'base-report',
-          final_score: 75,
-          final_verdict: 'Base analysis verdict',
-          evidence: [{ id: 'e1', url: 'http://example.com/source1', publisher: 'Source 1', quote: 'q1', score: 80, type: 'news' }],
-          metadata: {
-            method_used: 'citation-augmented',
-            processing_time_ms: 100,
-            apis_used: ['base-api'],
-            sources_consulted: { total: 1, high_credibility: 1, conflicting: 0 },
-            warnings: []
-          }
-        })
+        performCitationAugmentedAnalysis: vi.fn().mockResolvedValue(mockReport),
+        processSearchResults: vi.fn().mockResolvedValue(mockReport)
       };
     })
   };
@@ -63,6 +65,11 @@ vi.mock('../services/core/CategoryRatingService', () => {
     };
     return { CategoryRatingService };
 });
+
+vi.mock('../services/webSearch', () => ({
+  search: vi.fn().mockResolvedValue([]),
+  executeMultiStrategySearch: vi.fn().mockResolvedValue([]),
+}));
 
 
 describe('Streamlined Fact Check System', () => {
