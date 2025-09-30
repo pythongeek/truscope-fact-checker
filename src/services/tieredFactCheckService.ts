@@ -6,6 +6,7 @@ import { AdvancedCacheService } from './advancedCacheService';
 import { BlobStorageService } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
+import { synthesizeEvidenceWithGemini } from './geminiService';
 
 export type FactCheckTier = 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
 
@@ -353,59 +354,79 @@ export class TieredFactCheckService {
 
   private async runSynthesisPhase(claimText: string, allEvidence: EvidenceItem[]): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🧠 Phase 4: Multi-Source Synthesis & Final Verdict');
+    console.log('🧠 Phase 4: Gemini-Powered Synthesis');
 
     try {
-      // Aggregate evidence by source credibility
-      const highCredibilityEvidence = allEvidence.filter(e => e.score >= 80);
-      const mediumCredibilityEvidence = allEvidence.filter(e => e.score >= 50 && e.score < 80);
-      const lowCredibilityEvidence = allEvidence.filter(e => e.score < 50);
+        const synthesisReport = await synthesizeEvidenceWithGemini(claimText, allEvidence);
 
-      // Calculate weighted score
-      const totalWeight =
+        // If Gemini returns new evidence, you might want to add it to the final report.
+        // For now, we'll use the score and verdict from Gemini's synthesis.
+        const finalEvidence = synthesisReport.evidence || [];
+
+        return {
+            tier: 'synthesis',
+            success: true,
+            confidence: synthesisReport.final_score,
+            evidence: finalEvidence, // Use evidence from Gemini's report
+            shouldEscalate: false,
+            processingTime: Date.now() - startTime,
+        };
+    } catch (error) {
+        console.error('❌ Phase 4 Gemini synthesis failed:', error);
+        // Fallback to original synthesis logic if Gemini fails
+        try {
+            console.log('⚠️ Gemini synthesis failed. Falling back to original weighted synthesis.');
+            const fallbackResult = this.fallbackSynthesis(allEvidence);
+            return {
+                tier: 'synthesis',
+                success: true, // The fallback succeeded
+                confidence: fallbackResult.adjustedScore,
+                evidence: [],
+                shouldEscalate: false,
+                processingTime: Date.now() - startTime,
+            };
+        } catch (fallbackError) {
+            console.error('❌ Fallback synthesis also failed:', fallbackError);
+            return {
+                tier: 'synthesis',
+                success: false,
+                confidence: 30, // Default low confidence on complete failure
+                evidence: [],
+                shouldEscalate: false,
+                processingTime: Date.now() - startTime,
+                error: fallbackError instanceof Error ? fallbackError.message : 'Unknown fallback error'
+            };
+        }
+    }
+}
+
+private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number } {
+    const highCredibilityEvidence = allEvidence.filter(e => e.score >= 80);
+    const mediumCredibilityEvidence = allEvidence.filter(e => e.score >= 50 && e.score < 80);
+    const lowCredibilityEvidence = allEvidence.filter(e => e.score < 50);
+
+    const totalWeight =
         (highCredibilityEvidence.length * 3) +
         (mediumCredibilityEvidence.length * 2) +
         (lowCredibilityEvidence.length * 1);
 
-      const weightedSum =
+    const weightedSum =
         (highCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 3) +
         (mediumCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 2) +
         (lowCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 1);
 
-      const finalScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
+    const finalScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
 
-      // Check for contradictory evidence
-      const supportingEvidence = allEvidence.filter(e => e.score >= 60);
-      const contradictingEvidence = allEvidence.filter(e => e.score <= 40);
+    const supportingEvidence = allEvidence.filter(e => e.score >= 60);
+    const contradictingEvidence = allEvidence.filter(e => e.score <= 40);
 
-      let adjustedScore = finalScore;
-      if (contradictingEvidence.length > 0 && supportingEvidence.length > 0) {
-        // Reduce confidence when there's contradictory evidence
+    let adjustedScore = finalScore;
+    if (contradictingEvidence.length > 0 && supportingEvidence.length > 0) {
         adjustedScore = Math.max(30, finalScore - 15);
-      }
-
-      return {
-        tier: 'synthesis',
-        success: true,
-        confidence: adjustedScore,
-        evidence: [], // Evidence already aggregated
-        shouldEscalate: false,
-        processingTime: Date.now() - startTime
-      };
-
-    } catch (error) {
-      console.error('❌ Phase 4 synthesis failed:', error);
-      return {
-        tier: 'synthesis',
-        success: false,
-        confidence: 30,
-        evidence: [],
-        shouldEscalate: false,
-        processingTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
     }
-  }
+
+    return { adjustedScore };
+}
 
   // Helper Methods
   private convertRatingToScore(rating: any): number {
