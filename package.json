@@ -14,12 +14,16 @@
     "@google/genai": "^1.19.0",
     "@google/generative-ai": "^0.24.1",
     "@vercel/blob": "^2.0.0",
+    "node-fetch": "^3.3.2",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "serpapi": "^2.2.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/react": "^18.0.0",
+    "@types/uuid": "^10.0.0",
     "@vercel/node": "^5.3.24",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitest/ui": "^3.2.4",

@@ -55,3 +55,19 @@ export interface NewsArticle {
   pubDate: string;
   source: string;
 }
+
+export interface EvidenceItem {
+  id: string;
+  source_name: string;
+  source_url: string;
+  published_at: string | null;
+  title: string;
+  snippet: string;
+  confidence_score: number; // Placeholder for now, will be calculated later
+  retrieved_at: string;
+  metadata: {
+    author: string | null;
+    domain_authority: number | null; // Placeholder
+    api_source: 'serp' | 'newsdata' | 'google' | 'other';
+  };
+}

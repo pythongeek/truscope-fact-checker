@@ -1,53 +1,40 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// api/serp-search.ts
+
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import { getJson } from 'serpapi';
+import { normalizeSerpResponse } from '../src/services/evidenceNormalizer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ message: 'Only POST requests allowed' });
   }
 
-  const { query, num = 10 } = req.body;
-  const SERP_API_KEY = process.env.SERP_API_KEY;
+  const { query } = req.body;
 
-  if (!SERP_API_KEY) {
-    return res.status(500).json({ error: 'SERP API key not configured' });
+  if (!query) {
+    return res.status(400).json({ error: 'Query parameter is required' });
   }
 
   try {
-    const params = new URLSearchParams({
-      api_key: SERP_API_KEY,
-      q: query,
-      num: num.toString(),
-      engine: 'google',
-      gl: 'us',
-      hl: 'en'
-    });
-
-    const response = await fetch(`https://serpapi.com/search.json?${params}`, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`SERP API error: ${response.status}`);
+    const apiKey = process.env.SERP_API_KEY;
+    if (!apiKey) {
+        throw new Error("SERP API key is not configured.");
     }
 
-    const data = await response.json();
-    return res.status(200).json(data);
-  } catch (error) {
-    console.error('SERP API error:', error);
-    return res.status(500).json({
-      error: 'Failed to fetch search results',
-      details: error instanceof Error ? error.message : 'Unknown error'
+    const response = await getJson({
+      api_key: apiKey,
+      q: query,
+      engine: 'google',
+      gl: 'us',
+      hl: 'en',
     });
+
+    const normalizedEvidence = normalizeSerpResponse(response);
+
+    res.status(200).json({ evidence: normalizedEvidence });
+
+  } catch (error: any) {
+    console.error('SERP API Error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch search results from SERP API.', details: error.message });
   }
 }
