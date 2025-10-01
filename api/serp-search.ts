@@ -18,7 +18,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const SERP_API_KEY = process.env.SERP_API_KEY;
 
   if (!SERP_API_KEY) {
-    return res.status(500).json({ error: 'SERP API key not configured' });
+    console.warn('SERP_API_KEY not found. Returning empty search results.');
+    return res.status(200).json({
+      results: [],
+      aiOverview: null,
+      totalResults: 0,
+      error: 'SERP API key not configured.',
+      queries: {
+        primaryQuery: query,
+        subQueries: [],
+        keywords: [],
+        entities: [],
+        searchPriority: 'low'
+      }
+    });
   }
 
   try {
