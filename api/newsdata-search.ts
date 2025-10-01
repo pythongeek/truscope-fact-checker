@@ -17,7 +17,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const NEWSDATA_API_KEY = process.env.NEWSDATA_API_KEY;
 
   if (!NEWSDATA_API_KEY) {
-    return res.status(500).json({ error: 'NewsData API key not configured' });
+    console.warn('NEWSDATA_API_KEY not found. Returning empty news data.');
+    return res.status(200).json({
+      status: 'success',
+      totalResults: 0,
+      results: [],
+      nextPage: null,
+      error: 'NewsData API key not configured.'
+    });
   }
 
   try {
