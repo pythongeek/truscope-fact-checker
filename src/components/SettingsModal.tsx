@@ -21,8 +21,6 @@ const API_KEY_FIELDS = [
     { id: 'factCheck', label: 'Google Fact Check Tools API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
     { id: 'search', label: 'Google Search API Key', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
     { id: 'searchId', label: 'Google Search ID', group: 'Google APIs', url: 'https://developers.google.com/custom-search/v1/overview', type: 'password' },
-    { id: 'newsdata', label: 'newsdata.io API Key', group: 'Third-Party APIs', url: 'https://newsdata.io/free-news-api', type: 'password' },
-    { id: 'serp', label: 'SERP API Key', group: 'Third-Party APIs', url: 'https://serphouse.com/', type: 'password' },
 ];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
