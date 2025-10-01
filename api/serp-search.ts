@@ -1,67 +1,53 @@
-// Backend endpoint for SerpAPI search.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { getJson } from "serpapi";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  // Ensure we are only accepting POST requests
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { query, num = 10 } = req.body;
-  const SERP_API_KEY = process.env.SERP_API_KEY;
-
-  if (!SERP_API_KEY) {
-    console.warn('SERP_API_KEY not found. Returning empty search results.');
-    return res.status(200).json({
-      results: [],
-      aiOverview: null,
-      totalResults: 0,
-      error: 'SERP API key not configured.',
-      queries: {
-        primaryQuery: query,
-        subQueries: [],
-        keywords: [],
-        entities: [],
-        searchPriority: 'low'
-      }
-    });
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 
   try {
-    const params = new URLSearchParams({
-      api_key: SERP_API_KEY,
-      q: query,
-      num: num.toString(),
-      engine: 'google',
-      gl: 'us',
-      hl: 'en'
-    });
+    const serpApiKey = process.env.SERP_API_KEY;
 
-    const response = await fetch(`https://serpapi.com/search.json?${params}`, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`SERP API error: ${response.status}`);
+    // 💡 **Detailed Check 1: Validate the API Key**
+    if (!serpApiKey) {
+      // This throws a clear error that we will catch and log
+      throw new Error("FATAL: SERP_API_KEY is not configured in server environment variables.");
     }
 
-    const data = await response.json();
-    return res.status(200).json(data);
-  } catch (error) {
-    console.error('SERP API error:', error);
+    const params = req.body;
+
+    console.log(`[SERP API] Initiating search with query: "${params.q}"`);
+
+    const response = await getJson({
+      ...params,
+      api_key: serpApiKey,
+    });
+
+    console.log(`[SERP API] Search successful for query: "${params.q}"`);
+    return res.status(200).json(response);
+
+  } catch (error: unknown) {
+    // 💡 **Detailed Check 2: Catch and Log ANY Error**
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+
+    // This is the crucial part for detailed debugging in Vercel
+    console.error("❌ [SERP API Handler Error]", {
+        details: errorMessage,
+        // The stack trace is extremely useful for debugging
+        stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    // Send a standardized error response to the frontend
     return res.status(500).json({
-      error: 'Failed to fetch search results',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: "Internal Server Error",
+      message: "The search request failed on the server. Check the function logs for details.",
+      details: errorMessage, // Optionally send the error message back
     });
   }
 }
