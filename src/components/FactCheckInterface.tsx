@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { FactCheckReport, PublishingContext } from '../types/factCheck';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
-import { MethodSelector } from './MethodSelector';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
@@ -14,7 +13,6 @@ interface FactCheckInterfaceProps {
 }
 
 export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
-  const [publishingContext, setPublishingContext] = useState<PublishingContext>('journalism');
   const [inputText, setInputText] = useState(initialClaimText);
   const [report, setReport] = useState<FactCheckReport | null>(initialReport);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -76,8 +74,8 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
     setReport(null);
     setTieredProgress([]);
 
-    await handleTieredFactCheck(inputText, publishingContext);
-  }, [inputText, publishingContext, factCheckService]);
+    await handleTieredFactCheck(inputText, 'journalism');
+  }, [inputText, factCheckService]);
 
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
@@ -93,13 +91,6 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
         </p>
       </div>
 
-      {/* Method Selection */}
-      <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
-        <MethodSelector
-          publishingContext={publishingContext}
-          onPublishingContextChange={setPublishingContext}
-        />
-      </div>
 
       {/* Text Input */}
       <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">

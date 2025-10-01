@@ -448,39 +448,113 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
 
   private calculateSearchResultScore(result: any, claimText: string): number {
     let score = 50; // Base score
-
-    // Domain credibility boost
     const domain = result.source.toLowerCase();
-    if (domain.includes('reuters') || domain.includes('ap.org') || domain.includes('bbc')) score += 25;
-    else if (domain.includes('cnn') || domain.includes('nytimes') || domain.includes('washingtonpost')) score += 15;
-    else if (domain.includes('factcheck') || domain.includes('snopes') || domain.includes('politifact')) score += 30;
-    else if (domain.includes('.gov') || domain.includes('.edu')) score += 20;
-    else if (domain.includes('wikipedia')) score += 10;
 
-    // Content relevance boost
+    // Tiered domain credibility scoring
+    const credibilityTiers = [
+      { domains: ['reuters', 'ap.org', 'bbc', 'apnews'], boost: 35 },
+      { domains: ['factcheck', 'snopes', 'politifact'], boost: 30 },
+      { domains: ['cnn', 'nytimes', 'washingtonpost', 'wsj', 'theguardian'], boost: 20 },
+      { domains: ['.gov', '.edu'], boost: 25 },
+      { domains: ['wikipedia'], boost: 5, penalty: 0 }, // Lower boost for Wikipedia
+      { domains: ['forbes', 'businessinsider'], boost: 10 },
+      { domains: ['reddit', 'quora', 'facebook', 'twitter'], boost: 0, penalty: 25 }, // Penalize social media
+      { domains: ['blogspot', 'wordpress', 'medium'], boost: 0, penalty: 20 } // Penalize blog platforms
+    ];
+
+    let appliedBoost = 0;
+    let appliedPenalty = 0;
+
+    for (const tier of credibilityTiers) {
+      if (tier.domains.some(d => domain.includes(d))) {
+        appliedBoost = tier.boost;
+        appliedPenalty = tier.penalty || 0;
+        break;
+      }
+    }
+
+    score += appliedBoost - appliedPenalty;
+
+
+    // Enhanced content relevance boost
     const snippet = result.snippet.toLowerCase();
-    const claimWords = claimText.toLowerCase().split(' ').filter(w => w.length > 3);
-    const matchedWords = claimWords.filter(word => snippet.includes(word));
-    const relevanceScore = (matchedWords.length / claimWords.length) * 20;
+    const title = result.title.toLowerCase();
+    const claimWords = claimText.toLowerCase().match(/\b(\w+)\b/g) || [];
+    const snippetWords = snippet.match(/\b(\w+)\b/g) || [];
+    const titleWords = title.match(/\b(\w+)\b/g) || [];
 
-    return Math.min(100, Math.max(10, score + relevanceScore));
+    const matchedInSnippet = claimWords.filter(word => snippetWords.includes(word)).length;
+    const matchedInTitle = claimWords.filter(word => titleWords.includes(word)).length;
+
+    // More weight for title matches
+    const relevanceScore = (matchedInSnippet / claimWords.length) * 15 + (matchedInTitle / claimWords.length) * 20;
+
+    score += relevanceScore;
+
+    // Snippet sentiment analysis (basic)
+    const negativeKeywords = ['conspiracy', 'hoax', 'unproven', 'scam'];
+    if (negativeKeywords.some(kw => snippet.includes(kw))) {
+      score -= 15;
+    }
+
+    return Math.min(100, Math.max(0, score));
   }
 
   private calculateNewsScore(article: any, claimText: string): number {
-    let score = 60; // Base news score
-
-    // Source credibility
+    let score = 55; // Adjusted base score for more detailed calculation
     const sourceName = article.source_name.toLowerCase();
-    if (['reuters', 'associated press', 'bbc news', 'npr'].some(s => sourceName.includes(s))) score += 20;
-    else if (['cnn', 'abc news', 'nbc news', 'cbs news'].some(s => sourceName.includes(s))) score += 10;
+    const description = article.description.toLowerCase();
+    const title = article.title.toLowerCase();
 
-    // Recency boost
+    // Granular source credibility with penalties
+    const sourceTiers = [
+        { sources: ['reuters', 'associated press', 'ap', 'bbc news', 'npr', 'pbs'], boost: 25 },
+        { sources: ['cnn', 'abc news', 'nbc news', 'cbs news', 'the guardian', 'al jazeera'], boost: 15 },
+        { sources: ['fox news', 'msnbc', 'breitbart', 'daily mail'], penalty: 15 }, // Known for strong bias
+        { sources: ['washington post', 'new york times', 'wsj'], boost: 20 },
+    ];
+
+    let appliedBoost = 0;
+    let appliedPenalty = 0;
+
+    for (const tier of sourceTiers) {
+        if (tier.sources.some(s => sourceName.includes(s))) {
+            appliedBoost = tier.boost || 0;
+            appliedPenalty = tier.penalty || 0;
+            break;
+        }
+    }
+    score += appliedBoost - appliedPenalty;
+
+
+    // Recency boost (more granular)
     const daysOld = (Date.now() - new Date(article.pubDate).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysOld <= 1) score += 15;
-    else if (daysOld <= 7) score += 10;
-    else if (daysOld <= 30) score += 5;
+    if (daysOld <= 2) score += 15;
+    else if (daysOld <= 10) score += 10;
+    else if (daysOld <= 45) score += 5;
+    else if (daysOld > 180) score -= 10; // Penalize very old news
 
-    return Math.min(100, Math.max(20, score));
+
+    // Content analysis for bias and depth
+    const biasedKeywords = ['outrageous', 'shocking', 'slams', 'destroys', 'miracle', 'agenda'];
+    const biasedMentions = biasedKeywords.filter(kw => description.includes(kw) || title.includes(kw)).length;
+    score -= biasedMentions * 5; // Penalize for each biased keyword
+
+    // Boost for article length (as a proxy for depth)
+    if (article.description.length > 250) {
+        score += 10;
+    }
+
+    // Keyword relevance in title
+    const claimWords = claimText.toLowerCase().match(/\b(\w+)\b/g) || [];
+    const titleWords = title.match(/\b(\w+)\b/g) || [];
+    const matchedInTitle = claimWords.filter(word => titleWords.includes(word)).length;
+
+    if (matchedInTitle / claimWords.length > 0.5) {
+        score += 10; // Boost if title is highly relevant
+    }
+
+    return Math.min(100, Math.max(0, score));
   }
 
   private detectTemporalElements(text: string): { hasTemporalClaims: boolean; extractedDate?: string } {
