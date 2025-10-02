@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclarationSchema } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
@@ -17,30 +17,30 @@ const queryExtractionSchema = {
   name: "extractQueries",
   description: "Extracts structured search query data from a given text.",
   parameters: {
-    type: FunctionDeclarationSchema.Type.OBJECT,
+    type: "object",
     properties: {
       primaryQuery: {
-        type: FunctionDeclarationSchema.Type.STRING,
+        type: "string",
         description: "Main search query optimized for fact-checking"
       },
       subQueries: {
-        type: FunctionDeclarationSchema.Type.ARRAY,
-        items: { type: FunctionDeclarationSchema.Type.STRING },
+        type: "array",
+        items: { type: "string" },
         description: "Additional targeted queries for specific claims"
       },
       keywords: {
-        type: FunctionDeclarationSchema.Type.ARRAY,
-        items: { type: FunctionDeclarationSchema.Type.STRING },
+        type: "array",
+        items: { type: "string" },
         description: "Key searchable terms"
       },
       entities: {
-        type: FunctionDeclarationSchema.Type.ARRAY,
+        type: "array",
         items: {
-          type: FunctionDeclarationSchema.Type.OBJECT,
+          type: "object",
           properties: {
-            name: { type: FunctionDeclarationSchema.Type.STRING },
+            name: { type: "string" },
             type: {
-              type: FunctionDeclarationSchema.Type.STRING,
+              type: "string",
               enum: ['person', 'organization', 'location', 'event', 'date', 'concept']
             }
           },
@@ -48,7 +48,7 @@ const queryExtractionSchema = {
         }
       },
       searchPriority: {
-        type: FunctionDeclarationSchema.Type.STRING,
+        type: "string",
         enum: ['high', 'medium', 'low'],
         description: "Priority level for search execution"
       }
