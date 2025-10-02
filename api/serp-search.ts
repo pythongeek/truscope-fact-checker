@@ -25,11 +25,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Log the incoming request body
     console.log(`[serp-search] Received body:`, req.body);
-    const { q, engine } = req.body;
+    const { query, engine } = req.body;
 
-    if (!q) {
-      console.error('[serp-search] Error: Missing "q" parameter in the request body.');
-      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "q".' });
+    if (!query) {
+      console.error('[serp-search] Error: Missing "query" parameter in the request body.');
+      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "query".' });
     }
 
     // 3. Securely check and log the environment variable
@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const searchParams = new URLSearchParams({
         ...req.body,
         api_key: apiKey,
-        q: q as string,
+        q: query as string,
         engine: (engine as string) || 'google',
       });
 

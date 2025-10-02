@@ -14,11 +14,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Log the incoming request body
     console.log(`[newsdata-search] Received body:`, req.body);
-    const { q, lang, country } = req.body;
+    const { query, lang, country } = req.body;
 
-    if (!q) {
-      console.error('[newsdata-search] Error: Missing "q" parameter in the request body.');
-      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "q".' });
+    if (!query) {
+      console.error('[newsdata-search] Error: Missing "query" parameter in the request body.');
+      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "query".' });
     }
 
     // 3. Securely check and log the environment variable
@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4. Construct and log the URL before fetching
     const apiUrl = `https://newsdata.io/api/1/news?apikey=${apiKey}&q=${encodeURIComponent(
-      q as string
+      query as string
     )}&language=${lang || 'en'}&country=${country || 'us'}`;
     // Log the URL with the API key redacted for security
     console.log(`[newsdata-search] Fetching URL: ${apiUrl.replace(apiKey, 'REDACTED')}`);
