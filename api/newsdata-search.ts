@@ -1,56 +1,70 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// api/newsdata-search.ts
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
-// A simple fetch wrapper for Newsdata.io API
-async function fetchNewsData(params: Record<string, any>, apiKey: string) {
-    const query = new URLSearchParams(params).toString();
-    const response = await fetch(`https://newsdata.io/api/1/news?apikey=${apiKey}&${query}`);
-
-    if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`Newsdata.io API responded with status ${response.status}: ${errorBody}`);
-    }
-
-    return response.json();
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
-
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 1. Wrap EVERYTHING in a try...catch block
   try {
-    const newsDataApiKey = process.env.NEWSDATA_API_KEY;
+    console.log('[newsdata-search] Function invoked.');
 
-    // 💡 **Detailed Check 1: Validate the API Key**
-    if (!newsDataApiKey) {
-      throw new Error("FATAL: NEWSDATA_API_KEY is not configured in server environment variables.");
+    if (req.method !== 'POST') {
+        res.setHeader('Allow', ['POST']);
+        console.error(`[newsdata-search] Error: Method ${req.method} Not Allowed.`);
+        return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
-    const params = req.body;
-    console.log(`[Newsdata.io API] Initiating search with query: "${params.q}"`);
+    // 2. Log the incoming request body
+    console.log(`[newsdata-search] Received body:`, req.body);
+    const { q, lang, country } = req.body;
 
-    const data = await fetchNewsData(params, newsDataApiKey);
+    if (!q) {
+      console.error('[newsdata-search] Error: Missing "q" parameter in the request body.');
+      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "q".' });
+    }
 
-    console.log(`[Newsdata.io API] Search successful.`);
-    return res.status(200).json(data);
+    // 3. Securely check and log the environment variable
+    const apiKey = process.env.NEWSDATA_API_KEY;
+    if (!apiKey) {
+      console.error('[newsdata-search] FATAL: NEWSDATA_API_KEY environment variable not found!');
+      return res.status(500).json({ error: 'Server Configuration Error: Newsdata API key not configured.' });
+    } else {
+      // Log a sanitized version to confirm it's loaded without exposing the full key
+      console.log(`[newsdata-search] API Key loaded successfully. Starts with: ${apiKey.substring(0, 4)}...`);
+    }
 
-  } catch (error: unknown) {
-    // 💡 **Detailed Check 2: Catch and Log ANY Error**
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+    // 4. Construct and log the URL before fetching
+    const apiUrl = `https://newsdata.io/api/1/news?apikey=${apiKey}&q=${encodeURIComponent(
+      q as string
+    )}&language=${lang || 'en'}&country=${country || 'us'}`;
+    // Log the URL with the API key redacted for security
+    console.log(`[newsdata-search] Fetching URL: ${apiUrl.replace(apiKey, 'REDACTED')}`);
 
-    console.error("❌ [Newsdata.io API Handler Error]", {
-      details: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    const response = await fetch(apiUrl);
 
-    return res.status(500).json({
-      error: "Internal Server Error",
-      message: "The news search request failed on the server. Check the function logs for details.",
-      details: errorMessage,
+    // 5. Log the status of the external API response
+    console.log(`[newsdata-search] Received status ${response.status} from Newsdata API.`);
+
+    // 6. Check if the response is OK before parsing JSON
+    if (!response.ok) {
+      // Try to get text for better error logging, as it might not be JSON
+      const errorText = await response.text();
+      console.error('[newsdata-search] Newsdata API returned an error:', errorText);
+      return res.status(response.status).json({
+        error: 'Failed to fetch from Newsdata API',
+        details: errorText
+      });
+    }
+
+    // 7. Now it's safe to parse the JSON
+    const data = await response.json();
+    console.log('[newsdata-search] Successfully fetched data. Sending 200 OK response.');
+    res.status(200).json(data);
+
+  } catch (error: any) {
+    // 8. This is the global catch. It will catch any other unexpected error.
+    console.error('[newsdata-search] An unexpected error occurred in the handler:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      details: error.message || 'An unknown error occurred.'
     });
   }
 }

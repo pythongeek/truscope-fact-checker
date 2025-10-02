@@ -1,128 +1,95 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+// api/serp-search.ts
+import { VercelRequest, VercelResponse } from '@vercel/node';
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  // Enable CORS for debugging
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).json({
-      error: 'Method not allowed',
-      message: `Method ${req.method} Not Allowed`
-    });
-  }
-
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 1. Wrap EVERYTHING in a try...catch block
   try {
-    const serpApiKey = process.env.SERP_API_KEY;
+    console.log('[serp-search] Function invoked.');
 
-    // Validate API key
-    if (!serpApiKey) {
-      console.error('❌ SERP_API_KEY environment variable is not set');
-      return res.status(500).json({
-        error: 'Configuration Error',
-        message: 'SERP_API_KEY is not configured on the server',
-        details: 'Please add SERP_API_KEY to your Vercel environment variables'
-      });
+    // Enable CORS for debugging
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Handle preflight requests for CORS
+    if (req.method === 'OPTIONS') {
+      console.log('[serp-search] Responding to OPTIONS preflight request.');
+      return res.status(200).end();
     }
 
-    // Validate request body
-    if (!req.body || typeof req.body !== 'object') {
-      console.error('❌ Invalid request body:', req.body);
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Request body must be a valid JSON object',
-        received: typeof req.body
-      });
+    if (req.method !== 'POST') {
+        res.setHeader('Allow', ['POST']);
+        console.error(`[serp-search] Error: Method ${req.method} Not Allowed.`);
+        return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
 
-    const params = req.body;
+    // 2. Log the incoming request body
+    console.log(`[serp-search] Received body:`, req.body);
+    const { q, engine } = req.body;
 
-    // Ensure required parameters
-    if (!params.q && !params.engine) {
-      console.error('❌ Missing required parameters:', params);
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Missing required parameters: q (query) or engine',
-        received: params
-      });
+    if (!q) {
+      console.error('[serp-search] Error: Missing "q" parameter in the request body.');
+      return res.status(400).json({ error: 'Bad Request: Missing required query parameter "q".' });
     }
 
-    console.log(`[SERP API] Initiating search with query: "${params.q}"`);
-    console.log('[SERP API] Full params:', JSON.stringify(params, null, 2));
+    // 3. Securely check and log the environment variable
+    const apiKey = process.env.SERP_API_KEY;
+    if (!apiKey) {
+      console.error('[serp-search] FATAL: SERP_API_KEY environment variable not found!');
+      return res.status(500).json({ error: 'Server Configuration Error: SERP API key not configured.' });
+    } else {
+      // Log a sanitized version to confirm it's loaded without exposing the full key
+      console.log(`[serp-search] API Key loaded successfully. Starts with: ${apiKey.substring(0, 4)}...`);
+    }
 
-    // Use native fetch instead of serpapi library to avoid dependencies issues
+    // 4. Construct and log the URL before fetching
     const searchParams = new URLSearchParams({
-      api_key: serpApiKey,
-      engine: params.engine || 'google',
-      q: params.q || '',
-      ...params
-    });
+        ...req.body,
+        api_key: apiKey,
+        q: q as string,
+        engine: (engine as string) || 'google',
+      });
 
-    const serpApiUrl = `https://serpapi.com/search.json?${searchParams.toString()}`;
+    const apiUrl = `https://serpapi.com/search.json?${searchParams.toString()}`;
+    // Log URL without the API key for security
+    console.log(`[serp-search] Fetching URL: ${apiUrl.replace(apiKey, 'REDACTED')}`);
 
-    console.log('[SERP API] Request URL (without key):', serpApiUrl.replace(serpApiKey, 'REDACTED'));
+    const response = await fetch(apiUrl);
 
-    const response = await fetch(serpApiUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // 5. Log the status of the external API response
+    console.log(`[serp-search] Received status ${response.status} from SERP API.`);
 
+    // 6. Check if the response is OK before parsing JSON
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ SERP API responded with status ${response.status}:`, errorText);
-
+      console.error('[serp-search] SERP API returned an error:', errorText);
       return res.status(response.status).json({
-        error: 'SERP API Error',
-        message: `SERP API returned status ${response.status}`,
-        details: errorText,
-        statusCode: response.status
+        error: 'Failed to fetch from SERP API',
+        details: errorText
       });
     }
 
-    const data = await response.json();
+    // 7. Now it's safe to parse the JSON
+    const responseData = await response.json();
 
-    // Check for API-level errors in the response
-    if (data.error) {
-      console.error('❌ SERP API returned error:', data.error);
-      return res.status(400).json({
-        error: 'SERP API Error',
-        message: data.error,
-        details: data
-      });
+    // Also check for logical errors returned in a 200 OK response
+    if (responseData.error) {
+        console.error('[serp-search] SERP API returned a logical error:', responseData.error);
+        return res.status(400).json({
+            error: 'SERP API returned an error',
+            details: responseData.error,
+        });
     }
 
-    console.log(`✅ [SERP API] Search successful for query: "${params.q}"`);
-    console.log(`[SERP API] Results count:`, data.organic_results?.length || 0);
+    console.log('[serp-search] Successfully fetched data. Sending 200 OK response.');
+    res.status(200).json(responseData);
 
-    return res.status(200).json(data);
-
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    const errorStack = error instanceof Error ? error.stack : undefined;
-
-    console.error("❌ [SERP API Handler Error]", {
-      message: errorMessage,
-      stack: errorStack,
-      error: error
-    });
-
-    return res.status(500).json({
+  } catch (error: any) {
+    // 8. This is the global catch. It will catch any other unexpected error.
+    console.error('[serp-search] An unexpected error occurred in the handler:', error);
+    res.status(500).json({
       error: 'Internal Server Error',
-      message: 'The SERP search request failed on the server',
-      details: errorMessage,
-      timestamp: new Date().toISOString()
+      details: error.message || 'An unknown error occurred.'
     });
   }
 }
