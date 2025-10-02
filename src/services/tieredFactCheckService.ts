@@ -7,7 +7,6 @@ import { BlobStorageService } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { synthesizeEvidenceWithGemini } from './geminiService';
-import { queryExtractor, ExtractedSearchTerms } from './queryExtractor';
 
 export type FactCheckTier = 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
 
@@ -43,11 +42,6 @@ export class TieredFactCheckService {
 
     console.log('🎯 Starting Tiered Fact Check Process');
 
-    // --- START OF NEW LOGIC ---
-    // STEP 1: Generate a clean set of search terms *before* starting the phases.
-    const searchTerms: ExtractedSearchTerms = await queryExtractor.generateSearchTermsFromText(claimText);
-    // --- END OF NEW LOGIC ---
-
     const tierResults: TierResult[] = [];
     let finalEvidence: EvidenceItem[] = [];
     let finalScore = 0;
@@ -55,7 +49,7 @@ export class TieredFactCheckService {
 
     try {
       // Phase 1: Direct Verification (Fast & Economical)
-      const phase1Result = await this.runDirectVerification(searchTerms.primaryQuery);
+      const phase1Result = await this.runDirectVerification(claimText);
       tierResults.push(phase1Result);
 
       if (phase1Result.success && !phase1Result.shouldEscalate) {
@@ -67,7 +61,7 @@ export class TieredFactCheckService {
         console.log('⏭️  Phase 1 Escalating to Phase 2');
 
         // Phase 2: Broad Web Search & Initial Grounding
-        const phase2Result = await this.runBroadWebSearch(searchTerms);
+        const phase2Result = await this.runBroadWebSearch(claimText);
         tierResults.push(phase2Result);
         finalEvidence.push(...phase2Result.evidence);
 
@@ -79,7 +73,7 @@ export class TieredFactCheckService {
           console.log('⏭️  Phase 2 Escalating to Phase 3');
 
           // Phase 3: Specialized & Temporal Analysis
-          const phase3Result = await this.runSpecializedAnalysis(claimText, searchTerms);
+          const phase3Result = await this.runSpecializedAnalysis(claimText);
           tierResults.push(phase3Result);
           finalEvidence.push(...phase3Result.evidence);
 
@@ -178,18 +172,12 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runDirectVerification(query: string): Promise<TierResult> {
+  private async runDirectVerification(claimText: string): Promise<TierResult> {
     const startTime = Date.now();
     console.log('📋 Phase 1: Direct Verification');
 
     try {
-      console.log(`[Phase 1] Searching with optimized query: "${query}"`);
-      const factCheckResults = await this.googleFactCheck.searchClaims(query, 5);
-
-      if (!factCheckResults || !Array.isArray(factCheckResults)) {
-         console.error('[serpApiService] Invalid response from SERP API endpoint. Expected an array.');
-         throw new Error('Invalid response from SERP API endpoint');
-      }
+      const factCheckResults = await this.googleFactCheck.searchClaims(claimText, 5);
 
       if (factCheckResults.length === 0) {
         return {
@@ -238,13 +226,12 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runBroadWebSearch(searchTerms: ExtractedSearchTerms): Promise<TierResult> {
+  private async runBroadWebSearch(claimText: string): Promise<TierResult> {
     const startTime = Date.now();
     console.log('🔍 Phase 2: Broad Web Search & Initial Grounding');
 
     try {
-      console.log(`[Phase 2] Executing search with primary query: ${searchTerms.primaryQuery}`);
-      const searchResults = await this.serpApi.search(searchTerms.primaryQuery, 10);
+      const searchResults = await this.serpApi.search(claimText, 10);
 
       if (searchResults.results.length === 0) {
         return {
@@ -263,7 +250,7 @@ export class TieredFactCheckService {
         publisher: result.source,
         url: result.link,
         quote: result.snippet,
-        score: this.calculateSearchResultScore(result, searchTerms.primaryQuery),
+        score: this.calculateSearchResultScore(result, claimText),
         type: 'search_result'
       }));
 
@@ -297,7 +284,7 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runSpecializedAnalysis(claimText: string, searchTerms: ExtractedSearchTerms): Promise<TierResult> {
+  private async runSpecializedAnalysis(claimText: string): Promise<TierResult> {
     const startTime = Date.now();
     console.log('🎯 Phase 3: Specialized & Temporal Analysis');
 
@@ -309,9 +296,9 @@ export class TieredFactCheckService {
 
       if (hasTemporalElements.hasTemporalClaims) {
         console.log('📅 Temporal elements detected, fetching recent news');
-        console.log(`[Phase 3] Searching news with query: "${searchTerms.primaryQuery}"`);
+
         const newsResults = await this.newsService.searchNews({
-          query: searchTerms.primaryQuery,
+          query: claimText,
           fromDate: hasTemporalElements.extractedDate || new Date().toISOString()
         });
 

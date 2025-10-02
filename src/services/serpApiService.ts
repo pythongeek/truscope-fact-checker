@@ -1,4 +1,4 @@
-import { queryExtractor, ExtractedQueries } from './queryExtractor';
+import { QueryExtractorService, ExtractedQueries } from './queryExtractor';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
 
@@ -21,7 +21,7 @@ export interface SerpApiResponse {
 export class SerpApiService {
   private static instance: SerpApiService;
   private cache = AdvancedCacheService.getInstance();
-  private queryExtractor = queryExtractor;
+  private queryExtractor = QueryExtractorService.getInstance();
 
   static getInstance(): SerpApiService {
     if (!SerpApiService.instance) {
