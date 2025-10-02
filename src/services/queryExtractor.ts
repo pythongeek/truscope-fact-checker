@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclarationSchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclarationSchema } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
@@ -17,30 +17,30 @@ const queryExtractionSchema = {
   name: "extractQueries",
   description: "Extracts structured search query data from a given text.",
   parameters: {
-    type: FunctionDeclarationSchemaType.OBJECT,
+    type: FunctionDeclarationSchema.Type.OBJECT,
     properties: {
       primaryQuery: {
-        type: FunctionDeclarationSchemaType.STRING,
+        type: FunctionDeclarationSchema.Type.STRING,
         description: "Main search query optimized for fact-checking"
       },
       subQueries: {
-        type: FunctionDeclarationSchemaType.ARRAY,
-        items: { type: FunctionDeclarationSchemaType.STRING },
+        type: FunctionDeclarationSchema.Type.ARRAY,
+        items: { type: FunctionDeclarationSchema.Type.STRING },
         description: "Additional targeted queries for specific claims"
       },
       keywords: {
-        type: FunctionDeclarationSchemaType.ARRAY,
-        items: { type: FunctionDeclarationSchemaType.STRING },
+        type: FunctionDeclarationSchema.Type.ARRAY,
+        items: { type: FunctionDeclarationSchema.Type.STRING },
         description: "Key searchable terms"
       },
       entities: {
-        type: FunctionDeclarationSchemaType.ARRAY,
+        type: FunctionDeclarationSchema.Type.ARRAY,
         items: {
-          type: FunctionDeclarationSchemaType.OBJECT,
+          type: FunctionDeclarationSchema.Type.OBJECT,
           properties: {
-            name: { type: FunctionDeclarationSchemaType.STRING },
+            name: { type: FunctionDeclarationSchema.Type.STRING },
             type: {
-              type: FunctionDeclarationSchemaType.STRING,
+              type: FunctionDeclarationSchema.Type.STRING,
               enum: ['person', 'organization', 'location', 'event', 'date', 'concept']
             }
           },
@@ -48,7 +48,7 @@ const queryExtractionSchema = {
         }
       },
       searchPriority: {
-        type: FunctionDeclarationSchemaType.STRING,
+        type: FunctionDeclarationSchema.Type.STRING,
         enum: ['high', 'medium', 'low'],
         description: "Priority level for search execution"
       }
