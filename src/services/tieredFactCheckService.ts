@@ -186,7 +186,7 @@ export class TieredFactCheckService {
     console.log('📋 Phase 1: Direct Verification');
 
     try {
-      const factCheckResults = await this.googleFactCheck.searchClaims(claimText, 5);
+      const factCheckResults = await this.googleFactCheck.searchClaims(truncateQuery(claimText), 5);
 
       if (factCheckResults.length === 0) {
         return {
