@@ -1,7 +1,7 @@
 import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
-import { NewsDataService } from './newsDataService';
+import { WebzNewsService } from './webzNewsService';
 import { AdvancedCacheService } from './advancedCacheService';
 import { BlobStorageService } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
@@ -24,7 +24,7 @@ export class TieredFactCheckService {
   private static instance: TieredFactCheckService;
   private googleFactCheck = GoogleFactCheckService.getInstance();
   private serpApi = SerpApiService.getInstance();
-  private newsData = NewsDataService.getInstance();
+  private newsService = new WebzNewsService();
   private cache = AdvancedCacheService.getInstance();
   private blobStorage = BlobStorageService.getInstance();
   private performanceMonitor = PerformanceMonitor.getInstance();
@@ -297,20 +297,19 @@ export class TieredFactCheckService {
       if (hasTemporalElements.hasTemporalClaims) {
         console.log('📅 Temporal elements detected, fetching recent news');
 
-        const newsResults = await this.newsData.searchTemporalNews(
-          claimText,
-          hasTemporalElements.extractedDate || new Date().toISOString(),
-          3
-        );
+        const newsResults = await this.newsService.searchNews({
+          query: claimText,
+          fromDate: hasTemporalElements.extractedDate || new Date().toISOString()
+        });
 
-        const newsEvidence: EvidenceItem[] = newsResults.articles.slice(0, 6).map((article, index) => ({
+        const newsEvidence: EvidenceItem[] = newsResults.posts.slice(0, 6).map((article, index) => ({
           id: `news_${index}`,
-          publisher: article.source_name,
-          url: article.link,
-          quote: article.description,
+          publisher: article.author,
+          url: article.url,
+          quote: article.text,
           score: this.calculateNewsScore(article, claimText),
           type: 'news',
-          publishedDate: article.pubDate
+          publishedDate: article.published
         }));
 
         evidence.push(...newsEvidence);
@@ -502,8 +501,8 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
 
   private calculateNewsScore(article: any, claimText: string): number {
     let score = 55; // Adjusted base score for more detailed calculation
-    const sourceName = article.source_name.toLowerCase();
-    const description = article.description.toLowerCase();
+    const sourceName = article.author.toLowerCase();
+    const description = article.text.toLowerCase();
     const title = article.title.toLowerCase();
 
     // Granular source credibility with penalties
@@ -528,7 +527,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
 
 
     // Recency boost (more granular)
-    const daysOld = (Date.now() - new Date(article.pubDate).getTime()) / (1000 * 60 * 60 * 24);
+    const daysOld = (Date.now() - new Date(article.published).getTime()) / (1000 * 60 * 60 * 24);
     if (daysOld <= 2) score += 15;
     else if (daysOld <= 10) score += 10;
     else if (daysOld <= 45) score += 5;
@@ -541,7 +540,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     score -= biasedMentions * 5; // Penalize for each biased keyword
 
     // Boost for article length (as a proxy for depth)
-    if (article.description.length > 250) {
+    if (article.text.length > 250) {
         score += 10;
     }
 
@@ -670,7 +669,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
           apis.push('serp-api');
           break;
         case 'specialized-analysis':
-          apis.push('newsdata-io');
+          apis.push('webz-io');
           break;
         case 'synthesis':
           apis.push('multi-source-synthesis');
