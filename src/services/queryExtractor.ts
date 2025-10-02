@@ -58,7 +58,7 @@ export class QueryExtractorService {
   private ai: GoogleGenAI;
 
   private constructor() {
-    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    this.ai = new GoogleGenAI(getGeminiApiKey());
   }
 
   static getInstance(): QueryExtractorService {
@@ -94,16 +94,17 @@ Primary: "Elon Musk Twitter acquisition 2022 price"
 Sub-Queries: ["Twitter deal $44 billion", "Elon Musk Twitter October 2022"]
 Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]`;
 
-      const result = await this.ai.models.generateContent({
+      const model = this.ai.getGenerativeModel({
         model: getGeminiModel(),
-        contents: prompt,
-        config: {
+        generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: queryExtractionSchema,
           temperature: 0.3,
           maxOutputTokens: 1500
-        }
+        },
+        tools: [{ functionDeclarations: [queryExtractionSchema] }]
       });
+
+      const result = await model.generateContent(prompt);
 
       const extracted = parseAIJsonResponse(result.text) as ExtractedQueries;
 
