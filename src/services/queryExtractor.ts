@@ -2,8 +2,8 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { geminiService } from './geminiService';
-import { jsonParser, parseAIJsonResponse } from '../utils/jsonParser';
+import geminiService from './geminiService';
+import jsonParser, { parseAIJsonResponse } from '../utils/jsonParser';
 
 // --- NEW INTERFACE ---
 export interface ExtractedSearchTerms {
