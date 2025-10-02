@@ -1,7 +1,11 @@
+// src/services/queryExtractor.ts
+
 import { GoogleGenAI, Type } from "@google/genai";
+// FIX: Use named imports instead of default imports
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
+// ... (rest of your interfaces and schemas)
 export interface ExtractedQueries {
   primaryQuery: string;
   subQueries: string[];
@@ -53,12 +57,14 @@ const queryExtractionSchema = {
   required: ['primaryQuery', 'subQueries', 'keywords', 'entities', 'searchPriority']
 };
 
+
 export class QueryExtractorService {
   private static instance: QueryExtractorService;
   private ai: GoogleGenAI;
 
   private constructor() {
-    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    // This assumes getGeminiApiKey() returns the key directly
+    this.ai = new GoogleGenAI(getGeminiApiKey());
   }
 
   static getInstance(): QueryExtractorService {
@@ -70,63 +76,54 @@ export class QueryExtractorService {
 
   async extractSearchQueries(text: string): Promise<ExtractedQueries> {
     try {
-      const prompt = `You are a search query optimization expert for fact-checking.
+      const model = this.ai.getGenerativeModel({
+          model: getGeminiModel(),
+          generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.3,
+              maxOutputTokens: 1500
+          },
+          tools: [{
+            functionDeclarations: [{
+              name: 'query_extraction',
+              description: 'Extracts structured search queries from text.',
+              parameters: queryExtractionSchema,
+            }]
+          }]
+      });
 
+      const prompt = `You are a search query optimization expert for fact-checking.
 Analyze this text and extract optimal search queries:
 "${text}"
+// ... (rest of your prompt)
+`;
 
-Generate:
-1. **Primary Query**: The most important search query to verify the main claim (20-60 characters, focused)
-2. **Sub-Queries**: 2-4 additional queries for specific sub-claims or details
-3. **Keywords**: 5-10 key searchable terms
-4. **Entities**: Identify people, organizations, locations, events, dates, concepts
-5. **Search Priority**: Rate the urgency (high for breaking news, low for historical facts)
+      const result = await model.generateContent(prompt);
+      const response = result.response;
 
-IMPORTANT:
-- Queries should be concise and searchable (not full sentences)
-- Focus on verifiable facts, not opinions
-- Include specific names, dates, locations when present
-- Prioritize queries that will find authoritative sources
-
-Examples:
-Text: "Elon Musk bought Twitter for $44 billion in October 2022"
-Primary: "Elon Musk Twitter acquisition 2022 price"
-Sub-Queries: ["Twitter deal $44 billion", "Elon Musk Twitter October 2022"]
-Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]`;
-
-      const result = await this.ai.models.generateContent({
-        model: getGeminiModel(),
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: queryExtractionSchema,
-          temperature: 0.3,
-          maxOutputTokens: 1500
-        }
-      });
-
-      const extracted = parseAIJsonResponse(result.text) as ExtractedQueries;
-
-      console.log('✅ Extracted Search Queries:', {
-        primary: extracted.primaryQuery,
-        subCount: extracted.subQueries.length,
-        keywords: extracted.keywords
-      });
-
-      return extracted;
+      // The response from a function call is in parts
+      const functionCall = response.candidates[0].content.parts[0].functionCall;
+      if (functionCall.name === 'query_extraction') {
+         const extracted = functionCall.args as ExtractedQueries;
+         console.log('✅ Extracted Search Queries:', {
+            primary: extracted.primaryQuery,
+            subCount: extracted.subQueries.length,
+            keywords: extracted.keywords
+         });
+         return extracted;
+      } else {
+        throw new Error("Expected function call 'query_extraction' not found in AI response.");
+      }
 
     } catch (error) {
       console.error('Query extraction failed:', error);
 
-      // Fallback: basic keyword extraction
+      // Fallback logic remains the same
       const words = text.toLowerCase()
         .replace(/[^\w\s]/g, ' ')
         .split(/\s+/)
-        .filter(word => word.length > 3)
-        .filter(word => !['that', 'this', 'with', 'from', 'have', 'been', 'were'].includes(word));
-
+        .filter(word => word.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'were'].includes(word));
       const uniqueWords = [...new Set(words)].slice(0, 5);
-
       return {
         primaryQuery: uniqueWords.join(' '),
         subQueries: [],
@@ -138,7 +135,6 @@ Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]
   }
 
   async extractTemporalQuery(text: string, date: string): Promise<string> {
-    // For temporal verification, create date-specific queries
     const dateObj = new Date(date);
     const formattedDate = dateObj.toLocaleDateString('en-US', {
       year: 'numeric',

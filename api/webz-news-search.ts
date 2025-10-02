@@ -1,14 +1,24 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 
+const MAX_WEBZ_QUERY_LENGTH = 100; // Define the hard limit
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     console.log('[webz-news-search] Function invoked.');
 
-    const { query, fromDate } = req.body;
+    let { query, fromDate } = req.body; // Make query mutable
     if (!query) {
       console.error('[webz-news-search] Error: Missing "query" parameter in the request body.');
       return res.status(400).json({ error: 'Bad Request: Missing required "query" parameter.' });
     }
+
+    // --- START OF FIX ---
+    // Add a server-side safeguard to truncate the query if it's too long
+    if (query.length > MAX_WEBZ_QUERY_LENGTH) {
+      console.warn(`[webz-news-search] Query was truncated on server from ${query.length} to ${MAX_WEBZ_QUERY_LENGTH} characters.`);
+      query = query.substring(0, MAX_WEBZ_QUERY_LENGTH);
+    }
+    // --- END OF FIX ---
 
     const apiKey = process.env.WEBZ_API_KEY;
     if (!apiKey) {
