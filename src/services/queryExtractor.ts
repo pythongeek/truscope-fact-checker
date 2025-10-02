@@ -1,157 +1,141 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+// src/services/queryExtractor.ts
+
+import { GoogleGenAI, Type } from "@google/genai"; // Make sure 'Type' is imported
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export interface ExtractedQueries {
-  primaryQuery: string;
-  subQueries: string[];
-  keywords: string[];
-  entities: Array<{
-    name: string;
-    type: 'person' | 'organization' | 'location' | 'event' | 'date' | 'concept';
-  }>;
-  searchPriority: 'high' | 'medium' | 'low';
+    primaryQuery: string;
+    subQueries: string[];
+    keywords: string[];
+    entities: Array<{
+        name: string;
+        type: 'person' | 'organization' | 'location' | 'event' | 'date' | 'concept';
+    }>;
+    searchPriority: 'high' | 'medium' | 'low';
 }
 
+// --- START OF FIX ---
+// The schema now uses the 'Type' enum from the @google/genai SDK instead of strings.
 const queryExtractionSchema = {
-  name: "extractQueries",
-  description: "Extracts structured search query data from a given text.",
-  parameters: {
-    type: "object",
+    type: Type.OBJECT,
     properties: {
-      primaryQuery: {
-        type: "string",
-        description: "Main search query optimized for fact-checking"
-      },
-      subQueries: {
-        type: "array",
-        items: { type: "string" },
-        description: "Additional targeted queries for specific claims"
-      },
-      keywords: {
-        type: "array",
-        items: { type: "string" },
-        description: "Key searchable terms"
-      },
-      entities: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            type: {
-              type: "string",
-              enum: ['person', 'organization', 'location', 'event', 'date', 'concept']
-            }
-          },
-          required: ['name', 'type']
-        }
-      },
-      searchPriority: {
-        type: "string",
-        enum: ['high', 'medium', 'low'],
-        description: "Priority level for search execution"
-      }
+        primaryQuery: {
+            type: Type.STRING,
+            description: "A concise, high-level search query summarizing the core claim or topic.",
+        },
+        subQueries: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of secondary, more specific questions to verify individual facts.",
+        },
+        keywords: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of essential single or two-word keywords from the text.",
+        },
+        entities: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    type: { type: Type.STRING, enum: ['person', 'organization', 'location', 'event', 'date', 'concept'] },
+                },
+                required: ['name', 'type'],
+            },
+            description: "A list of named entities (people, places, organizations).",
+        },
+        searchPriority: {
+            type: Type.STRING,
+            enum: ['high', 'medium', 'low'],
+            description: "The urgency or importance of fact-checking this claim.",
+        },
     },
-    required: ['primaryQuery', 'subQueries', 'keywords', 'entities', 'searchPriority']
-  }
+    required: ["primaryQuery", "subQueries", "keywords", "entities", "searchPriority"],
 };
+// --- END OF FIX ---
 
 export class QueryExtractorService {
-  private static instance: QueryExtractorService;
-  private ai: GoogleGenerativeAI;
+    private static instance: QueryExtractorService;
+    private ai: GoogleGenAI;
 
-  private constructor() {
-    this.ai = new GoogleGenerativeAI(getGeminiApiKey());
-  }
-
-  static getInstance(): QueryExtractorService {
-    if (!QueryExtractorService.instance) {
-      QueryExtractorService.instance = new QueryExtractorService();
+    private constructor() {
+        this.ai = new GoogleGenAI(getGeminiApiKey());
     }
-    return QueryExtractorService.instance;
-  }
 
-  async extractSearchQueries(text: string): Promise<ExtractedQueries> {
-    try {
-      const prompt = `You are a search query optimization expert for fact-checking.
-
-Analyze this text and extract optimal search queries:
-"${text}"
-
-Generate:
-1. **Primary Query**: The most important search query to verify the main claim (20-60 characters, focused)
-2. **Sub-Queries**: 2-4 additional queries for specific sub-claims or details
-3. **Keywords**: 5-10 key searchable terms
-4. **Entities**: Identify people, organizations, locations, events, dates, concepts
-5. **Search Priority**: Rate the urgency (high for breaking news, low for historical facts)
-
-IMPORTANT:
-- Queries should be concise and searchable (not full sentences)
-- Focus on verifiable facts, not opinions
-- Include specific names, dates, locations when present
-- Prioritize queries that will find authoritative sources
-
-Examples:
-Text: "Elon Musk bought Twitter for $44 billion in October 2022"
-Primary: "Elon Musk Twitter acquisition 2022 price"
-Sub-Queries: ["Twitter deal $44 billion", "Elon Musk Twitter October 2022"]
-Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]`;
-
-      const model = this.ai.getGenerativeModel({
-        model: getGeminiModel(),
-        tools: [{ functionDeclarations: [queryExtractionSchema] }],
-      });
-
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const functionCall = response.candidates?.[0]?.content?.parts?.[0]?.functionCall;
-
-      if (!functionCall || !functionCall.args) {
-        throw new Error("No function call or arguments found in response");
-      }
-
-      const extracted = functionCall.args as ExtractedQueries;
-
-      console.log('✅ Extracted Search Queries:', {
-        primary: extracted.primaryQuery,
-        subCount: extracted.subQueries.length,
-        keywords: extracted.keywords
-      });
-
-      return extracted;
-
-    } catch (error) {
-      console.error('Query extraction failed:', error);
-
-      // Fallback: basic keyword extraction
-      const words = text.toLowerCase()
-        .replace(/[^\w\s]/g, ' ')
-        .split(/\s+/)
-        .filter(word => word.length > 3)
-        .filter(word => !['that', 'this', 'with', 'from', 'have', 'been', 'were'].includes(word));
-
-      const uniqueWords = [...new Set(words)].slice(0, 5);
-
-      return {
-        primaryQuery: uniqueWords.join(' '),
-        subQueries: [],
-        keywords: uniqueWords,
-        entities: [],
-        searchPriority: 'medium'
-      };
+    static getInstance(): QueryExtractorService {
+        if (!QueryExtractorService.instance) {
+            QueryExtractorService.instance = new QueryExtractorService();
+        }
+        return QueryExtractorService.instance;
     }
-  }
 
-  async extractTemporalQuery(text: string, date: string): Promise<string> {
-    // For temporal verification, create date-specific queries
-    const dateObj = new Date(date);
-    const formattedDate = dateObj.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long'
-    });
+    async extractSearchQueries(text: string): Promise<ExtractedQueries> {
+        try {
+            const model = this.ai.getGenerativeModel({
+                model: getGeminiModel(),
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    temperature: 0.3,
+                    maxOutputTokens: 1500
+                },
+                tools: [{
+                    functionDeclarations: [{
+                        name: 'query_extraction',
+                        description: 'Extracts structured search queries from text.',
+                        // The corrected schema is used here
+                        parameters: queryExtractionSchema,
+                    }]
+                }]
+            });
 
-    const queries = await this.extractSearchQueries(text);
-    return `${queries.primaryQuery} ${formattedDate}`;
-  }
+            const prompt = `You are a search query optimization expert for fact-checking. Analyze this text and extract optimal search queries: "${text}"`;
+
+            const result = await model.generateContent(prompt);
+            const response = result.response;
+
+            if (response.candidates && response.candidates[0].content.parts[0].functionCall) {
+                const functionCall = response.candidates[0].content.parts[0].functionCall;
+                if (functionCall.name === 'query_extraction') {
+                    const extracted = functionCall.args as ExtractedQueries;
+                    console.log('✅ Extracted Search Queries:', {
+                        primary: extracted.primaryQuery,
+                        subCount: extracted.subQueries.length,
+                        keywords: extracted.keywords
+                    });
+                    return extracted;
+                }
+            }
+            throw new Error("Expected function call 'query_extraction' not found in AI response.");
+
+        } catch (error) {
+            console.error('Query extraction failed:', error);
+
+            // Fallback logic
+            const words = text.toLowerCase()
+                .replace(/[^\w\s]/g, ' ')
+                .split(/\s+/)
+                .filter(word => word.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'were'].includes(word));
+            const uniqueWords = [...new Set(words)].slice(0, 5);
+            return {
+                primaryQuery: uniqueWords.join(' '),
+                subQueries: [],
+                keywords: uniqueWords,
+                entities: [],
+                searchPriority: 'medium'
+            };
+        }
+    }
+
+    async extractTemporalQuery(text: string, date: string): Promise<string> {
+        const dateObj = new Date(date);
+        const formattedDate = dateObj.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long'
+        });
+
+        const queries = await this.extractSearchQueries(text);
+        return `${queries.primaryQuery} ${formattedDate}`;
+    }
 }
