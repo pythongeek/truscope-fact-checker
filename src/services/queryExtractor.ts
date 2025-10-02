@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, FunctionDeclarationSchemaType } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
@@ -14,51 +14,55 @@ export interface ExtractedQueries {
 }
 
 const queryExtractionSchema = {
-  type: Type.OBJECT,
-  properties: {
-    primaryQuery: {
-      type: Type.STRING,
-      description: "Main search query optimized for fact-checking"
-    },
-    subQueries: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Additional targeted queries for specific claims"
-    },
-    keywords: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "Key searchable terms"
-    },
-    entities: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          type: {
-            type: Type.STRING,
-            enum: ['person', 'organization', 'location', 'event', 'date', 'concept']
-          }
-        },
-        required: ['name', 'type']
+  name: "extractQueries",
+  description: "Extracts structured search query data from a given text.",
+  parameters: {
+    type: FunctionDeclarationSchemaType.OBJECT,
+    properties: {
+      primaryQuery: {
+        type: FunctionDeclarationSchemaType.STRING,
+        description: "Main search query optimized for fact-checking"
+      },
+      subQueries: {
+        type: FunctionDeclarationSchemaType.ARRAY,
+        items: { type: FunctionDeclarationSchemaType.STRING },
+        description: "Additional targeted queries for specific claims"
+      },
+      keywords: {
+        type: FunctionDeclarationSchemaType.ARRAY,
+        items: { type: FunctionDeclarationSchemaType.STRING },
+        description: "Key searchable terms"
+      },
+      entities: {
+        type: FunctionDeclarationSchemaType.ARRAY,
+        items: {
+          type: FunctionDeclarationSchemaType.OBJECT,
+          properties: {
+            name: { type: FunctionDeclarationSchemaType.STRING },
+            type: {
+              type: FunctionDeclarationSchemaType.STRING,
+              enum: ['person', 'organization', 'location', 'event', 'date', 'concept']
+            }
+          },
+          required: ['name', 'type']
+        }
+      },
+      searchPriority: {
+        type: FunctionDeclarationSchemaType.STRING,
+        enum: ['high', 'medium', 'low'],
+        description: "Priority level for search execution"
       }
     },
-    searchPriority: {
-      type: Type.STRING,
-      enum: ['high', 'medium', 'low'],
-      description: "Priority level for search execution"
-    }
-  },
-  required: ['primaryQuery', 'subQueries', 'keywords', 'entities', 'searchPriority']
+    required: ['primaryQuery', 'subQueries', 'keywords', 'entities', 'searchPriority']
+  }
 };
 
 export class QueryExtractorService {
   private static instance: QueryExtractorService;
-  private ai: GoogleGenAI;
+  private ai: GoogleGenerativeAI;
 
   private constructor() {
-    this.ai = new GoogleGenAI(getGeminiApiKey());
+    this.ai = new GoogleGenerativeAI(getGeminiApiKey());
   }
 
   static getInstance(): QueryExtractorService {
@@ -96,17 +100,18 @@ Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]
 
       const model = this.ai.getGenerativeModel({
         model: getGeminiModel(),
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.3,
-          maxOutputTokens: 1500
-        },
-        tools: [{ functionDeclarations: [queryExtractionSchema] }]
+        tools: [{ functionDeclarations: [queryExtractionSchema] }],
       });
 
       const result = await model.generateContent(prompt);
+      const response = result.response;
+      const functionCall = response.candidates?.[0]?.content?.parts?.[0]?.functionCall;
 
-      const extracted = parseAIJsonResponse(result.text) as ExtractedQueries;
+      if (!functionCall || !functionCall.args) {
+        throw new Error("No function call or arguments found in response");
+      }
+
+      const extracted = functionCall.args as ExtractedQueries;
 
       console.log('✅ Extracted Search Queries:', {
         primary: extracted.primaryQuery,
