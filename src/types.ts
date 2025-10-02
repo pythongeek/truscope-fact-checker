@@ -55,3 +55,18 @@ export interface NewsArticle {
   pubDate: string;
   source: string;
 }
+
+// Add 'export' to this interface
+export interface NewsSource {
+  searchNews(params: SearchParams): Promise<any>;
+}
+
+// Add 'export' to this type
+export type SearchParams = {
+  query: string;
+  fromDate?: string;
+  toDate?: string;
+  maxResults?: number;
+  language?: string;
+  country?: string;
+};
