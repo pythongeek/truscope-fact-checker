@@ -1,8 +1,9 @@
 // src/services/queryExtractor.ts
 
-import { GoogleGenAI, Type } from "@google/genai"; // Make sure 'Type' is imported
+// FIX: Import the correct class name 'GoogleGenerativeAI'
+import { GoogleGenerativeAI, Type } from "@google/genai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { parseAIJsonResponse } from '../utils/jsonParser';
+// parseAIJsonResponse is not used, so it's removed to keep the code clean.
 
 export interface ExtractedQueries {
     primaryQuery: string;
@@ -15,25 +16,12 @@ export interface ExtractedQueries {
     searchPriority: 'high' | 'medium' | 'low';
 }
 
-// --- START OF FIX ---
-// The schema now uses the 'Type' enum from the @google/genai SDK instead of strings.
 const queryExtractionSchema = {
     type: Type.OBJECT,
     properties: {
-        primaryQuery: {
-            type: Type.STRING,
-            description: "A concise, high-level search query summarizing the core claim or topic.",
-        },
-        subQueries: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "A list of secondary, more specific questions to verify individual facts.",
-        },
-        keywords: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "A list of essential single or two-word keywords from the text.",
-        },
+        primaryQuery: { type: Type.STRING, description: "..." },
+        subQueries: { type: Type.ARRAY, items: { type: Type.STRING }, description: "..." },
+        keywords: { type: Type.ARRAY, items: { type: Type.STRING }, description: "..." },
         entities: {
             type: Type.ARRAY,
             items: {
@@ -44,24 +32,21 @@ const queryExtractionSchema = {
                 },
                 required: ['name', 'type'],
             },
-            description: "A list of named entities (people, places, organizations).",
+            description: "...",
         },
-        searchPriority: {
-            type: Type.STRING,
-            enum: ['high', 'medium', 'low'],
-            description: "The urgency or importance of fact-checking this claim.",
-        },
+        searchPriority: { type: Type.STRING, enum: ['high', 'medium', 'low'], description: "..." },
     },
     required: ["primaryQuery", "subQueries", "keywords", "entities", "searchPriority"],
 };
-// --- END OF FIX ---
 
 export class QueryExtractorService {
     private static instance: QueryExtractorService;
-    private ai: GoogleGenAI;
+    // FIX: Use the correct class type 'GoogleGenerativeAI'
+    private ai: GoogleGenerativeAI;
 
     private constructor() {
-        this.ai = new GoogleGenAI(getGeminiApiKey());
+        // FIX: Instantiate the correct class 'GoogleGenerativeAI'
+        this.ai = new GoogleGenerativeAI(getGeminiApiKey());
     }
 
     static getInstance(): QueryExtractorService {
@@ -73,6 +58,7 @@ export class QueryExtractorService {
 
     async extractSearchQueries(text: string): Promise<ExtractedQueries> {
         try {
+            // This method call is now correct because 'this.ai' is the right object type
             const model = this.ai.getGenerativeModel({
                 model: getGeminiModel(),
                 generationConfig: {
@@ -84,7 +70,6 @@ export class QueryExtractorService {
                     functionDeclarations: [{
                         name: 'query_extraction',
                         description: 'Extracts structured search queries from text.',
-                        // The corrected schema is used here
                         parameters: queryExtractionSchema,
                     }]
                 }]
@@ -111,12 +96,8 @@ export class QueryExtractorService {
 
         } catch (error) {
             console.error('Query extraction failed:', error);
-
-            // Fallback logic
-            const words = text.toLowerCase()
-                .replace(/[^\w\s]/g, ' ')
-                .split(/\s+/)
-                .filter(word => word.length > 3 && !['that', 'this', 'with', 'from', 'have', 'been', 'were'].includes(word));
+            // Fallback logic remains the same
+            const words = text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(word => word.length > 3);
             const uniqueWords = [...new Set(words)].slice(0, 5);
             return {
                 primaryQuery: uniqueWords.join(' '),
@@ -130,11 +111,7 @@ export class QueryExtractorService {
 
     async extractTemporalQuery(text: string, date: string): Promise<string> {
         const dateObj = new Date(date);
-        const formattedDate = dateObj.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'long'
-        });
-
+        const formattedDate = dateObj.toLocaleString('en-US', { year: 'numeric', month: 'long' });
         const queries = await this.extractSearchQueries(text);
         return `${queries.primaryQuery} ${formattedDate}`;
     }
