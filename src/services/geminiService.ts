@@ -7,7 +7,7 @@ import { search } from './webSearch';
 import { enhancedFactCheck } from './textAnalysisService';
 import { RealTimeFactDBService } from './realTimeFactDB';
 import { FactDatabase, FactVerdict } from "../types/factDatabase";
-import { parseAIJsonResponse } from '../utils/jsonParser';
+import { RobustJSONParser } from '../utils/jsonParser';
 import { generateSHA256 } from '../utils/hashUtils';
 
 // Helper function to extract text from different SDK response structures
@@ -322,7 +322,7 @@ Respond with exactly this JSON structure:
         const responseText = extractTextFromGeminiResponse(result);
         console.log('Normalization AI response:', responseText);
 
-        const parsedResult = parseAIJsonResponse(responseText);
+        const parsedResult = RobustJSONParser.parse(responseText);
 
         // Validate the response has required fields
         if (parsedResult && parsedResult.normalized_claim && parsedResult.keywords && Array.isArray(parsedResult.keywords)) {
@@ -388,7 +388,7 @@ Make sure your response is valid JSON.`;
         });
 
         const responseText = extractTextFromGeminiResponse(result);
-        const parsed = parseAIJsonResponse(responseText);
+        const parsed = RobustJSONParser.parse(responseText);
 
         // Create a proper FactCheckReport structure
         const report: FactCheckReport = {
@@ -512,7 +512,7 @@ const runGoogleSearchAndAiCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    return parseAIJsonResponse(jsonString) as FactCheckReport;
+    return RobustJSONParser.parse(jsonString) as FactCheckReport;
 };
 
 const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: string): Promise<FactCheckReport> => {
@@ -539,7 +539,7 @@ const runHybridCheck = async (normalizedClaim: ClaimNormalization, context?: str
         },
     });
     const jsonString = result.text.trim();
-    return parseAIJsonResponse(jsonString) as FactCheckReport;
+    return RobustJSONParser.parse(jsonString) as FactCheckReport;
 };
 
 // NEW: Citation-Augmented Core Analysis Method
@@ -577,7 +577,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const jsonString = result.text.trim();
-    const preliminaryAnalysis: PreliminaryAnalysis = parseAIJsonResponse(jsonString);
+    const preliminaryAnalysis: PreliminaryAnalysis = RobustJSONParser.parse(jsonString);
 
     // --- 2. External Evidence Gathering ---
     console.log("Starting targeted searches for verification...");
@@ -636,7 +636,7 @@ const runCitationAugmentedCheck = async (normalizedClaim: ClaimNormalization, co
         },
     });
     const finalJsonString = finalResult.text.trim();
-    const finalReport = parseAIJsonResponse(finalJsonString) as FactCheckReport;
+    const finalReport = RobustJSONParser.parse(finalJsonString) as FactCheckReport;
 
     // Ensure searchEvidence is populated with the actual search results
     if (searchResults.length > 0) {
@@ -689,7 +689,7 @@ export const synthesizeEvidenceWithGemini = async (claimText: string, evidence: 
             },
         });
         const jsonString = result.text.trim();
-        const report = parseAIJsonResponse(jsonString) as FactCheckReport;
+        const report = RobustJSONParser.parse(jsonString) as FactCheckReport;
 
         // Populate metadata that the AI cannot determine
         report.metadata.method_used = 'gemini-synthesis';

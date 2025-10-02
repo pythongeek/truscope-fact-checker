@@ -2,13 +2,12 @@ import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/cor
 import { AdvancedEvidence } from '../types/enhancedFactCheck';
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
-import { parseAIJsonResponse } from '../utils/jsonParser';
+import { RobustJSONParser } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
   private ai: GoogleGenAI;
 
   constructor() {
-    // Reverting to the user's original constructor pattern
     this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
   }
 
@@ -51,13 +50,8 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
-      const result = await this.ai.models.generateContent({
-        model: getGeminiModel(),
-        contents: prompt,
-      });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const result = await this.ai.getGenerativeModel({ model: getGeminiModel() }).generateContent(prompt);
+      const response = RobustJSONParser.parse(result.response.text());
 
       return {
         totalIssues: response.issues.length,
@@ -130,13 +124,8 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
-      const result = await this.ai.models.generateContent({
-        model: getGeminiModel(),
-        contents: prompt,
-      });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const result = await this.ai.getGenerativeModel({ model: getGeminiModel() }).generateContent(prompt);
+      const response = RobustJSONParser.parse(result.response.text());
 
       return {
         id: `correction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

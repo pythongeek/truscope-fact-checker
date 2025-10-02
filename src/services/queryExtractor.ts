@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { parseAIJsonResponse } from '../utils/jsonParser';
+import { RobustJSONParser } from '../utils/jsonParser';
 
 export interface ExtractedQueries {
   primaryQuery: string;
@@ -105,7 +105,7 @@ Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]
         }
       });
 
-      const extracted = parseAIJsonResponse(result.text) as ExtractedQueries;
+      const extracted = RobustJSONParser.parse(result.response.text()) as ExtractedQueries;
 
       console.log('✅ Extracted Search Queries:', {
         primary: extracted.primaryQuery,

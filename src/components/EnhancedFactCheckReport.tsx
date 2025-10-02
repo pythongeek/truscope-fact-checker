@@ -159,27 +159,42 @@ export const EnhancedFactCheckReport: React.FC<EnhancedFactCheckReportProps> = (
 
           <div className="space-y-3">
             {report.evidence.map((evidence, idx) => (
-              <div key={idx} className="border border-slate-700 rounded p-3">
+              <div key={idx} className="border border-slate-700 rounded p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-slate-300">{evidence.publisher}</span>
-                  <span className={`px-2 py-1 rounded text-xs ${
-                    evidence.score >= 80 ? 'bg-green-500/10 text-green-300' :
-                    evidence.score >= 60 ? 'bg-yellow-500/10 text-yellow-300' :
-                    'bg-red-500/10 text-red-300'
-                  }`}>
-                    {evidence.score}/100
-                  </span>
+                  {evidence.source && (
+                    <span className={`px-2 py-1 rounded text-xs capitalize ${
+                      evidence.source.classification === 'highly-credible' ? 'bg-green-500/10 text-green-300' :
+                      evidence.source.classification === 'credible' ? 'bg-sky-500/10 text-sky-300' :
+                      evidence.source.classification === 'mixed' ? 'bg-yellow-500/10 text-yellow-300' :
+                      'bg-red-500/10 text-red-300'
+                    }`}>
+                      {evidence.source.classification.replace('-', ' ')}
+                    </span>
+                  )}
                 </div>
-                <p className="text-sm text-slate-400 mb-2">{evidence.quote}</p>
-                {evidence.url && (
-                  <a
-                    href={evidence.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-indigo-400 hover:text-indigo-300"
-                  >
-                    View Source →
-                  </a>
+                <p className="text-sm text-slate-400 mb-3">{evidence.quote}</p>
+                <div className="flex items-center justify-between">
+                  {evidence.url && (
+                    <a
+                      href={evidence.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-indigo-400 hover:text-indigo-300"
+                    >
+                      View Source →
+                    </a>
+                  )}
+                  {evidence.source && (
+                    <div className="text-xs text-slate-500" title={`Rating: ${evidence.source.rating}/100`}>
+                      Credibility: {evidence.source.rating}/100
+                    </div>
+                  )}
+                </div>
+                {evidence.source?.warnings && evidence.source.warnings.length > 0 && (
+                  <div className="mt-2 text-xs text-yellow-500/80">
+                    Warning: {evidence.source.warnings.join(', ')}
+                  </div>
                 )}
               </div>
             ))}
