@@ -8,6 +8,15 @@ import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { synthesizeEvidenceWithGemini } from './geminiService';
 
+// ADD THIS HELPER FUNCTION at the top of the class
+const truncateQuery = (query: string, maxLength: number = 2000): string => {
+  if (query.length > maxLength) {
+    console.warn(`Query truncated from ${query.length} to ${maxLength} characters.`);
+    return query.substring(0, maxLength);
+  }
+  return query;
+};
+
 export type FactCheckTier = 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
 
 export interface TierResult {
@@ -231,7 +240,7 @@ export class TieredFactCheckService {
     console.log('🔍 Phase 2: Broad Web Search & Initial Grounding');
 
     try {
-      const searchResults = await this.serpApi.search(claimText, 10);
+      const searchResults = await this.serpApi.search(truncateQuery(claimText), 10);
 
       if (searchResults.results.length === 0) {
         return {
@@ -298,7 +307,7 @@ export class TieredFactCheckService {
         console.log('📅 Temporal elements detected, fetching recent news');
 
         const newsResults = await this.newsService.searchNews({
-          query: claimText,
+          query: truncateQuery(claimText),
           fromDate: hasTemporalElements.extractedDate || new Date().toISOString()
         });
 
