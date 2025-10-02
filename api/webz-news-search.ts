@@ -41,11 +41,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`[webz-news-search] Received status ${response.status} from Webz.io API.`);
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[webz-news-search] Webz.io API returned an error:', errorData);
-      return res.status(response.status).json({
-        error: 'Failed to fetch from Webz.io API',
-        details: errorData,
+      // If not, read the response as plain text to avoid a JSON parsing error
+      const errorText = await response.text();
+      console.error(`[webz-news-search] Webz.io API Error: ${response.status}`, errorText);
+
+      // Return a structured error to your frontend
+      return res.status(500).json({
+        message: 'Failed to fetch from the news API.',
+        details: errorText
       });
     }
 

@@ -1,55 +1,51 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
+// /api/serp-search.ts
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+const SERPER_API_URL = 'https://google.serper.dev/search';
+const MAX_QUERY_LENGTH = 2048;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    console.log('[serp-search] Function invoked.');
-
-    const { query } = req.body;
-    if (!query) {
-      console.error('[serp-search] Error: Missing "query" parameter in the request body.');
-      return res.status(400).json({ error: 'Bad Request: Missing required "query" parameter.' });
+    if (req.method !== 'POST') {
+        return res.status(405).json({ message: 'Method Not Allowed' });
     }
 
+    let { query } = req.body;
     const apiKey = process.env.SERP_API_KEY;
+
     if (!apiKey) {
-      console.error('[serp-search] FATAL: SERP_API_KEY environment variable not found!');
-      return res.status(500).json({ error: 'Server Configuration Error: SERP API key not configured.' });
-    } else {
-      console.log(`[serp-search] API Key loaded successfully.`);
+        return res.status(500).json({ message: 'SERP API key not configured' });
+    }
+    if (!query || typeof query !== 'string') {
+        return res.status(400).json({ message: 'Query is required and must be a string' });
     }
 
-    const apiUrl = 'https://google.serper.dev/search';
-    console.log(`[serp-search] Fetching from URL: ${apiUrl}`);
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'X-API-KEY': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ q: query }),
-    });
-
-    console.log(`[serp-search] Received status ${response.status} from Serper API.`);
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[serp-search] Serper API returned an error:', errorData);
-      return res.status(response.status).json({
-        error: 'Failed to fetch from Serper API',
-        details: errorData,
-      });
+    // --- START OF FIX ---
+    if (query.length > MAX_QUERY_LENGTH) {
+        console.warn(`[serp-search] Query truncated on server-side from ${query.length} to ${MAX_QUERY_LENGTH}.`);
+        query = query.substring(0, MAX_QUERY_LENGTH);
     }
+    // --- END OF FIX ---
 
-    const data = await response.json();
-    console.log('[serp-search] Successfully fetched data. Sending 200 OK response.');
-    res.status(200).json(data);
+    try {
+        const response = await fetch(SERPER_API_URL, {
+            method: 'POST',
+            headers: {
+                'X-API-KEY': apiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ q: query }), // Use the safe, truncated query
+        });
 
-  } catch (error: any) {
-    console.error('[serp-search] An unexpected error occurred in the handler:', error);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      details: error.message || 'An unknown error occurred.',
-    });
-  }
+        const data = await response.json();
+        if (!response.ok) {
+            console.error('[serp-search] Serper API returned an error:', data);
+            return res.status(response.status).json(data);
+        }
+
+        return res.status(200).json(data);
+    } catch (error: any) {
+        console.error('[serp-search] An unexpected error occurred:', error);
+        return res.status(500).json({ message: 'An internal error occurred' });
+    }
 }
