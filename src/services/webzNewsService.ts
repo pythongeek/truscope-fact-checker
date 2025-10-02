@@ -1,11 +1,11 @@
-import { HttpClient } from './httpClient';
+import { RobustHttpClient } from './httpClient';
 import { NewsSource, SearchParams } from '../types';
 
 export class WebzNewsService implements NewsSource {
-  private httpClient: HttpClient;
+  private httpClient: RobustHttpClient;
 
   constructor() {
-    this.httpClient = new HttpClient();
+    this.httpClient = RobustHttpClient.getInstance();
   }
 
   async searchNews(params: SearchParams): Promise<any> {
