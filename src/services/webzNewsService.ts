@@ -10,10 +10,24 @@ export class WebzNewsService implements NewsSource {
 
   async searchNews(params: SearchParams): Promise<any> {
     const { query, fromDate } = params;
-    console.log(`[WebzNewsService] Searching for: "${query}" from date: ${fromDate}`);
+
+    const MAX_QUERY_LENGTH = 80; // Leave buffer under 100
+
+    // Truncate and clean the query
+    let cleanQuery = query
+      .trim()
+      .substring(0, MAX_QUERY_LENGTH);
+
+    // Ensure it doesn't cut off mid-word
+    const lastSpace = cleanQuery.lastIndexOf(' ');
+    if (lastSpace > 50) { // Keep at least 50 chars
+      cleanQuery = cleanQuery.substring(0, lastSpace);
+    }
+
+    console.log(`[WebzNewsService] Searching with truncated query (${cleanQuery.length} chars): "${cleanQuery}" from date: ${fromDate}`);
 
     const body = {
-      query,
+      query: cleanQuery,
       fromDate,
     };
 
