@@ -1,5 +1,5 @@
 // src/services/analysis/AdvancedTextAnalyzer.ts
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from '../apiKeyService';
 import { parseAIJsonResponse } from '../../utils/jsonParser';
 // ============================================================================
@@ -73,23 +73,23 @@ processingTimestamp: string;
 // SCHEMA DEFINITIONS
 // ============================================================================
 const namedEntitySchema = {
-    type: SchemaType.OBJECT,
+    type: "object",
     properties: {
-        text: { type: SchemaType.STRING, description: "The entity text" },
+        text: { type: "string", description: "The entity text" },
         type: {
-            type: SchemaType.STRING,
+            type: "string",
             enum: ['PERSON', 'ORGANIZATION', 'LOCATION', 'EVENT', 'DATE', 'CONCEPT', 'PRODUCT', 'MONEY'],
             description: "Entity type"
         },
-        relevance: { type: SchemaType.INTEGER, description: "Relevance score 0-100" },
+        relevance: { type: "integer", description: "Relevance score 0-100" },
         aliases: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
+            type: "array",
+            items: { type: "string" },
             nullable: true,
             description: "Alternative names or spellings"
         },
         context: {
-            type: SchemaType.STRING,
+            type: "string",
             nullable: true,
             description: "Brief context about the entity"
         }
@@ -97,117 +97,117 @@ const namedEntitySchema = {
     required: ['text', 'type', 'relevance']
 };
 const atomicClaimSchema = {
-    type: SchemaType.OBJECT,
+    type: "object",
     properties: {
-        id: { type: SchemaType.STRING, description: "Unique claim identifier" },
-        claimText: { type: SchemaType.STRING, description: "The atomic claim statement" },
+        id: { type: "string", description: "Unique claim identifier" },
+        claimText: { type: "string", description: "The atomic claim statement" },
         claimType: {
-            type: SchemaType.STRING,
+            type: "string",
             enum: ['factual', 'statistical', 'causal', 'temporal', 'comparative', 'opinion'],
             description: "Type of claim"
         },
         verifiability: {
-            type: SchemaType.STRING,
+            type: "string",
             enum: ['high', 'medium', 'low'],
             description: "How verifiable this claim is"
         },
         entities: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
+            type: "array",
+            items: { type: "string" },
             description: "Entities referenced in this claim"
         },
         temporalContext: {
-            type: SchemaType.OBJECT,
+            type: "object",
             nullable: true,
             properties: {
-                hasDateReference: { type: SchemaType.BOOLEAN },
+                hasDateReference: { type: "boolean" },
                 dateType: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['specific', 'relative', 'range', 'ongoing', 'future']
                 },
                 extractedDates: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
+                    type: "array",
+                    items: { type: "string" }
                 },
                 temporalModifiers: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
+                    type: "array",
+                    items: { type: "string" }
                 },
-                timeframe: { type: SchemaType.STRING, nullable: true },
+                timeframe: { type: "string", nullable: true },
                 recency: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['breaking', 'recent', 'historical', 'timeless']
                 }
             },
             required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
         },
         dependencies: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING },
+            type: "array",
+            items: { type: "string" },
             description: "IDs of claims this depends on"
         },
         priority: {
-            type: SchemaType.INTEGER,
+            type: "integer",
             description: "Priority for verification (1-10)"
         }
     },
     required: ['id', 'claimText', 'claimType', 'verifiability', 'entities', 'dependencies', 'priority']
 };
 const deepTextAnalysisSchema = {
-    type: SchemaType.OBJECT,
+    type: "object",
     properties: {
         namedEntities: {
-            type: SchemaType.ARRAY,
+            type: "array",
             items: namedEntitySchema
         },
         atomicClaims: {
-            type: SchemaType.ARRAY,
+            type: "array",
             items: atomicClaimSchema
         },
         temporalContext: {
-            type: SchemaType.OBJECT,
+            type: "object",
             properties: {
-                hasDateReference: { type: SchemaType.BOOLEAN },
+                hasDateReference: { type: "boolean" },
                 dateType: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['specific', 'relative', 'range', 'ongoing', 'future']
                 },
                 extractedDates: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
+                    type: "array",
+                    items: { type: "string" }
                 },
                 temporalModifiers: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
+                    type: "array",
+                    items: { type: "string" }
                 },
-                timeframe: { type: SchemaType.STRING, nullable: true },
+                timeframe: { type: "string", nullable: true },
                 recency: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['breaking', 'recent', 'historical', 'timeless']
                 }
             },
             required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
         },
         biasIndicators: {
-            type: SchemaType.OBJECT,
+            type: "object",
             properties: {
-                overallBiasScore: { type: SchemaType.INTEGER },
+                overallBiasScore: { type: "integer" },
                 sentimentPolarity: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['positive', 'negative', 'neutral', 'mixed']
                 },
                 languageMarkers: {
-                    type: SchemaType.OBJECT,
+                    type: "object",
                     properties: {
-                        emotionalLanguage: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        absoluteStatements: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        hedgingLanguage: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-                        loadedTerms: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+                        emotionalLanguage: { type: "array", items: { type: "string" } },
+                        absoluteStatements: { type: "array", items: { type: "string" } },
+                        hedgingLanguage: { type: "array", items: { type: "string" } },
+                        loadedTerms: { type: "array", items: { type: "string" } }
                     },
                     required: ['emotionalLanguage', 'absoluteStatements', 'hedgingLanguage', 'loadedTerms']
                 },
                 sourceBias: {
-                    type: SchemaType.STRING,
+                    type: "string",
                     enum: ['left', 'center', 'right', 'unknown'],
                     nullable: true
                 }
@@ -215,11 +215,11 @@ const deepTextAnalysisSchema = {
             required: ['overallBiasScore', 'sentimentPolarity', 'languageMarkers']
         },
         complexity: {
-            type: SchemaType.STRING,
+            type: "string",
             enum: ['simple', 'moderate', 'complex']
         },
         suggestedSearchDepth: {
-            type: SchemaType.STRING,
+            type: "string",
             enum: ['shallow', 'standard', 'deep']
         }
     },
