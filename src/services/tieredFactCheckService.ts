@@ -1,3 +1,5 @@
+// src/services/tieredFactCheckService.ts - FIXED VERSION
+
 import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
@@ -8,13 +10,36 @@ import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { synthesizeEvidenceWithGemini } from './geminiService';
 
-// ADD THIS HELPER FUNCTION at the top of the class
-const truncateQuery = (query: string, maxLength: number = 2000): string => {
+// CRITICAL FIX: Smart query extraction
+const extractSearchQuery = (text: string, maxLength: number = 100): string => {
+  // Remove common filler words
+  const stopWords = ['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+
+  // Split into sentences and take first 1-2
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  let query = sentences.slice(0, 2).join(' ').trim();
+
+  // If still too long, extract key phrases
   if (query.length > maxLength) {
-    console.warn(`Query truncated from ${query.length} to ${maxLength} characters.`);
-    return query.substring(0, maxLength);
+    const words = query.split(/\s+/)
+      .filter(w => w.length > 3 && !stopWords.includes(w.toLowerCase()))
+      .slice(0, 8);
+    query = words.join(' ');
   }
-  return query;
+
+  // Final truncation as safety
+  return query.substring(0, maxLength);
+};
+
+// CRITICAL FIX: Extract entity-focused query
+const extractEntityQuery = (text: string): string => {
+  // Look for proper nouns (capitalized words), dates, numbers
+  const properNouns = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g) || [];
+  const dates = text.match(/\b\d{4}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/gi) || [];
+  const numbers = text.match(/\$[\d,]+(?:\.\d+)?(?:\s*(?:billion|million|thousand))?/gi) || [];
+
+  const keyElements = [...properNouns.slice(0, 3), ...dates, ...numbers.slice(0, 2)];
+  return keyElements.join(' ').substring(0, 100);
 };
 
 export type FactCheckTier = 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
@@ -50,6 +75,7 @@ export class TieredFactCheckService {
     const reportId = await generateSHA256(`tiered_${claimText}_${startTime}`);
 
     console.log('🎯 Starting Tiered Fact Check Process');
+    console.log('📝 Original text length:', claimText.length);
 
     const tierResults: TierResult[] = [];
     let finalEvidence: EvidenceItem[] = [];
@@ -57,8 +83,14 @@ export class TieredFactCheckService {
     let finalVerdict = 'Unverified';
 
     try {
+      // CRITICAL FIX: Extract search query ONCE at the start
+      const searchQuery = extractSearchQuery(claimText, 100);
+      const entityQuery = extractEntityQuery(claimText);
+      console.log('🔍 Extracted search query:', searchQuery);
+      console.log('🏷️  Extracted entity query:', entityQuery);
+
       // Phase 1: Direct Verification (Fast & Economical)
-      const phase1Result = await this.runDirectVerification(claimText);
+      const phase1Result = await this.runDirectVerification(searchQuery, entityQuery);
       tierResults.push(phase1Result);
 
       if (phase1Result.success && !phase1Result.shouldEscalate) {
@@ -69,8 +101,8 @@ export class TieredFactCheckService {
       } else {
         console.log('⏭️  Phase 1 Escalating to Phase 2');
 
-        // Phase 2: Broad Web Search & Initial Grounding
-        const phase2Result = await this.runBroadWebSearch(claimText);
+        // Phase 2: Broad Web Search
+        const phase2Result = await this.runBroadWebSearch(searchQuery, entityQuery);
         tierResults.push(phase2Result);
         finalEvidence.push(...phase2Result.evidence);
 
@@ -81,14 +113,14 @@ export class TieredFactCheckService {
         } else {
           console.log('⏭️  Phase 2 Escalating to Phase 3');
 
-          // Phase 3: Specialized & Temporal Analysis
-          const phase3Result = await this.runSpecializedAnalysis(claimText);
+          // Phase 3: Specialized Analysis
+          const phase3Result = await this.runSpecializedAnalysis(searchQuery, claimText);
           tierResults.push(phase3Result);
           finalEvidence.push(...phase3Result.evidence);
 
           console.log('⏭️  Proceeding to Phase 4 - Synthesis');
 
-          // Phase 4: Multi-Source Synthesis & Final Verdict
+          // Phase 4: Synthesis
           const phase4Result = await this.runSynthesisPhase(claimText, finalEvidence, publishingContext);
           tierResults.push(phase4Result);
 
@@ -97,6 +129,15 @@ export class TieredFactCheckService {
         }
       }
 
+      // CRITICAL FIX: Handle zero evidence case
+      if (finalEvidence.length === 0) {
+        console.warn('⚠️  No evidence collected - returning unverified status');
+        finalScore = 0;
+        finalVerdict = 'UNVERIFIED - Insufficient Evidence';
+      }
+
+      console.log(`✅ Fact check complete: ${finalScore}% confidence with ${finalEvidence.length} evidence items`);
+
       // Create comprehensive report
       const report: FactCheckReport = {
         id: reportId,
@@ -104,7 +145,7 @@ export class TieredFactCheckService {
         final_verdict: finalVerdict,
         final_score: finalScore,
         evidence: finalEvidence,
-        reasoning: this.generateReasoning(tierResults),
+        reasoning: this.generateReasoning(tierResults, finalEvidence.length),
         enhanced_claim_text: claimText,
         score_breakdown: {
           final_score_formula: this.generateScoreFormula(tierResults),
@@ -123,7 +164,7 @@ export class TieredFactCheckService {
             high_credibility: finalEvidence.filter(e => Number(e.score) >= 80).length,
             conflicting: 0
           },
-          warnings: this.generateWarnings(tierResults),
+          warnings: this.generateWarnings(tierResults, finalEvidence.length),
           tier_breakdown: tierResults.map(r => ({
             tier: r.tier,
             success: r.success,
@@ -132,13 +173,19 @@ export class TieredFactCheckService {
             evidence_count: r.evidence.length
           }))
         },
-        // Required fields with defaults
         source_credibility_report: {
-          overallScore: Math.round(finalEvidence.reduce((sum, e) => sum + e.score, 0) / Math.max(finalEvidence.length, 1)),
+          overallScore: finalEvidence.length > 0
+            ? Math.round(finalEvidence.reduce((sum, e) => sum + e.score, 0) / finalEvidence.length)
+            : 0,
           highCredibilitySources: finalEvidence.filter(e => e.score >= 80).length,
           flaggedSources: 0,
           biasWarnings: [],
-          credibilityBreakdown: { academic: 0, news: finalEvidence.length, government: 0, social: 0 }
+          credibilityBreakdown: {
+            academic: 0,
+            news: finalEvidence.length,
+            government: 0,
+            social: 0
+          }
         },
         temporal_verification: {
           hasTemporalClaims: false,
@@ -156,7 +203,6 @@ export class TieredFactCheckService {
         console.warn('⚠️  Failed to upload to blob storage:', error);
       }
 
-      // Record performance metric
       this.performanceMonitor.recordMetric({
         operation: 'tiered-fact-check',
         duration: Date.now() - startTime,
@@ -169,7 +215,6 @@ export class TieredFactCheckService {
     } catch (error) {
       console.error('❌ Tiered fact check failed:', error);
 
-      // Record error metric
       this.performanceMonitor.recordMetric({
         operation: 'tiered-fact-check',
         duration: Date.now() - startTime,
@@ -181,14 +226,19 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runDirectVerification(claimText: string): Promise<TierResult> {
+  private async runDirectVerification(searchQuery: string, entityQuery: string): Promise<TierResult> {
     const startTime = Date.now();
     console.log('📋 Phase 1: Direct Verification');
 
     try {
-      const factCheckResults = await this.googleFactCheck.searchClaims(truncateQuery(claimText), 5);
+      // Use entity query for fact-check search
+      const factCheckQuery = entityQuery || searchQuery;
+      console.log('🔍 Fact-check query:', factCheckQuery);
+
+      const factCheckResults = await this.googleFactCheck.searchClaims(factCheckQuery, 5);
 
       if (factCheckResults.length === 0) {
+        console.log('ℹ️  No fact-check results found');
         return {
           tier: 'direct-verification',
           success: false,
@@ -199,7 +249,6 @@ export class TieredFactCheckService {
         };
       }
 
-      // Convert fact check results to evidence
       const evidence: EvidenceItem[] = factCheckResults.map((result, index) => ({
         id: `fact_check_${index}`,
         publisher: result.claimReview[0]?.publisher || 'Fact Checker',
@@ -211,6 +260,8 @@ export class TieredFactCheckService {
 
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
       const highConfidenceThreshold = 80;
+
+      console.log(`✅ Phase 1 found ${evidence.length} fact-check results, avg score: ${avgScore.toFixed(1)}%`);
 
       return {
         tier: 'direct-verification',
@@ -235,14 +286,17 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runBroadWebSearch(claimText: string): Promise<TierResult> {
+  private async runBroadWebSearch(searchQuery: string, entityQuery: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🔍 Phase 2: Broad Web Search & Initial Grounding');
+    console.log('🔍 Phase 2: Broad Web Search');
 
     try {
-      const searchResults = await this.serpApi.search(truncateQuery(claimText), 10);
+      // Use primary search query
+      console.log('🔍 Web search query:', searchQuery);
+      const searchResults = await this.serpApi.search(searchQuery, 10);
 
-      if (searchResults.results.length === 0) {
+      if (!searchResults || !searchResults.results || searchResults.results.length === 0) {
+        console.log('ℹ️  No web search results found');
         return {
           tier: 'web-search',
           success: false,
@@ -253,22 +307,22 @@ export class TieredFactCheckService {
         };
       }
 
-      // Convert search results to evidence
       const evidence: EvidenceItem[] = searchResults.results.slice(0, 8).map((result, index) => ({
         id: `web_search_${index}`,
         publisher: result.source,
         url: result.link,
         quote: result.snippet,
-        score: this.calculateSearchResultScore(result, claimText),
+        score: this.calculateSearchResultScore(result, searchQuery),
         type: 'search_result'
       }));
 
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
-
-      // Check if sources agree (simple consensus check)
       const highScoreCount = evidence.filter(e => Number(e.score) >= 70).length;
       const lowScoreCount = evidence.filter(e => e.score <= 40).length;
-      const clearConsensus = (highScoreCount >= 5 && lowScoreCount <= 1) || (lowScoreCount >= 5 && highScoreCount <= 1);
+      const clearConsensus = (highScoreCount >= 5 && lowScoreCount <= 1) ||
+                            (lowScoreCount >= 5 && highScoreCount <= 1);
+
+      console.log(`✅ Phase 2 found ${evidence.length} web results, avg score: ${avgScore.toFixed(1)}%`);
 
       return {
         tier: 'web-search',
@@ -293,42 +347,48 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runSpecializedAnalysis(claimText: string): Promise<TierResult> {
+  private async runSpecializedAnalysis(searchQuery: string, fullText: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🎯 Phase 3: Specialized & Temporal Analysis');
+    console.log('🎯 Phase 3: Specialized Analysis');
 
     try {
       const evidence: EvidenceItem[] = [];
 
-      // Check if claim involves dates/events for temporal analysis
-      const hasTemporalElements = this.detectTemporalElements(claimText);
+      // Temporal detection on FULL text
+      const hasTemporalElements = this.detectTemporalElements(fullText);
 
       if (hasTemporalElements.hasTemporalClaims) {
         console.log('📅 Temporal elements detected, fetching recent news');
 
+        // Use search query for news, not full text
         const newsResults = await this.newsService.searchNews({
-          query: truncateQuery(claimText),
+          query: searchQuery,
           fromDate: hasTemporalElements.extractedDate || new Date().toISOString()
         });
 
-        const newsEvidence: EvidenceItem[] = newsResults.posts.slice(0, 6).map((article, index) => ({
-          id: `news_${index}`,
-          publisher: article.author,
-          url: article.url,
-          quote: article.text,
-          score: this.calculateNewsScore(article, claimText),
-          type: 'news',
-          publishedDate: article.published
-        }));
+        if (newsResults && newsResults.posts && newsResults.posts.length > 0) {
+          const newsEvidence: EvidenceItem[] = newsResults.posts.slice(0, 6).map((article, index) => ({
+            id: `news_${index}`,
+            publisher: article.author,
+            url: article.url,
+            quote: article.text,
+            score: this.calculateNewsScore(article, searchQuery),
+            type: 'news',
+            publishedDate: article.published
+          }));
 
-        evidence.push(...newsEvidence);
+          evidence.push(...newsEvidence);
+          console.log(`✅ Found ${newsEvidence.length} news articles`);
+        } else {
+          console.log('ℹ️  No recent news found');
+        }
       }
 
-      // Additional specialized searches for specific claim types
-      const claimType = this.detectClaimType(claimText);
+      // Claim type detection on FULL text
+      const claimType = this.detectClaimType(fullText);
       if (claimType !== 'general') {
         console.log(`🔬 Specialized search for ${claimType} claim`);
-        const specializedResults = await this.performSpecializedSearch(claimText, claimType);
+        const specializedResults = await this.performSpecializedSearch(searchQuery, claimType);
         evidence.push(...specializedResults);
       }
 
@@ -336,12 +396,14 @@ export class TieredFactCheckService {
         ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
         : 50;
 
+      console.log(`✅ Phase 3 found ${evidence.length} specialized sources, avg score: ${avgScore.toFixed(1)}%`);
+
       return {
         tier: 'specialized-analysis',
         success: evidence.length > 0,
         confidence: avgScore,
         evidence,
-        shouldEscalate: true, // Always escalate to synthesis for final decision
+        shouldEscalate: true,
         processingTime: Date.now() - startTime
       };
 
@@ -359,68 +421,89 @@ export class TieredFactCheckService {
     }
   }
 
-  private async runSynthesisPhase(claimText: string, allEvidence: EvidenceItem[], publishingContext: PublishingContext): Promise<TierResult> {
+  private async runSynthesisPhase(
+    claimText: string,
+    allEvidence: EvidenceItem[],
+    publishingContext: PublishingContext
+  ): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🧠 Phase 4: Gemini-Powered Synthesis');
+    console.log('🧠 Phase 4: Synthesis');
+    console.log(`📊 Synthesizing ${allEvidence.length} evidence items`);
 
     try {
-        const synthesisReport = await synthesizeEvidenceWithGemini(claimText, allEvidence, publishingContext);
+      if (allEvidence.length === 0) {
+        console.warn('⚠️  No evidence to synthesize');
+        return {
+          tier: 'synthesis',
+          success: false,
+          confidence: 0,
+          evidence: [],
+          shouldEscalate: false,
+          processingTime: Date.now() - startTime
+        };
+      }
 
-        // If Gemini returns new evidence, you might want to add it to the final report.
-        // For now, we'll use the score and verdict from Gemini's synthesis.
-        const finalEvidence = synthesisReport.evidence || [];
+      // Try Gemini synthesis first
+      try {
+        const synthesisReport = await synthesizeEvidenceWithGemini(
+          claimText,
+          allEvidence,
+          publishingContext
+        );
+
+        console.log(`✅ Gemini synthesis complete: ${synthesisReport.final_score}% confidence`);
 
         return {
-            tier: 'synthesis',
-            success: true,
-            confidence: synthesisReport.final_score,
-            evidence: finalEvidence, // Use evidence from Gemini's report
-            shouldEscalate: false,
-            processingTime: Date.now() - startTime,
+          tier: 'synthesis',
+          success: true,
+          confidence: synthesisReport.final_score,
+          evidence: synthesisReport.evidence || [],
+          shouldEscalate: false,
+          processingTime: Date.now() - startTime
         };
-    } catch (error) {
-        console.error('❌ Phase 4 Gemini synthesis failed:', error);
-        // Fallback to original synthesis logic if Gemini fails
-        try {
-            console.log('⚠️ Gemini synthesis failed. Falling back to original weighted synthesis.');
-            const fallbackResult = this.fallbackSynthesis(allEvidence);
-            return {
-                tier: 'synthesis',
-                success: true, // The fallback succeeded
-                confidence: fallbackResult.adjustedScore,
-                evidence: [],
-                shouldEscalate: false,
-                processingTime: Date.now() - startTime,
-            };
-        } catch (fallbackError) {
-            console.error('❌ Fallback synthesis also failed:', fallbackError);
-            return {
-                tier: 'synthesis',
-                success: false,
-                confidence: 30, // Default low confidence on complete failure
-                evidence: [],
-                shouldEscalate: false,
-                processingTime: Date.now() - startTime,
-                error: fallbackError instanceof Error ? fallbackError.message : 'Unknown fallback error'
-            };
-        }
-    }
-}
+      } catch (geminiError) {
+        console.warn('⚠️  Gemini synthesis failed, using fallback:', geminiError);
 
-private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number } {
+        // Fallback weighted synthesis
+        const fallbackResult = this.fallbackSynthesis(allEvidence);
+
+        return {
+          tier: 'synthesis',
+          success: true,
+          confidence: fallbackResult.adjustedScore,
+          evidence: [],
+          shouldEscalate: false,
+          processingTime: Date.now() - startTime
+        };
+      }
+    } catch (error) {
+      console.error('❌ Phase 4 synthesis failed:', error);
+      return {
+        tier: 'synthesis',
+        success: false,
+        confidence: 30,
+        evidence: [],
+        shouldEscalate: false,
+        processingTime: Date.now() - startTime,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number } {
     const highCredibilityEvidence = allEvidence.filter(e => e.score >= 80);
     const mediumCredibilityEvidence = allEvidence.filter(e => e.score >= 50 && e.score < 80);
     const lowCredibilityEvidence = allEvidence.filter(e => e.score < 50);
 
     const totalWeight =
-        (highCredibilityEvidence.length * 3) +
-        (mediumCredibilityEvidence.length * 2) +
-        (lowCredibilityEvidence.length * 1);
+      (highCredibilityEvidence.length * 3) +
+      (mediumCredibilityEvidence.length * 2) +
+      (lowCredibilityEvidence.length * 1);
 
     const weightedSum =
-        (highCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 3) +
-        (mediumCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 2) +
-        (lowCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 1);
+      (highCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 3) +
+      (mediumCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 2) +
+      (lowCredibilityEvidence.reduce((sum, e) => sum + e.score, 0) * 1);
 
     const finalScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
 
@@ -429,13 +512,15 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
 
     let adjustedScore = finalScore;
     if (contradictingEvidence.length > 0 && supportingEvidence.length > 0) {
-        adjustedScore = Math.max(30, finalScore - 15);
+      adjustedScore = Math.max(30, finalScore - 15);
     }
 
-    return { adjustedScore };
-}
+    console.log(`📊 Fallback synthesis: ${adjustedScore}% (from ${allEvidence.length} sources)`);
 
-  // Helper Methods
+    return { adjustedScore };
+  }
+
+  // Helper methods (keeping existing implementations)
   private convertRatingToScore(rating: any): number {
     if (!rating) return 50;
 
@@ -446,7 +531,6 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     if (textualRating.includes('mostly false')) return 25;
     if (textualRating.includes('false') || textualRating.includes('pants on fire')) return 10;
 
-    // Use numeric rating if available
     if (rating.ratingValue && rating.bestRating) {
       return Math.round((rating.ratingValue / rating.bestRating) * 100);
     }
@@ -455,36 +539,27 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
   }
 
   private calculateSearchResultScore(result: any, claimText: string): number {
-    let score = 50; // Base score
+    let score = 50;
     const domain = result.source.toLowerCase();
 
-    // Tiered domain credibility scoring
     const credibilityTiers = [
       { domains: ['reuters', 'ap.org', 'bbc', 'apnews'], boost: 35 },
       { domains: ['factcheck', 'snopes', 'politifact'], boost: 30 },
       { domains: ['cnn', 'nytimes', 'washingtonpost', 'wsj', 'theguardian'], boost: 20 },
       { domains: ['.gov', '.edu'], boost: 25 },
-      { domains: ['wikipedia'], boost: 5, penalty: 0 }, // Lower boost for Wikipedia
+      { domains: ['wikipedia'], boost: 5 },
       { domains: ['forbes', 'businessinsider'], boost: 10 },
-      { domains: ['reddit', 'quora', 'facebook', 'twitter'], boost: 0, penalty: 25 }, // Penalize social media
-      { domains: ['blogspot', 'wordpress', 'medium'], boost: 0, penalty: 20 } // Penalize blog platforms
+      { domains: ['reddit', 'quora', 'facebook', 'twitter'], penalty: 25 },
+      { domains: ['blogspot', 'wordpress', 'medium'], penalty: 20 }
     ];
-
-    let appliedBoost = 0;
-    let appliedPenalty = 0;
 
     for (const tier of credibilityTiers) {
       if (tier.domains.some(d => domain.includes(d))) {
-        appliedBoost = tier.boost;
-        appliedPenalty = tier.penalty || 0;
+        score += (tier.boost || 0) - (tier.penalty || 0);
         break;
       }
     }
 
-    score += appliedBoost - appliedPenalty;
-
-
-    // Enhanced content relevance boost
     const snippet = result.snippet.toLowerCase();
     const title = result.title.toLowerCase();
     const claimWords = claimText.toLowerCase().match(/\b(\w+)\b/g) || [];
@@ -494,12 +569,11 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     const matchedInSnippet = claimWords.filter(word => snippetWords.includes(word)).length;
     const matchedInTitle = claimWords.filter(word => titleWords.includes(word)).length;
 
-    // More weight for title matches
-    const relevanceScore = (matchedInSnippet / claimWords.length) * 15 + (matchedInTitle / claimWords.length) * 20;
+    const relevanceScore = (matchedInSnippet / claimWords.length) * 15 +
+                          (matchedInTitle / claimWords.length) * 20;
 
     score += relevanceScore;
 
-    // Snippet sentiment analysis (basic)
     const negativeKeywords = ['conspiracy', 'hoax', 'unproven', 'scam'];
     if (negativeKeywords.some(kw => snippet.includes(kw))) {
       score -= 15;
@@ -509,77 +583,44 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
   }
 
   private calculateNewsScore(article: any, claimText: string): number {
-    let score = 55; // Adjusted base score for more detailed calculation
+    let score = 55;
     const sourceName = article.author.toLowerCase();
-    const description = article.text.toLowerCase();
-    const title = article.title.toLowerCase();
 
-    // Granular source credibility with penalties
     const sourceTiers = [
-        { sources: ['reuters', 'associated press', 'ap', 'bbc news', 'npr', 'pbs'], boost: 25 },
-        { sources: ['cnn', 'abc news', 'nbc news', 'cbs news', 'the guardian', 'al jazeera'], boost: 15 },
-        { sources: ['fox news', 'msnbc', 'breitbart', 'daily mail'], penalty: 15 }, // Known for strong bias
-        { sources: ['washington post', 'new york times', 'wsj'], boost: 20 },
+      { sources: ['reuters', 'associated press', 'ap', 'bbc news', 'npr', 'pbs'], boost: 25 },
+      { sources: ['cnn', 'abc news', 'nbc news', 'cbs news', 'the guardian', 'al jazeera'], boost: 15 },
+      { sources: ['fox news', 'msnbc', 'breitbart', 'daily mail'], penalty: 15 },
+      { sources: ['washington post', 'new york times', 'wsj'], boost: 20 }
     ];
 
-    let appliedBoost = 0;
-    let appliedPenalty = 0;
-
     for (const tier of sourceTiers) {
-        if (tier.sources.some(s => sourceName.includes(s))) {
-            appliedBoost = tier.boost || 0;
-            appliedPenalty = tier.penalty || 0;
-            break;
-        }
+      if (tier.sources.some(s => sourceName.includes(s))) {
+        score += (tier.boost || 0) - (tier.penalty || 0);
+        break;
+      }
     }
-    score += appliedBoost - appliedPenalty;
 
-
-    // Recency boost (more granular)
     const daysOld = (Date.now() - new Date(article.published).getTime()) / (1000 * 60 * 60 * 24);
     if (daysOld <= 2) score += 15;
     else if (daysOld <= 10) score += 10;
     else if (daysOld <= 45) score += 5;
-    else if (daysOld > 180) score -= 10; // Penalize very old news
-
-
-    // Content analysis for bias and depth
-    const biasedKeywords = ['outrageous', 'shocking', 'slams', 'destroys', 'miracle', 'agenda'];
-    const biasedMentions = biasedKeywords.filter(kw => description.includes(kw) || title.includes(kw)).length;
-    score -= biasedMentions * 5; // Penalize for each biased keyword
-
-    // Boost for article length (as a proxy for depth)
-    if (article.text.length > 250) {
-        score += 10;
-    }
-
-    // Keyword relevance in title
-    const claimWords = claimText.toLowerCase().match(/\b(\w+)\b/g) || [];
-    const titleWords = title.match(/\b(\w+)\b/g) || [];
-    const matchedInTitle = claimWords.filter(word => titleWords.includes(word)).length;
-
-    if (matchedInTitle / claimWords.length > 0.5) {
-        score += 10; // Boost if title is highly relevant
-    }
+    else if (daysOld > 180) score -= 10;
 
     return Math.min(100, Math.max(0, score));
   }
 
   private detectTemporalElements(text: string): { hasTemporalClaims: boolean; extractedDate?: string } {
     const temporalPatterns = [
-      /\b\d{4}\b/, // Years
+      /\b\d{4}\b/,
       /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}\b/i,
-      /\b\d{1,2}\/\d{1,2}\/\d{4}\b/, // Dates
+      /\b\d{1,2}\/\d{1,2}\/\d{4}\b/,
       /\b(today|yesterday|tomorrow|last week|next week|recently|currently)\b/i
     ];
 
     for (const pattern of temporalPatterns) {
       const match = text.match(pattern);
       if (match) {
-        return {
-          hasTemporalClaims: true,
-          extractedDate: match[0]
-        };
+        return { hasTemporalClaims: true, extractedDate: match[0] };
       }
     }
 
@@ -587,12 +628,12 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
   }
 
   private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
+    const lowerText = text.toLowerCase();
+
     const medicalKeywords = ['vaccine', 'covid', 'virus', 'disease', 'treatment', 'medicine', 'health'];
     const politicalKeywords = ['president', 'election', 'vote', 'government', 'policy', 'congress'];
     const scientificKeywords = ['research', 'study', 'scientist', 'climate', 'global warming', 'experiment'];
     const financialKeywords = ['stock', 'economy', 'inflation', 'market', 'financial', 'investment'];
-
-    const lowerText = text.toLowerCase();
 
     if (medicalKeywords.some(k => lowerText.includes(k))) return 'medical';
     if (politicalKeywords.some(k => lowerText.includes(k))) return 'political';
@@ -612,14 +653,17 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     };
 
     try {
-      const results = await this.serpApi.search(specializedQueries[claimType as keyof typeof specializedQueries] || claimText, 5);
+      const results = await this.serpApi.search(
+        specializedQueries[claimType as keyof typeof specializedQueries] || claimText,
+        5
+      );
 
       return results.results.map((result, index) => ({
         id: `specialized_${claimType}_${index}`,
         publisher: result.source,
         url: result.link,
         quote: result.snippet,
-        score: this.calculateSearchResultScore(result, claimText) + 10, // Boost for specialized sources
+        score: this.calculateSearchResultScore(result, claimText) + 10,
         type: 'search_result'
       }));
     } catch {
@@ -628,6 +672,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
   }
 
   private generateVerdict(score: number): string {
+    if (score === 0) return 'UNVERIFIED - Insufficient Evidence';
     if (score >= 85) return 'TRUE - Highly Verified';
     if (score >= 70) return 'MOSTLY TRUE - Well Supported';
     if (score >= 50) return 'MIXED - Partial Accuracy';
@@ -635,26 +680,29 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     return 'FALSE - Contradicted by Evidence';
   }
 
-  private generateReasoning(tierResults: TierResult[]): string {
+  private generateReasoning(tierResults: TierResult[], evidenceCount: number): string {
     const completedTiers = tierResults.filter(r => r.success);
-    const totalEvidence = tierResults.reduce((sum, r) => sum + r.evidence.length, 0);
 
-    let reasoning = `Completed ${completedTiers.length} verification phases with ${totalEvidence} evidence sources. `;
+    let reasoning = `Completed ${completedTiers.length} verification phases with ${evidenceCount} evidence sources. `;
 
     tierResults.forEach((result, index) => {
       const phase = index + 1;
       if (result.success) {
-        reasoning += `Phase ${phase} (${result.tier}) found ${result.evidence.length} sources with ${result.confidence}% confidence. `;
+        reasoning += `Phase ${phase} (${result.tier}) found ${result.evidence.length} sources with ${result.confidence.toFixed(1)}% confidence. `;
       } else if (result.error) {
         reasoning += `Phase ${phase} encountered issues: ${result.error}. `;
       }
     });
 
+    if (evidenceCount === 0) {
+      reasoning += 'No verifiable evidence could be found to support or refute this claim.';
+    }
+
     return reasoning;
   }
 
   private generateScoreFormula(tierResults: TierResult[]): string {
-    const phases = tierResults.map((r, i) => `Phase ${i + 1}: ${r.confidence}%`);
+    const phases = tierResults.map((r, i) => `Phase ${i + 1}: ${r.confidence.toFixed(1)}%`);
     return `Tiered Analysis: ${phases.join(' → ')}`;
   }
 
@@ -681,7 +729,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
           apis.push('webz-io');
           break;
         case 'synthesis':
-          apis.push('multi-source-synthesis');
+          apis.push('gemini-synthesis');
           break;
       }
     });
@@ -689,7 +737,7 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     return [...new Set(apis)];
   }
 
-  private generateWarnings(tierResults: TierResult[]): string[] {
+  private generateWarnings(tierResults: TierResult[], evidenceCount: number): string[] {
     const warnings: string[] = [];
 
     const failedTiers = tierResults.filter(r => !r.success);
@@ -697,8 +745,9 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
       warnings.push(`${failedTiers.length} verification phase(s) failed - results may be incomplete`);
     }
 
-    const totalEvidence = tierResults.reduce((sum, r) => sum + r.evidence.length, 0);
-    if (totalEvidence < 3) {
+    if (evidenceCount === 0) {
+      warnings.push('No evidence found - claim could not be verified');
+    } else if (evidenceCount < 3) {
       warnings.push('Limited evidence available - consider additional manual verification');
     }
 
@@ -722,7 +771,12 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     }
   }
 
-  private createErrorReport(claimText: string, reportId: string, error: any, processingTime: number): FactCheckReport {
+  private createErrorReport(
+    claimText: string,
+    reportId: string,
+    error: any,
+    processingTime: number
+  ): FactCheckReport {
     return {
       id: reportId,
       originalText: claimText,
