@@ -1,251 +1,458 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+// src/services/analysis/AdvancedTextAnalyzer.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getGeminiApiKey, getGeminiModel } from '../apiKeyService';
+import { parseAIJsonResponse } from '../../utils/jsonParser';
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+// Helper function to extract text from different SDK response structures
+const extractTextFromGeminiResponse = (result: any): string => {
+    if (!result || !result.response) {
+        throw new Error('Invalid response from AI model: "response" property is missing.');
+    }
+    const responseText = result.response.text();
+    if (typeof responseText !== 'string' || !responseText) {
+        console.error('Empty or invalid response text from AI model.', result);
+        throw new Error('Empty or invalid response text from AI model.');
+    }
+    return responseText.trim();
+};
 
 export interface NamedEntity {
-  text: string;
-  type: 'PERSON' | 'ORGANIZATION' | 'LOCATION' | 'DATE' | 'EVENT' | 'OTHER';
-  relevance: number;
-  aliases?: string[];
-  context?: string;
+text: string;
+type: 'PERSON' | 'ORGANIZATION' | 'LOCATION' | 'EVENT' | 'DATE' | 'CONCEPT' | 'PRODUCT' | 'MONEY';
+relevance: number; // 0-100
+aliases?: string[];
+context?: string;
 }
-
 export interface AtomicClaim {
-  claim: string;
-  confidence: number;
-  claimType: 'factual' | 'opinion' | 'prediction' | 'statistical';
-  subjects: string[];
-  temporalContext?: string;
+id: string;
+claimText: string;
+claimType: 'factual' | 'statistical' | 'causal' | 'temporal' | 'comparative' | 'opinion';
+verifiability: 'high' | 'medium' | 'low';
+entities: string[];
+temporalContext?: TemporalContext;
+dependencies: string[]; // IDs of related claims
+priority: number; // 1-10 (10 = highest)
 }
-
 export interface TemporalContext {
-  timeReference: string;
-  type: 'absolute' | 'relative' | 'implicit';
-  timestamp?: string;
-  confidence: number;
+hasDateReference: boolean;
+dateType: 'specific' | 'relative' | 'range' | 'ongoing' | 'future';
+extractedDates: string[];
+temporalModifiers: string[];
+timeframe?: string;
+recency: 'breaking' | 'recent' | 'historical' | 'timeless';
 }
-
-export interface BiasIndicator {
-  type: 'political' | 'emotional' | 'selective' | 'framing' | 'none';
-  severity: 'low' | 'medium' | 'high';
-  evidence: string;
-  confidence: number;
+export interface BiasIndicators {
+overallBiasScore: number; // 0-100 (0 = neutral, 100 = highly biased)
+sentimentPolarity: 'positive' | 'negative' | 'neutral' | 'mixed';
+languageMarkers: {
+emotionalLanguage: string[];
+absoluteStatements: string[];
+hedgingLanguage: string[];
+loadedTerms: string[];
+};
+sourceBias?: 'left' | 'center' | 'right' | 'unknown';
 }
-
 export interface DeepTextAnalysis {
-  namedEntities: NamedEntity[];
-  atomicClaims: AtomicClaim[];
-  temporalContexts: TemporalContext[];
-  biasIndicators: BiasIndicator[];
-  overallSentiment: {
-    polarity: 'positive' | 'negative' | 'neutral';
-    intensity: number;
-  };
-  suggestedSearchDepth: 'shallow' | 'moderate' | 'deep';
+originalText: string;
+namedEntities: NamedEntity[];
+atomicClaims: AtomicClaim[];
+temporalContext: TemporalContext;
+biasIndicators: BiasIndicators;
+complexity: 'simple' | 'moderate' | 'complex';
+suggestedSearchDepth: 'shallow' | 'standard' | 'deep';
+metadata: {
+wordCount: number;
+sentenceCount: number;
+processingTimestamp: string;
+};
 }
-
-export class AdvancedTextAnalyzer {
-  private genAI: GoogleGenerativeAI;
-  private model: any;
-
-  constructor(apiKey?: string) {
-    const key = apiKey || import.meta.env.VITE_GEMINI_API_KEY;
-    
-    if (!key) {
-      throw new Error('Gemini API key not found. Please set VITE_GEMINI_API_KEY environment variable.');
-    }
-
-    this.genAI = new GoogleGenerativeAI(key);
-    this.model = this.genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-    });
-  }
-
-  async analyzeText(text: string): Promise<DeepTextAnalysis> {
-    try {
-      const result = await this.model.generateContent({
-        contents: [{
-          role: "user",
-          parts: [{
-            text: `Perform a comprehensive analysis of the following text. Extract named entities, break down into atomic claims, identify temporal contexts, detect bias, and assess sentiment.
-
-Text to analyze:
-"""
-${text}
-"""
-
-Provide a thorough analysis following the required schema.`
-          }]
-        }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.OBJECT,
-            properties: {
-              namedEntities: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    text: { 
-                      type: SchemaType.STRING, 
-                      description: "The entity text" 
-                    },
-                    type: { 
-                      type: SchemaType.STRING, 
-                      enum: ['PERSON', 'ORGANIZATION', 'LOCATION', 'DATE', 'EVENT', 'OTHER'],
-                      description: "Entity type" 
-                    },
-                    relevance: { 
-                      type: SchemaType.NUMBER, 
-                      description: "Relevance score 0-100" 
-                    },
-                    aliases: { 
-                      type: SchemaType.ARRAY,
-                      items: { type: SchemaType.STRING },
-                      description: "Alternative names",
-                      nullable: true
-                    },
-                    context: { 
-                      type: SchemaType.STRING, 
-                      description: "Contextual information",
-                      nullable: true
-                    }
-                  },
-                  required: ['text', 'type', 'relevance']
-                }
-              },
-              atomicClaims: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    claim: { type: SchemaType.STRING },
-                    confidence: { type: SchemaType.NUMBER },
-                    claimType: { 
-                      type: SchemaType.STRING,
-                      enum: ['factual', 'opinion', 'prediction', 'statistical']
-                    },
-                    subjects: { 
-                      type: SchemaType.ARRAY,
-                      items: { type: SchemaType.STRING }
-                    },
-                    temporalContext: { 
-                      type: SchemaType.STRING,
-                      nullable: true
-                    }
-                  },
-                  required: ['claim', 'confidence', 'claimType', 'subjects']
-                }
-              },
-              temporalContexts: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    timeReference: { type: SchemaType.STRING },
-                    type: { 
-                      type: SchemaType.STRING,
-                      enum: ['absolute', 'relative', 'implicit']
-                    },
-                    timestamp: { 
-                      type: SchemaType.STRING,
-                      nullable: true
-                    },
-                    confidence: { type: SchemaType.NUMBER }
-                  },
-                  required: ['timeReference', 'type', 'confidence']
-                }
-              },
-              biasIndicators: {
-                type: SchemaType.ARRAY,
-                items: {
-                  type: SchemaType.OBJECT,
-                  properties: {
-                    type: { 
-                      type: SchemaType.STRING,
-                      enum: ['political', 'emotional', 'selective', 'framing', 'none']
-                    },
-                    severity: { 
-                      type: SchemaType.STRING,
-                      enum: ['low', 'medium', 'high']
-                    },
-                    evidence: { type: SchemaType.STRING },
-                    confidence: { type: SchemaType.NUMBER }
-                  },
-                  required: ['type', 'severity', 'evidence', 'confidence']
-                }
-              },
-              overallSentiment: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  polarity: { 
-                    type: SchemaType.STRING,
-                    enum: ['positive', 'negative', 'neutral']
-                  },
-                  intensity: { type: SchemaType.NUMBER }
-                },
-                required: ['polarity', 'intensity']
-              },
-              suggestedSearchDepth: {
-                type: SchemaType.STRING,
-                enum: ['shallow', 'moderate', 'deep']
-              }
-            },
-            required: ['namedEntities', 'atomicClaims', 'temporalContexts', 'biasIndicators', 'overallSentiment', 'suggestedSearchDepth']
-          }
+// ============================================================================
+// SCHEMA DEFINITIONS
+// ============================================================================
+const namedEntitySchema = {
+    type: "object",
+    properties: {
+        text: { type: "string", description: "The entity text" },
+        type: {
+            type: "string",
+            enum: ['PERSON', 'ORGANIZATION', 'LOCATION', 'EVENT', 'DATE', 'CONCEPT', 'PRODUCT', 'MONEY'],
+            description: "Entity type"
+        },
+        relevance: { type: "integer", description: "Relevance score 0-100" },
+        aliases: {
+            type: "array",
+            items: { type: "string" },
+            nullable: true,
+            description: "Alternative names or spellings"
+        },
+        context: {
+            type: "string",
+            nullable: true,
+            description: "Brief context about the entity"
         }
-      });
-
-      const response = await result.response;
-      const analysisData = JSON.parse(response.text());
-
-      return analysisData as DeepTextAnalysis;
-
-    } catch (error) {
-      console.error('Advanced text analysis failed:', error);
-      
-      // Fallback: return basic analysis
-      return this.fallbackAnalysis(text);
+    },
+    required: ['text', 'type', 'relevance']
+};
+const atomicClaimSchema = {
+    type: "object",
+    properties: {
+        id: { type: "string", description: "Unique claim identifier" },
+        claimText: { type: "string", description: "The atomic claim statement" },
+        claimType: {
+            type: "string",
+            enum: ['factual', 'statistical', 'causal', 'temporal', 'comparative', 'opinion'],
+            description: "Type of claim"
+        },
+        verifiability: {
+            type: "string",
+            enum: ['high', 'medium', 'low'],
+            description: "How verifiable this claim is"
+        },
+        entities: {
+            type: "array",
+            items: { type: "string" },
+            description: "Entities referenced in this claim"
+        },
+        temporalContext: {
+            type: "object",
+            nullable: true,
+            properties: {
+                hasDateReference: { type: "boolean" },
+                dateType: {
+                    type: "string",
+                    enum: ['specific', 'relative', 'range', 'ongoing', 'future']
+                },
+                extractedDates: {
+                    type: "array",
+                    items: { type: "string" }
+                },
+                temporalModifiers: {
+                    type: "array",
+                    items: { type: "string" }
+                },
+                timeframe: { type: "string", nullable: true },
+                recency: {
+                    type: "string",
+                    enum: ['breaking', 'recent', 'historical', 'timeless']
+                }
+            },
+            required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
+        },
+        dependencies: {
+            type: "array",
+            items: { type: "string" },
+            description: "IDs of claims this depends on"
+        },
+        priority: {
+            type: "integer",
+            description: "Priority for verification (1-10)"
+        }
+    },
+    required: ['id', 'claimText', 'claimType', 'verifiability', 'entities', 'dependencies', 'priority']
+};
+const deepTextAnalysisSchema = {
+    type: "object",
+    properties: {
+        namedEntities: {
+            type: "array",
+            items: namedEntitySchema
+        },
+        atomicClaims: {
+            type: "array",
+            items: atomicClaimSchema
+        },
+        temporalContext: {
+            type: "object",
+            properties: {
+                hasDateReference: { type: "boolean" },
+                dateType: {
+                    type: "string",
+                    enum: ['specific', 'relative', 'range', 'ongoing', 'future']
+                },
+                extractedDates: {
+                    type: "array",
+                    items: { type: "string" }
+                },
+                temporalModifiers: {
+                    type: "array",
+                    items: { type: "string" }
+                },
+                timeframe: { type: "string", nullable: true },
+                recency: {
+                    type: "string",
+                    enum: ['breaking', 'recent', 'historical', 'timeless']
+                }
+            },
+            required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
+        },
+        biasIndicators: {
+            type: "object",
+            properties: {
+                overallBiasScore: { type: "integer" },
+                sentimentPolarity: {
+                    type: "string",
+                    enum: ['positive', 'negative', 'neutral', 'mixed']
+                },
+                languageMarkers: {
+                    type: "object",
+                    properties: {
+                        emotionalLanguage: { type: "array", items: { type: "string" } },
+                        absoluteStatements: { type: "array", items: { type: "string" } },
+                        hedgingLanguage: { type: "array", items: { type: "string" } },
+                        loadedTerms: { type: "array", items: { type: "string" } }
+                    },
+                    required: ['emotionalLanguage', 'absoluteStatements', 'hedgingLanguage', 'loadedTerms']
+                },
+                sourceBias: {
+                    type: "string",
+                    enum: ['left', 'center', 'right', 'unknown'],
+                    nullable: true
+                }
+            },
+            required: ['overallBiasScore', 'sentimentPolarity', 'languageMarkers']
+        },
+        complexity: {
+            type: "string",
+            enum: ['simple', 'moderate', 'complex']
+        },
+        suggestedSearchDepth: {
+            type: "string",
+            enum: ['shallow', 'standard', 'deep']
+        }
+    },
+    required: ['namedEntities', 'atomicClaims', 'temporalContext', 'biasIndicators', 'complexity', 'suggestedSearchDepth']
+};
+// ============================================================================
+// SERVICE CLASS
+// ============================================================================
+export class AdvancedTextAnalyzer {
+    private static instance: AdvancedTextAnalyzer;
+    private ai: GoogleGenerativeAI;
+    private constructor() {
+        this.ai = new GoogleGenerativeAI(getGeminiApiKey());
     }
-  }
+    static getInstance(): AdvancedTextAnalyzer {
+        if (!AdvancedTextAnalyzer.instance) {
+            AdvancedTextAnalyzer.instance = new AdvancedTextAnalyzer();
+        }
+        return AdvancedTextAnalyzer.instance;
+    }
+    /**
+    
+    Main analysis method - performs deep text analysis
+    */
+    async analyzeText(text: string): Promise<DeepTextAnalysis> {
+        console.log('🔬 Starting deep text analysis...');
+        const startTime = Date.now();
 
-  private fallbackAnalysis(text: string): DeepTextAnalysis {
-    // Simple fallback when AI analysis fails
-    return {
-      namedEntities: [],
-      atomicClaims: [{
-        claim: text,
-        confidence: 50,
-        claimType: 'factual',
-        subjects: ['unknown']
-      }],
-      temporalContexts: [],
-      biasIndicators: [{
-        type: 'none',
-        severity: 'low',
-        evidence: 'Fallback analysis - no AI processing',
-        confidence: 0
-      }],
-      overallSentiment: {
-        polarity: 'neutral',
-        intensity: 50
-      },
-      suggestedSearchDepth: 'moderate'
-    };
-  }
+        try {
+            const prompt = this.buildAnalysisPrompt(text);
 
-  // Additional utility methods
-  async extractEntities(text: string): Promise<NamedEntity[]> {
-    const analysis = await this.analyzeText(text);
-    return analysis.namedEntities;
-  }
+            const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
+            const result = await model.generateContent({
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: deepTextAnalysisSchema,
+                    temperature: 0.1,
+                }
+            });
 
-  async decomposeIntoClaims(text: string): Promise<AtomicClaim[]> {
-    const analysis = await this.analyzeText(text);
-    return analysis.atomicClaims;
-  }
+            const responseText = extractTextFromGeminiResponse(result);
+            const analysis = parseAIJsonResponse(responseText);
 
-  async detectBias(text: string): Promise<BiasIndicator[]> {
-    const analysis = await this.analyzeText(text);
-    return analysis.biasIndicators;
+            const enrichedAnalysis: DeepTextAnalysis = {
+                originalText: text,
+    namedEntities: analysis.namedEntities || [],
+    atomicClaims: analysis.atomicClaims || [],
+    temporalContext: analysis.temporalContext,
+    biasIndicators: analysis.biasIndicators,
+    complexity: analysis.complexity,
+    suggestedSearchDepth: analysis.suggestedSearchDepth,
+    metadata: {
+      wordCount: text.split(/\s+/).length,
+      sentenceCount: text.split(/[.!?]+/).length,
+      processingTimestamp: new Date().toISOString()
+    }
+  };
+
+  const processingTime = Date.now() - startTime;
+  console.log(`✅ Deep text analysis completed in ${processingTime}ms`);
+  console.log(`   - Entities: ${enrichedAnalysis.namedEntities.length}`);
+  console.log(`   - Claims: ${enrichedAnalysis.atomicClaims.length}`);
+  console.log(`   - Complexity: ${enrichedAnalysis.complexity}`);
+
+  return enrichedAnalysis;
+
+} catch (error) {
+  console.error('❌ Deep text analysis failed:', error);
+  return this.generateFallbackAnalysis(text);
+}
+}
+/**
+
+Build the comprehensive analysis prompt
+*/
+private buildAnalysisPrompt(text: string): string {
+return `You are an expert fact-checking analyst with advanced NLP capabilities. Perform a comprehensive deep analysis of the following text.
+
+TEXT TO ANALYZE:
+"${text}"
+YOUR TASKS:
+
+NAMED ENTITY RECOGNITION (NER)
+
+Extract all significant entities: people, organizations, locations, events, dates, concepts, products, monetary values
+For each entity:
+
+Assign relevance score (0-100): How central is this entity to the claim?
+Provide aliases (alternative names/spellings)
+Add brief context if needed
+
+
+
+
+CLAIM DECOMPOSITION
+
+Break down the text into atomic claims (smallest verifiable units)
+For each atomic claim:
+
+Assign unique ID (claim-1, claim-2, etc.)
+Classify type: factual, statistical, causal, temporal, comparative, or opinion
+Rate verifiability: high (easily verifiable), medium (needs context), low (subjective/vague)
+List entities referenced in this specific claim
+Extract temporal context if present
+Identify dependencies (claims that depend on other claims being true)
+Assign priority (1-10): Higher priority for central, controversial, or impactful claims
+
+
+
+CLAIM DECOMPOSITION EXAMPLES:
+
+"President Biden, who was elected in 2020, announced a new policy yesterday."
+→ Claim 1: "Biden was elected president in 2020" (factual, high verifiability, priority: 5)
+→ Claim 2: "Biden announced a new policy yesterday" (temporal, high verifiability, priority: 8)
+"The economy is improving because unemployment dropped 2% last month."
+→ Claim 1: "Unemployment dropped 2% last month" (statistical, high verifiability, priority: 9)
+→ Claim 2: "The economy is improving" (opinion, low verifiability, priority: 4, depends on claim-1)
+
+
+TEMPORAL CONTEXT EXTRACTION
+
+Determine if text has date/time references
+Classify date type: specific (exact dates), relative (yesterday, last month), range (2020-2023), ongoing (currently), future
+Extract all date mentions
+Identify temporal modifiers (recently, historically, soon, etc.)
+Determine recency: breaking (<24hrs), recent (<30 days), historical (>1 year), timeless
+
+
+SENTIMENT & BIAS DETECTION
+
+Calculate overall bias score (0=neutral, 100=highly biased)
+Determine sentiment polarity: positive, negative, neutral, mixed
+Identify language markers:
+
+Emotional language (shocking, devastating, amazing)
+Absolute statements (always, never, everyone)
+Hedging language (might, could, possibly)
+Loaded terms (radical, mainstream, extremist)
+
+
+Attempt to detect political/ideological bias if apparent
+
+
+COMPLEXITY & SEARCH DEPTH ASSESSMENT
+
+Rate complexity: simple (1-2 claims), moderate (3-5 claims), complex (6+ claims)
+Suggest search depth:
+
+shallow: Simple factual claims, well-known facts
+standard: Most claims, requires typical verification
+deep: Complex claims, controversial topics, multiple interdependent claims
+
+
+
+
+
+CRITICAL INSTRUCTIONS:
+
+Be thorough but precise
+Don't make assumptions; only extract what's explicitly stated or strongly implied
+For opinions, mark them as such but still decompose for context
+Prioritize claims that are central to the text's main argument
+Return ONLY valid JSON matching the exact schema provided
+
+Begin analysis now.`;
+}
+/**
+
+Fallback analysis when AI fails
+*/
+private generateFallbackAnalysis(text: string): DeepTextAnalysis {
+console.warn('⚠️ Using fallback analysis method');
+
+const words = text.split(/\s+/);
+const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+// Basic entity extraction (capitalize words as potential entities)
+const potentialEntities = words
+  .filter(word => /^[A-Z]/.test(word) && word.length > 2)
+  .filter((word, index, arr) => arr.indexOf(word) === index)
+  .slice(0, 10);
+
+const entities: NamedEntity[] = potentialEntities.map(entity => ({
+  text: entity,
+  type: 'CONCEPT' as const,
+  relevance: 50,
+  aliases: []
+}));
+
+// Basic claim decomposition (one claim per sentence)
+const claims: AtomicClaim[] = sentences.map((sentence, index) => ({
+  id: `claim-${index + 1}`,
+  claimText: sentence.trim(),
+  claimType: 'factual' as const,
+  verifiability: 'medium' as const,
+  entities: [],
+  dependencies: [],
+  priority: 5
+}));
+
+// Basic temporal detection
+const hasDate = /\d{4}|yesterday|today|tomorrow|last\s+\w+|next\s+\w+/i.test(text);
+const temporalContext: TemporalContext = {
+  hasDateReference: hasDate,
+  dateType: hasDate ? 'relative' : 'ongoing',
+  extractedDates: [],
+  temporalModifiers: [],
+  recency: 'timeless'
+};
+
+return {
+  originalText: text,
+  namedEntities: entities,
+  atomicClaims: claims,
+  temporalContext,
+  biasIndicators: {
+    overallBiasScore: 50,
+    sentimentPolarity: 'neutral',
+    languageMarkers: {
+      emotionalLanguage: [],
+      absoluteStatements: [],
+      hedgingLanguage: [],
+      loadedTerms: []
+    }
+  },
+  complexity: claims.length > 5 ? 'complex' : claims.length > 2 ? 'moderate' : 'simple',
+  suggestedSearchDepth: 'standard',
+  metadata: {
+    wordCount: words.length,
+    sentenceCount: sentences.length,
+    processingTimestamp: new Date().toISOString()
   }
+};
+}
 }
