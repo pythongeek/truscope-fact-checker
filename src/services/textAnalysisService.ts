@@ -121,15 +121,11 @@ export const analyzeTextSegments = async (
         `;
 
         const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.0-flash-exp",
             contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: textSegmentationSchema,
-            },
         });
-
-        const analysis = parseAIJsonResponse(result.text) as TextSegmentAnalysis;
+        const responseText = result.text;
+        const analysis = parseAIJsonResponse(responseText) as TextSegmentAnalysis;
         analysis.analysisMethod = method;
 
         return analysis;
@@ -193,15 +189,11 @@ export const rewriteContent = async (
         `;
 
         const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.0-flash-exp",
             contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: contentRewriteSchema,
-            },
         });
-
-        return parseAIJsonResponse(result.text) as ContentRewrite;
+        const responseText = result.text;
+        return parseAIJsonResponse(responseText) as ContentRewrite;
     } catch (error) {
         console.error("Error rewriting content:", error);
         throw new Error("Failed to rewrite content. Please try again.");

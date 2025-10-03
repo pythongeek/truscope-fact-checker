@@ -97,15 +97,10 @@ Keywords: ["Elon Musk", "Twitter", "acquisition", "$44 billion", "October 2022"]
       const result = await this.ai.models.generateContent({
         model: getGeminiModel(),
         contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: queryExtractionSchema,
-          temperature: 0.3,
-          maxOutputTokens: 1500
-        }
       });
 
-      const extracted = parseAIJsonResponse(result.text) as ExtractedQueries;
+      const responseText = result.text;
+      const extracted = parseAIJsonResponse(responseText) as ExtractedQueries;
 
       console.log('✅ Extracted Search Queries:', {
         primary: extracted.primaryQuery,

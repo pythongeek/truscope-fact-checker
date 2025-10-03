@@ -51,13 +51,12 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
       const result = await this.ai.models.generateContent({
         model: getGeminiModel(),
         contents: prompt,
       });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const responseText = result.text;
+      const response = parseAIJsonResponse(responseText);
 
       return {
         totalIssues: response.issues.length,
@@ -130,13 +129,12 @@ export class IntelligentCorrector {
     `;
 
     try {
-      // Reverting to the user's original call structure
       const result = await this.ai.models.generateContent({
         model: getGeminiModel(),
         contents: prompt,
       });
-      // Assuming the user's response structure is correct for this SDK version
-      const response = parseAIJsonResponse(result.text);
+      const responseText = result.text;
+      const response = parseAIJsonResponse(responseText);
 
       return {
         id: `correction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
