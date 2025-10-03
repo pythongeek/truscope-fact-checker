@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FactCheckReport } from '../types/factCheck'; // Keep for history service compatibility
 import { EnhancedFactCheckOrchestrator } from '../services/EnhancedFactCheckOrchestrator';
 import { saveReportToHistory } from '../services/historyService';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 import { FactCheckEvidence } from '../lib/fact-check-enhanced';
+import { useFactCheck } from '../hooks/useFactCheck';
 
 // This adapter is now only used for saving to the history service, which expects the old format.
 const convertEvidenceToLegacyReport = (evidence: FactCheckEvidence, originalText: string, processingTime: number): FactCheckReport => {
@@ -59,51 +60,34 @@ const convertEvidenceToLegacyReport = (evidence: FactCheckEvidence, originalText
 
 interface FactCheckInterfaceProps {
   initialClaimText?: string;
-  // initialReport is removed to fix type mismatch
 }
 
 export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialClaimText = '' }) => {
   const [inputText, setInputText] = useState(initialClaimText);
-  const [evidence, setEvidence] = useState<FactCheckEvidence | null>(null);
-  const [processingTime, setProcessingTime] = useState<number>(0);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { evidence, loading, error, performCheck } = useFactCheck();
+  const [processingTime, setProcessingTime] = useState(0);
 
-  const [orchestrator] = useState(() => new EnhancedFactCheckOrchestrator());
-
-  React.useEffect(() => {
+  useEffect(() => {
     setInputText(initialClaimText);
-    setEvidence(null); // Clear previous evidence when claim text changes
   }, [initialClaimText]);
 
   const handleAnalyze = useCallback(async () => {
     if (!inputText.trim()) {
-      setError('Please enter some text to analyze');
       return;
     }
+    const startTime = Date.now();
+    await performCheck(inputText);
+    const endTime = Date.now();
+    setProcessingTime(endTime - startTime);
+  }, [inputText, performCheck]);
 
-    setIsAnalyzing(true);
-    setError(null);
-    setEvidence(null);
-
-    try {
-      const startTime = Date.now();
-      const evidenceResult = await orchestrator.performFactCheck(inputText);
-      const duration = Date.now() - startTime;
-
-      setProcessingTime(duration);
-      setEvidence(evidenceResult);
-
-      // Save to history using the adapter
-      const legacyReport = convertEvidenceToLegacyReport(evidenceResult, inputText, duration);
+  // Save to history when evidence is updated
+  useEffect(() => {
+    if (evidence) {
+      const legacyReport = convertEvidenceToLegacyReport(evidence, inputText, processingTime);
       saveReportToHistory(inputText, legacyReport);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred during analysis.');
-    } finally {
-      setIsAnalyzing(false);
     }
-  }, [inputText, orchestrator]);
+  }, [evidence, inputText, processingTime]);
 
   const selectedCapability = getMethodCapabilities('comprehensive');
 
@@ -145,14 +129,14 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialC
 
           <button
             onClick={handleAnalyze}
-            disabled={isAnalyzing || !inputText.trim()}
+            disabled={loading || !inputText.trim()}
             className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-              isAnalyzing || !inputText.trim()
+              loading || !inputText.trim()
                 ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
                 : 'bg-indigo-600 text-white hover:bg-indigo-700'
             }`}
           >
-            {isAnalyzing ? (
+            {loading ? (
               <div className="flex items-center">
                 <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
                 Analyzing...
@@ -176,7 +160,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialC
         </div>
       )}
 
-      {evidence && (
+      {evidence && !loading && (
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>
           <EnhancedFactCheckReport evidence={evidence} processingTime={processingTime} />
