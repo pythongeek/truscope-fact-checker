@@ -1,4 +1,4 @@
-// src/services/serpApiService.ts - FIXED VERSION
+// src/services/serpApiService.ts - FIXED VERSION WITH CORRECT CACHE TTL
 
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
@@ -33,12 +33,10 @@ export class SerpApiService {
   }
 
   async search(query: string, maxResults: number = 10): Promise<SerpApiResponse> {
-    // CRITICAL FIX: Ensure query is reasonable length BEFORE any processing
     const truncatedQuery = query.length > 100 ? query.substring(0, 100) : query;
 
     const cacheKey = this.cache.generateKey('serp_search', await generateSHA256(truncatedQuery));
 
-    // Check cache first
     const cached = await this.cache.get<SerpApiResponse>(cacheKey);
     if (cached) {
       console.log('✅ Using cached SERP results');
@@ -46,10 +44,8 @@ export class SerpApiService {
     }
 
     try {
-      // Extract better search query if needed
       let searchQuery = truncatedQuery;
 
-      // Only attempt extraction if query looks like it needs it (very long or unstructured)
       if (truncatedQuery.length > 50 || truncatedQuery.split(' ').length > 10) {
         try {
           const extracted = await this.queryExtractor.extractSearchQueries(truncatedQuery);
@@ -57,11 +53,9 @@ export class SerpApiService {
           console.log('🔍 Executing search with primary query:', searchQuery);
         } catch (extractError) {
           console.warn('Query extraction failed, using original:', extractError);
-          // Continue with original truncated query
         }
       }
 
-      // Call server-side SERP API endpoint
       const response = await this.httpClient.request<any>('/api/serp-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,12 +64,10 @@ export class SerpApiService {
         retryConfig: { maxRetries: 2 }
       });
 
-      // CRITICAL FIX: Validate and normalize response structure
       if (!response) {
         throw new Error('Empty response from SERP API');
       }
 
-      // Handle different possible response structures
       const normalizedResponse = this.normalizeResponse(response);
 
       if (!normalizedResponse.results || normalizedResponse.results.length === 0) {
@@ -83,8 +75,7 @@ export class SerpApiService {
         return { results: [], totalResults: 0, searchQuery };
       }
 
-      // Cache the normalized response
-      await this.cache.set(cacheKey, normalizedResponse, 'searchTTL');
+      await this.cache.set(cacheKey, normalizedResponse);
 
       console.log(`✅ SERP API returned ${normalizedResponse.results.length} results`);
       return normalizedResponse;
@@ -92,7 +83,6 @@ export class SerpApiService {
     } catch (error) {
       console.error('SERP API error:', error);
 
-      // Return empty results instead of throwing
       return {
         results: [],
         totalResults: 0,
@@ -101,11 +91,7 @@ export class SerpApiService {
     }
   }
 
-  /**
-   * CRITICAL FIX: Normalize different possible SERP API response formats
-   */
   private normalizeResponse(response: any): SerpApiResponse {
-    // Case 1: Response already has 'results' array
     if (response.results && Array.isArray(response.results)) {
       return {
         results: response.results.map(this.normalizeResult),
@@ -114,7 +100,6 @@ export class SerpApiService {
       };
     }
 
-    // Case 2: Response has 'organic' results (common SERP format)
     if (response.organic && Array.isArray(response.organic)) {
       return {
         results: response.organic.map(this.normalizeResult),
@@ -123,7 +108,6 @@ export class SerpApiService {
       };
     }
 
-    // Case 3: Response has 'organicResults' (Serper.dev format)
     if (response.organic_results && Array.isArray(response.organic_results)) {
       return {
         results: response.organic_results.map(this.normalizeResult),
@@ -132,7 +116,6 @@ export class SerpApiService {
       };
     }
 
-    // Case 4: Response has 'items' (Google Custom Search format)
     if (response.items && Array.isArray(response.items)) {
       return {
         results: response.items.map(this.normalizeResult),
@@ -141,7 +124,6 @@ export class SerpApiService {
       };
     }
 
-    // Case 5: Response is directly an array
     if (Array.isArray(response)) {
       return {
         results: response.map(this.normalizeResult),
@@ -152,7 +134,6 @@ export class SerpApiService {
 
     console.warn('Unknown SERP response format:', Object.keys(response));
 
-    // Return empty results as fallback
     return {
       results: [],
       totalResults: 0,
@@ -160,11 +141,7 @@ export class SerpApiService {
     };
   }
 
-  /**
-   * Normalize individual search result to standard format
-   */
-  private normalizeResult(result: any): SerpApiResult {
-    // Handle different field names across SERP APIs
+  private normalizeResult = (result: any): SerpApiResult => {
     const title = result.title || result.displayLink || result.name || 'Untitled';
     const link = result.link || result.url || result.href || '';
     const snippet = result.snippet || result.description || result.text || '';
@@ -180,9 +157,6 @@ export class SerpApiService {
     };
   }
 
-  /**
-   * Extract domain from URL for source attribution
-   */
   private extractDomain(url: string): string {
     try {
       const urlObj = new URL(url);
@@ -192,9 +166,6 @@ export class SerpApiService {
     }
   }
 
-  /**
-   * Clean text by removing extra whitespace and HTML entities
-   */
   private cleanText(text: string): string {
     return text
       .replace(/\s+/g, ' ')
