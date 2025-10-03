@@ -1,3 +1,4 @@
+import { RobustJSONParser } from '../utils/jsonParser';
 // ============================================================================
 // SOURCE CREDIBILITY SYSTEM
 // ============================================================================
@@ -209,8 +210,6 @@ interface FactCheckEvidence {
   reasoning: string;
   lastUpdated: string;
 }
-
-import { RobustJSONParser } from '../utils/jsonParser';
 
 // ============================================================================
 // SMART QUERY OPTIMIZER

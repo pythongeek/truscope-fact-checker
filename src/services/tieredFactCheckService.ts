@@ -578,46 +578,6 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
   }
 
 
-  private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
-    const medicalKeywords = ['vaccine', 'covid', 'virus', 'disease', 'treatment', 'medicine', 'health'];
-    const politicalKeywords = ['president', 'election', 'vote', 'government', 'policy', 'congress'];
-    const scientificKeywords = ['research', 'study', 'scientist', 'climate', 'global warming', 'experiment'];
-    const financialKeywords = ['stock', 'economy', 'inflation', 'market', 'financial', 'investment'];
-
-    const lowerText = text.toLowerCase();
-
-    if (medicalKeywords.some(k => lowerText.includes(k))) return 'medical';
-    if (politicalKeywords.some(k => lowerText.includes(k))) return 'political';
-    if (scientificKeywords.some(k => lowerText.includes(k))) return 'scientific';
-    if (financialKeywords.some(k => lowerText.includes(k))) return 'financial';
-
-    return 'general';
-  }
-
-  private async performSpecializedSearch(claimText: string, claimType: string): Promise<EvidenceItem[]> {
-    const specializedQueries = {
-      medical: `${claimText} site:cdc.gov OR site:who.int OR site:pubmed.ncbi.nlm.nih.gov`,
-      political: `${claimText} site:factcheck.org OR site:politifact.com OR site:snopes.com`,
-      scientific: `${claimText} site:nature.com OR site:science.org OR site:arxiv.org`,
-      financial: `${claimText} site:sec.gov OR site:federalreserve.gov OR site:reuters.com`,
-      general: claimText
-    };
-
-    try {
-      const results = await this.serpApi.search(specializedQueries[claimType as keyof typeof specializedQueries] || claimText, 5);
-
-      return results.results.map((result, index) => ({
-        id: `specialized_${claimType}_${index}`,
-        publisher: result.source,
-        url: result.link,
-        quote: result.snippet,
-        score: this.calculateSearchResultScore(result, claimText) + 10, // Boost for specialized sources
-        type: 'search_result'
-      }));
-    } catch {
-      return [];
-    }
-  }
 
   private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
     const medicalKeywords = ['vaccine', 'covid', 'virus', 'disease', 'treatment', 'medicine', 'health'];

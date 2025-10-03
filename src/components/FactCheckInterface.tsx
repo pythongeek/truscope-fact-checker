@@ -1,67 +1,80 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckReport, PublishingContext } from '../types/factCheck';
-import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
+import { FactCheckReport } from '../types/factCheck'; // Keep for history service compatibility
+import { EnhancedFactCheckOrchestrator } from '../services/EnhancedFactCheckOrchestrator';
 import { saveReportToHistory } from '../services/historyService';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
-import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
-import { TieredFactCheckService } from '../services/tieredFactCheckService';
+import { FactCheckEvidence } from '../lib/fact-check-enhanced';
+
+// This adapter is now only used for saving to the history service, which expects the old format.
+const convertEvidenceToLegacyReport = (evidence: FactCheckEvidence, originalText: string, processingTime: number): FactCheckReport => {
+  const evidenceItems = evidence.sources.map((source, index) => ({
+    id: `evidence-${index}`,
+    publisher: source.source.domain,
+    url: source.url,
+    quote: source.snippet,
+    score: source.source.rating,
+    type: 'search_result' as 'search_result',
+    source: source.source,
+  }));
+
+  return {
+    id: `report-${Date.now()}`,
+    originalText: originalText,
+    final_verdict: evidence.verdict,
+    final_score: evidence.confidence,
+    reasoning: evidence.reasoning,
+    evidence: evidenceItems,
+    enhanced_claim_text: evidence.claim,
+    score_breakdown: {
+      final_score_formula: "Aggregated from new orchestrator",
+      metrics: [],
+    },
+    metadata: {
+      method_used: 'enhanced-orchestrator',
+      processing_time_ms: processingTime,
+      apis_used: ['gemini', 'serp-api', 'webz-io'],
+      sources_consulted: {
+        total: evidence.sources.length,
+        high_credibility: evidence.sources.filter(s => s.source.rating >= 80).length,
+        conflicting: 0,
+      },
+      warnings: [],
+    },
+    source_credibility_report: {
+      overallScore: evidence.aggregateCredibility,
+      highCredibilitySources: evidence.sources.filter(s => s.source.rating >= 80).length,
+      flaggedSources: 0,
+      biasWarnings: [],
+      credibilityBreakdown: { academic: 0, news: evidence.sources.length, government: 0, social: 0 },
+    },
+    temporal_verification: {
+      hasTemporalClaims: false,
+      validations: [],
+      overallTemporalScore: 0,
+      temporalWarnings: [],
+    },
+  };
+};
 
 interface FactCheckInterfaceProps {
-  initialReport?: FactCheckReport | null;
   initialClaimText?: string;
+  // initialReport is removed to fix type mismatch
 }
 
-export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
+export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialClaimText = '' }) => {
   const [inputText, setInputText] = useState(initialClaimText);
-  const [report, setReport] = useState<FactCheckReport | null>(initialReport);
+  const [evidence, setEvidence] = useState<FactCheckEvidence | null>(null);
+  const [processingTime, setProcessingTime] = useState<number>(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tieredProgress, setTieredProgress] = useState<TierProgress[]>([]);
-  const [currentPhase, setCurrentPhase] = useState(0);
 
-  const selectedMethod = 'tiered-verification';
+  const [orchestrator] = useState(() => new EnhancedFactCheckOrchestrator());
 
   React.useEffect(() => {
-    setReport(initialReport);
     setInputText(initialClaimText);
-  }, [initialReport, initialClaimText]);
-
-  const factCheckService = new EnhancedFactCheckService();
-
-  const handleTieredFactCheck = async (text: string, context: PublishingContext) => {
-    const initialProgress: TierProgress[] = [
-      { tier: 'direct-verification', status: 'pending' },
-      { tier: 'web-search', status: 'pending' },
-      { tier: 'specialized-analysis', status: 'pending' },
-      { tier: 'synthesis', status: 'pending' }
-    ];
-
-    setTieredProgress(initialProgress);
-    setCurrentPhase(1);
-
-    try {
-      const tieredService = TieredFactCheckService.getInstance();
-      const result = await tieredService.performTieredCheck(text, context);
-
-      if (result.metadata.tier_breakdown) {
-        const updatedProgress = result.metadata.tier_breakdown.map(tier => ({
-          tier: tier.tier,
-          status: tier.success ? 'completed' as const : 'failed' as const,
-          confidence: tier.confidence,
-          evidenceCount: tier.evidence_count
-        }));
-        setTieredProgress(updatedProgress);
-      }
-
-      setReport(result);
-      saveReportToHistory(text, result);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Analysis failed');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+    setEvidence(null); // Clear previous evidence when claim text changes
+  }, [initialClaimText]);
 
   const handleAnalyze = useCallback(async () => {
     if (!inputText.trim()) {
@@ -71,13 +84,28 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
 
     setIsAnalyzing(true);
     setError(null);
-    setReport(null);
-    setTieredProgress([]);
+    setEvidence(null);
 
-    await handleTieredFactCheck(inputText, 'journalism');
-  }, [inputText, factCheckService]);
+    try {
+      const startTime = Date.now();
+      const evidenceResult = await orchestrator.performFactCheck(inputText);
+      const duration = Date.now() - startTime;
 
-  const selectedCapability = getMethodCapabilities(selectedMethod);
+      setProcessingTime(duration);
+      setEvidence(evidenceResult);
+
+      // Save to history using the adapter
+      const legacyReport = convertEvidenceToLegacyReport(evidenceResult, inputText, duration);
+      saveReportToHistory(inputText, legacyReport);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred during analysis.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [inputText, orchestrator]);
+
+  const selectedCapability = getMethodCapabilities('comprehensive');
 
   return (
     <div className="max-w-6xl mx-auto p-2 md:p-6 space-y-6 md:space-y-8 bg-slate-900 text-white">
@@ -90,7 +118,6 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
           Advanced AI-powered verification with source credibility analysis
         </p>
       </div>
-
 
       {/* Text Input */}
       <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
@@ -131,7 +158,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
                 Analyzing...
               </div>
             ) : (
-              `Run ${selectedCapability.name}`
+              `Run Analysis`
             )}
           </button>
         </div>
@@ -149,35 +176,10 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
         </div>
       )}
 
-      {/* Results */}
-      {isAnalyzing && tieredProgress.length > 0 && (
-        <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
-          <TieredProgressIndicator
-            progress={tieredProgress}
-            currentPhase={currentPhase}
-          />
-        </div>
-      )}
-
-      {report && (
+      {evidence && (
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>
-          <EnhancedFactCheckReport report={report} />
-        </div>
-      )}
-
-      {/* Processing Indicator */}
-      {isAnalyzing && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-6 text-center">
-          <div className="animate-spin w-8 h-8 border-3 border-blue-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <h3 className="text-lg font-medium text-blue-300 mb-2">
-            Running {selectedCapability.name}
-          </h3>
-          <p className="text-blue-400">
-            {selectedCapability.processingTime === 'fast' && 'This should take just a few seconds...'}
-            {selectedCapability.processingTime === 'medium' && 'This may take up to a minute...'}
-            {selectedCapability.processingTime === 'slow' && 'This may take several minutes for thorough analysis...'}
-          </p>
+          <EnhancedFactCheckReport evidence={evidence} processingTime={processingTime} />
         </div>
       )}
     </div>

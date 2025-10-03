@@ -74,7 +74,6 @@ const App: React.FC = () => {
             case 'checker':
                 return (
                     <FactCheckInterface
-                        initialReport={selectedReport}
                         initialClaimText={selectedClaim}
                     />
                 );
