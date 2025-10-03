@@ -71,7 +71,7 @@ export class GoogleFactCheckService {
 
       const transformedResults = this.transformSerpResults(results, claimText);
 
-      await this.cache.set(cacheKey, transformedResults);
+      await this.cache.set(cacheKey, transformedResults, 'factCheckTTL');
 
       console.log(`✅ Fact-check search returned ${transformedResults.length} results`);
       return transformedResults;
