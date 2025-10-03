@@ -7,15 +7,7 @@ import { BlobStorageService } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { synthesizeEvidenceWithGemini } from './geminiService';
-
-// ADD THIS HELPER FUNCTION at the top of the class
-const truncateQuery = (query: string, maxLength: number = 2000): string => {
-  if (query.length > maxLength) {
-    console.warn(`Query truncated from ${query.length} to ${maxLength} characters.`);
-    return query.substring(0, maxLength);
-  }
-  return query;
-};
+import { QueryOptimizer, EnhancedFactCheckService, ValidatedSearchResult } from '../lib/fact-check-enhanced';
 
 export type FactCheckTier = 'direct-verification' | 'web-search' | 'specialized-analysis' | 'synthesis';
 
@@ -37,6 +29,7 @@ export class TieredFactCheckService {
   private cache = AdvancedCacheService.getInstance();
   private blobStorage = BlobStorageService.getInstance();
   private performanceMonitor = PerformanceMonitor.getInstance();
+  private enhancedFactCheckService = new EnhancedFactCheckService();
 
   static getInstance(): TieredFactCheckService {
     if (!TieredFactCheckService.instance) {
@@ -186,7 +179,7 @@ export class TieredFactCheckService {
     console.log('📋 Phase 1: Direct Verification');
 
     try {
-      const factCheckResults = await this.googleFactCheck.searchClaims(truncateQuery(claimText), 5);
+      const factCheckResults = await this.googleFactCheck.searchClaims(QueryOptimizer.optimizeForSearch(claimText, 2000), 5);
 
       if (factCheckResults.length === 0) {
         return {
@@ -240,9 +233,20 @@ export class TieredFactCheckService {
     console.log('🔍 Phase 2: Broad Web Search & Initial Grounding');
 
     try {
-      const searchResults = await this.serpApi.search(truncateQuery(claimText), 10);
+      const queryVariations = QueryOptimizer.generateQueryVariations(claimText);
+      console.log(`Generated ${queryVariations.length} query variations.`);
 
-      if (searchResults.results.length === 0) {
+      let allSearchResults: ValidatedSearchResult[] = [];
+      for (const query of queryVariations) {
+        const results = await this.enhancedFactCheckService.searchWithValidation(query);
+        allSearchResults.push(...results);
+      }
+
+      // Deduplicate results based on the URL
+      const uniqueResults = Array.from(new Map(allSearchResults.map(item => [item.url, item])).values());
+      console.log(`Found ${uniqueResults.length} unique search results after deduplication.`);
+
+      if (uniqueResults.length === 0) {
         return {
           tier: 'web-search',
           success: false,
@@ -253,34 +257,31 @@ export class TieredFactCheckService {
         };
       }
 
-      // Convert search results to evidence
-      const evidence: EvidenceItem[] = searchResults.results.slice(0, 8).map((result, index) => ({
+      const evidence: EvidenceItem[] = uniqueResults.map((result, index) => ({
         id: `web_search_${index}`,
-        publisher: result.source,
-        url: result.link,
+        publisher: result.source.domain,
+        url: result.url,
         quote: result.snippet,
-        score: this.calculateSearchResultScore(result, claimText),
-        type: 'search_result'
+        score: result.source.rating,
+        type: 'search_result',
+        source: result.source
       }));
 
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
-
-      // Check if sources agree (simple consensus check)
-      const highScoreCount = evidence.filter(e => Number(e.score) >= 70).length;
+      const highScoreCount = evidence.filter(e => e.score >= 80).length;
       const lowScoreCount = evidence.filter(e => e.score <= 40).length;
-      const clearConsensus = (highScoreCount >= 5 && lowScoreCount <= 1) || (lowScoreCount >= 5 && highScoreCount <= 1);
+      const clearConsensus = (highScoreCount >= 3 && lowScoreCount === 0) || (lowScoreCount >= 3 && highScoreCount === 0);
 
       return {
         tier: 'web-search',
         success: true,
         confidence: avgScore,
         evidence,
-        shouldEscalate: !clearConsensus || avgScore < 70,
+        shouldEscalate: !clearConsensus || avgScore < 75,
         processingTime: Date.now() - startTime
       };
-
     } catch (error) {
-      console.warn('⚠️  Phase 2 failed:', error);
+      console.warn('⚠️ Phase 2 failed:', error);
       return {
         tier: 'web-search',
         success: false,
@@ -298,31 +299,24 @@ export class TieredFactCheckService {
     console.log('🎯 Phase 3: Specialized & Temporal Analysis');
 
     try {
-      const evidence: EvidenceItem[] = [];
-
-      // Check if claim involves dates/events for temporal analysis
       const hasTemporalElements = this.detectTemporalElements(claimText);
+      let newsResults: ValidatedSearchResult[] = [];
 
       if (hasTemporalElements.hasTemporalClaims) {
         console.log('📅 Temporal elements detected, fetching recent news');
-
-        const newsResults = await this.newsService.searchNews({
-          query: truncateQuery(claimText),
-          fromDate: hasTemporalElements.extractedDate || new Date().toISOString()
-        });
-
-        const newsEvidence: EvidenceItem[] = newsResults.posts.slice(0, 6).map((article, index) => ({
-          id: `news_${index}`,
-          publisher: article.author,
-          url: article.url,
-          quote: article.text,
-          score: this.calculateNewsScore(article, claimText),
-          type: 'news',
-          publishedDate: article.published
-        }));
-
-        evidence.push(...newsEvidence);
+        newsResults = await this.enhancedFactCheckService.searchNewsWithValidation(claimText, hasTemporalElements.extractedDate);
       }
+
+      const evidence: EvidenceItem[] = newsResults.map((result, index) => ({
+        id: `news_${index}`,
+        publisher: result.source.domain,
+        url: result.url,
+        quote: result.snippet,
+        score: result.source.rating,
+        type: 'news',
+        publishedDate: result.publishDate,
+        source: result.source
+      }));
 
       // Additional specialized searches for specific claim types
       const claimType = this.detectClaimType(claimText);
@@ -332,21 +326,18 @@ export class TieredFactCheckService {
         evidence.push(...specializedResults);
       }
 
-      const avgScore = evidence.length > 0
-        ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
-        : 50;
+      const avgScore = evidence.length > 0 ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length : 50;
 
       return {
         tier: 'specialized-analysis',
         success: evidence.length > 0,
         confidence: avgScore,
         evidence,
-        shouldEscalate: true, // Always escalate to synthesis for final decision
+        shouldEscalate: true,
         processingTime: Date.now() - startTime
       };
-
     } catch (error) {
-      console.warn('⚠️  Phase 3 failed:', error);
+      console.warn('⚠️ Phase 3 failed:', error);
       return {
         tier: 'specialized-analysis',
         success: false,
@@ -586,6 +577,8 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
     return { hasTemporalClaims: false };
   }
 
+
+
   private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
     const medicalKeywords = ['vaccine', 'covid', 'virus', 'disease', 'treatment', 'medicine', 'health'];
     const politicalKeywords = ['president', 'election', 'vote', 'government', 'policy', 'congress'];
@@ -611,20 +604,18 @@ private fallbackSynthesis(allEvidence: EvidenceItem[]): { adjustedScore: number 
       general: claimText
     };
 
-    try {
-      const results = await this.serpApi.search(specializedQueries[claimType as keyof typeof specializedQueries] || claimText, 5);
+    const query = specializedQueries[claimType as keyof typeof specializedQueries] || claimText;
+    const results = await this.enhancedFactCheckService.searchWithRawQuery(query);
 
-      return results.results.map((result, index) => ({
-        id: `specialized_${claimType}_${index}`,
-        publisher: result.source,
-        url: result.link,
-        quote: result.snippet,
-        score: this.calculateSearchResultScore(result, claimText) + 10, // Boost for specialized sources
-        type: 'search_result'
-      }));
-    } catch {
-      return [];
-    }
+    return results.map((result, index) => ({
+      id: `specialized_${claimType}_${index}`,
+      publisher: result.source.domain,
+      url: result.url,
+      quote: result.snippet,
+      score: result.source.rating,
+      type: 'search_result',
+      source: result.source
+    }));
   }
 
   private generateVerdict(score: number): string {

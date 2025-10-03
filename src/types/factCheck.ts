@@ -1,4 +1,5 @@
 import { GoogleSearchResult } from '../types';
+import { SourceCredibility } from '../lib/fact-check-enhanced';
 
 // NEW - Replace with streamlined methods
 export type FactCheckMethod =
@@ -88,6 +89,7 @@ export interface EvidenceItem {
     score: number; // 0-100 reliability score
     type: 'claim' | 'news' | 'search_result' | 'cached-database' | 'academic';
     publishedDate?: string;
+    source?: SourceCredibility;
 }
 
 export interface FactCheckMetadata {

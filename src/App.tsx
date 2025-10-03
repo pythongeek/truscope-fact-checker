@@ -5,7 +5,7 @@ import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
 import { FactCheckInterface } from './components/FactCheckInterface';
 import { FactCheckReport } from '@/types/factCheck';
-import { parseAIJsonResponse } from './utils/jsonParser';
+import { RobustJSONParser } from './utils/jsonParser';
 
 // Initialize the global JSON fix on app startup
 function initializeGlobalJsonFix() {
@@ -29,7 +29,7 @@ function initializeGlobalJsonFix() {
       )) {
         try {
           console.warn('[JSON Fix] Standard JSON.parse failed, attempting robust AI response parsing');
-          const result = parseAIJsonResponse(text);
+          const result = RobustJSONParser.parse(text);
           console.log('[JSON Fix] Successfully parsed AI response');
           return result;
         } catch (robustError) {
@@ -74,7 +74,6 @@ const App: React.FC = () => {
             case 'checker':
                 return (
                     <FactCheckInterface
-                        initialReport={selectedReport}
                         initialClaimText={selectedClaim}
                     />
                 );
