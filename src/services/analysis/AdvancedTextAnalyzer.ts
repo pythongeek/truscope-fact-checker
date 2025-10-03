@@ -1,5 +1,5 @@
 // src/services/analysis/AdvancedTextAnalyzer.ts
-import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from '../apiKeyService';
 import { parseAIJsonResponse } from '../../utils/jsonParser';
 
@@ -76,18 +76,19 @@ export interface DeepTextAnalysis {
 }
 
 // ============================================================================
-// SCHEMA DEFINITIONS (PROPERLY TYPED)
+// SCHEMA DEFINITIONS - Using 'as any' to bypass strict typing
 // ============================================================================
 
-const namedEntitySchema: Schema = {
+const namedEntitySchema = {
     type: SchemaType.OBJECT,
     properties: {
         text: { type: SchemaType.STRING, description: "The entity text" },
         type: {
             type: SchemaType.STRING,
+            format: "enum",
             enum: ['PERSON', 'ORGANIZATION', 'LOCATION', 'EVENT', 'DATE', 'CONCEPT', 'PRODUCT', 'MONEY'],
             description: "Entity type"
-        },
+        } as any,
         relevance: { type: SchemaType.INTEGER, description: "Relevance score 0-100" },
         aliases: {
             type: SchemaType.ARRAY,
@@ -102,23 +103,25 @@ const namedEntitySchema: Schema = {
         }
     },
     required: ['text', 'type', 'relevance']
-};
+} as any;
 
-const atomicClaimSchema: Schema = {
+const atomicClaimSchema = {
     type: SchemaType.OBJECT,
     properties: {
         id: { type: SchemaType.STRING, description: "Unique claim identifier" },
         claimText: { type: SchemaType.STRING, description: "The atomic claim statement" },
         claimType: {
             type: SchemaType.STRING,
+            format: "enum",
             enum: ['factual', 'statistical', 'causal', 'temporal', 'comparative', 'opinion'],
             description: "Type of claim"
-        },
+        } as any,
         verifiability: {
             type: SchemaType.STRING,
+            format: "enum",
             enum: ['high', 'medium', 'low'],
             description: "How verifiable this claim is"
-        },
+        } as any,
         entities: {
             type: SchemaType.ARRAY,
             items: { type: SchemaType.STRING },
@@ -131,8 +134,9 @@ const atomicClaimSchema: Schema = {
                 hasDateReference: { type: SchemaType.BOOLEAN },
                 dateType: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['specific', 'relative', 'range', 'ongoing', 'future']
-                },
+                } as any,
                 extractedDates: {
                     type: SchemaType.ARRAY,
                     items: { type: SchemaType.STRING }
@@ -144,8 +148,9 @@ const atomicClaimSchema: Schema = {
                 timeframe: { type: SchemaType.STRING, nullable: true },
                 recency: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['breaking', 'recent', 'historical', 'timeless']
-                }
+                } as any
             },
             required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
         },
@@ -160,9 +165,9 @@ const atomicClaimSchema: Schema = {
         }
     },
     required: ['id', 'claimText', 'claimType', 'verifiability', 'entities', 'dependencies', 'priority']
-};
+} as any;
 
-const deepTextAnalysisSchema: Schema = {
+const deepTextAnalysisSchema = {
     type: SchemaType.OBJECT,
     properties: {
         namedEntities: {
@@ -179,8 +184,9 @@ const deepTextAnalysisSchema: Schema = {
                 hasDateReference: { type: SchemaType.BOOLEAN },
                 dateType: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['specific', 'relative', 'range', 'ongoing', 'future']
-                },
+                } as any,
                 extractedDates: {
                     type: SchemaType.ARRAY,
                     items: { type: SchemaType.STRING }
@@ -192,8 +198,9 @@ const deepTextAnalysisSchema: Schema = {
                 timeframe: { type: SchemaType.STRING, nullable: true },
                 recency: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['breaking', 'recent', 'historical', 'timeless']
-                }
+                } as any
             },
             required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
         },
@@ -203,8 +210,9 @@ const deepTextAnalysisSchema: Schema = {
                 overallBiasScore: { type: SchemaType.INTEGER },
                 sentimentPolarity: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['positive', 'negative', 'neutral', 'mixed']
-                },
+                } as any,
                 languageMarkers: {
                     type: SchemaType.OBJECT,
                     properties: {
@@ -217,23 +225,26 @@ const deepTextAnalysisSchema: Schema = {
                 },
                 sourceBias: {
                     type: SchemaType.STRING,
+                    format: "enum",
                     enum: ['left', 'center', 'right', 'unknown'],
                     nullable: true
-                }
+                } as any
             },
             required: ['overallBiasScore', 'sentimentPolarity', 'languageMarkers']
         },
         complexity: {
             type: SchemaType.STRING,
+            format: "enum",
             enum: ['simple', 'moderate', 'complex']
-        },
+        } as any,
         suggestedSearchDepth: {
             type: SchemaType.STRING,
+            format: "enum",
             enum: ['shallow', 'standard', 'deep']
-        }
+        } as any
     },
     required: ['namedEntities', 'atomicClaims', 'temporalContext', 'biasIndicators', 'complexity', 'suggestedSearchDepth']
-};
+} as any;
 
 // ============================================================================
 // SERVICE CLASS
