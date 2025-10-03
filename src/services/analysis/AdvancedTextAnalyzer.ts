@@ -1,5 +1,5 @@
 // src/services/analysis/AdvancedTextAnalyzer.ts
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from '../apiKeyService';
 import { parseAIJsonResponse } from '../../utils/jsonParser';
 
@@ -76,10 +76,10 @@ export interface DeepTextAnalysis {
 }
 
 // ============================================================================
-// SCHEMA DEFINITIONS (FIXED WITH SchemaType ENUM)
+// SCHEMA DEFINITIONS (PROPERLY TYPED)
 // ============================================================================
 
-const namedEntitySchema = {
+const namedEntitySchema: Schema = {
     type: SchemaType.OBJECT,
     properties: {
         text: { type: SchemaType.STRING, description: "The entity text" },
@@ -104,7 +104,7 @@ const namedEntitySchema = {
     required: ['text', 'type', 'relevance']
 };
 
-const atomicClaimSchema = {
+const atomicClaimSchema: Schema = {
     type: SchemaType.OBJECT,
     properties: {
         id: { type: SchemaType.STRING, description: "Unique claim identifier" },
@@ -162,7 +162,7 @@ const atomicClaimSchema = {
     required: ['id', 'claimText', 'claimType', 'verifiability', 'entities', 'dependencies', 'priority']
 };
 
-const deepTextAnalysisSchema = {
+const deepTextAnalysisSchema: Schema = {
     type: SchemaType.OBJECT,
     properties: {
         namedEntities: {
