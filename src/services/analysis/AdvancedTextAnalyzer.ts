@@ -76,19 +76,18 @@ export interface DeepTextAnalysis {
 }
 
 // ============================================================================
-// SCHEMA DEFINITIONS - Using 'as any' to bypass strict typing
+// SCHEMA DEFINITIONS
 // ============================================================================
 
-const namedEntitySchema = {
+const namedEntitySchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         text: { type: SchemaType.STRING, description: "The entity text" },
         type: {
             type: SchemaType.STRING,
-            format: "enum",
             enum: ['PERSON', 'ORGANIZATION', 'LOCATION', 'EVENT', 'DATE', 'CONCEPT', 'PRODUCT', 'MONEY'],
             description: "Entity type"
-        } as any,
+        },
         relevance: { type: SchemaType.INTEGER, description: "Relevance score 0-100" },
         aliases: {
             type: SchemaType.ARRAY,
@@ -103,56 +102,56 @@ const namedEntitySchema = {
         }
     },
     required: ['text', 'type', 'relevance']
-} as any;
+};
 
-const atomicClaimSchema = {
+const temporalContextSchema: any = {
+    type: SchemaType.OBJECT,
+    properties: {
+        hasDateReference: { type: SchemaType.BOOLEAN },
+        dateType: {
+            type: SchemaType.STRING,
+            enum: ['specific', 'relative', 'range', 'ongoing', 'future']
+        },
+        extractedDates: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING }
+        },
+        temporalModifiers: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING }
+        },
+        timeframe: { type: SchemaType.STRING, nullable: true },
+        recency: {
+            type: SchemaType.STRING,
+            enum: ['breaking', 'recent', 'historical', 'timeless']
+        }
+    },
+    required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
+};
+
+const atomicClaimSchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         id: { type: SchemaType.STRING, description: "Unique claim identifier" },
         claimText: { type: SchemaType.STRING, description: "The atomic claim statement" },
         claimType: {
             type: SchemaType.STRING,
-            format: "enum",
             enum: ['factual', 'statistical', 'causal', 'temporal', 'comparative', 'opinion'],
             description: "Type of claim"
-        } as any,
+        },
         verifiability: {
             type: SchemaType.STRING,
-            format: "enum",
             enum: ['high', 'medium', 'low'],
             description: "How verifiable this claim is"
-        } as any,
+        },
         entities: {
             type: SchemaType.ARRAY,
             items: { type: SchemaType.STRING },
             description: "Entities referenced in this claim"
         },
         temporalContext: {
-            type: SchemaType.OBJECT,
-            nullable: true,
-            properties: {
-                hasDateReference: { type: SchemaType.BOOLEAN },
-                dateType: {
-                    type: SchemaType.STRING,
-                    format: "enum",
-                    enum: ['specific', 'relative', 'range', 'ongoing', 'future']
-                } as any,
-                extractedDates: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
-                },
-                temporalModifiers: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
-                },
-                timeframe: { type: SchemaType.STRING, nullable: true },
-                recency: {
-                    type: SchemaType.STRING,
-                    format: "enum",
-                    enum: ['breaking', 'recent', 'historical', 'timeless']
-                } as any
-            },
-            required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
+            ...temporalContextSchema,
+            nullable: true
         },
         dependencies: {
             type: SchemaType.ARRAY,
@@ -165,9 +164,9 @@ const atomicClaimSchema = {
         }
     },
     required: ['id', 'claimText', 'claimType', 'verifiability', 'entities', 'dependencies', 'priority']
-} as any;
+};
 
-const deepTextAnalysisSchema = {
+const deepTextAnalysisSchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         namedEntities: {
@@ -178,41 +177,15 @@ const deepTextAnalysisSchema = {
             type: SchemaType.ARRAY,
             items: atomicClaimSchema
         },
-        temporalContext: {
-            type: SchemaType.OBJECT,
-            properties: {
-                hasDateReference: { type: SchemaType.BOOLEAN },
-                dateType: {
-                    type: SchemaType.STRING,
-                    format: "enum",
-                    enum: ['specific', 'relative', 'range', 'ongoing', 'future']
-                } as any,
-                extractedDates: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
-                },
-                temporalModifiers: {
-                    type: SchemaType.ARRAY,
-                    items: { type: SchemaType.STRING }
-                },
-                timeframe: { type: SchemaType.STRING, nullable: true },
-                recency: {
-                    type: SchemaType.STRING,
-                    format: "enum",
-                    enum: ['breaking', 'recent', 'historical', 'timeless']
-                } as any
-            },
-            required: ['hasDateReference', 'dateType', 'extractedDates', 'temporalModifiers', 'recency']
-        },
+        temporalContext: temporalContextSchema,
         biasIndicators: {
             type: SchemaType.OBJECT,
             properties: {
                 overallBiasScore: { type: SchemaType.INTEGER },
                 sentimentPolarity: {
                     type: SchemaType.STRING,
-                    format: "enum",
                     enum: ['positive', 'negative', 'neutral', 'mixed']
-                } as any,
+                },
                 languageMarkers: {
                     type: SchemaType.OBJECT,
                     properties: {
@@ -225,26 +198,23 @@ const deepTextAnalysisSchema = {
                 },
                 sourceBias: {
                     type: SchemaType.STRING,
-                    format: "enum",
                     enum: ['left', 'center', 'right', 'unknown'],
                     nullable: true
-                } as any
+                }
             },
             required: ['overallBiasScore', 'sentimentPolarity', 'languageMarkers']
         },
         complexity: {
             type: SchemaType.STRING,
-            format: "enum",
             enum: ['simple', 'moderate', 'complex']
-        } as any,
+        },
         suggestedSearchDepth: {
             type: SchemaType.STRING,
-            format: "enum",
             enum: ['shallow', 'standard', 'deep']
-        } as any
+        }
     },
     required: ['namedEntities', 'atomicClaims', 'temporalContext', 'biasIndicators', 'complexity', 'suggestedSearchDepth']
-} as any;
+};
 
 // ============================================================================
 // SERVICE CLASS
@@ -332,7 +302,7 @@ YOUR TASKS:
    - Extract all significant entities: people, organizations, locations, events, dates, concepts, products, monetary values
    - For each entity:
      * Assign relevance score (0-100): How central is this entity to the claim?
-     * Provide aliases (alternative names/spellings)
+     * Provide aliases (alternative names/spellings) if known
      * Add brief context if needed
 
 2. CLAIM DECOMPOSITION
