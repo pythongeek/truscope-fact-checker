@@ -2,6 +2,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 
+// Mock the API key service to prevent localStorage errors in Node.js test environment
+vi.mock('../services/apiKeyService', () => ({
+  getGeminiApiKey: vi.fn().mockReturnValue('test-gemini-api-key'),
+  getGeminiModel: vi.fn().mockReturnValue('gemini-pro'),
+}));
+
 // Mock dependent services to isolate the test to the orchestration logic
 vi.mock('../services/webSearch', () => ({
   search: vi.fn().mockResolvedValue([
@@ -84,6 +90,48 @@ vi.mock('../services/core/CategoryRatingService', () => {
         })
     };
     return { CategoryRatingService };
+});
+
+vi.mock('../services/analysis/PipelineIntegration', () => {
+  const mockPipelineResult = {
+    textAnalysis: {
+      namedEntities: [{ text: 'Test Entity', type: 'PERSON', relevance: 90 }],
+      atomicClaims: [{ id: 'claim-1', claimText: 'This is a test claim.', claimType: 'factual', verifiability: 'high', priority: 10 }],
+      complexity: 'moderate',
+      suggestedSearchDepth: 'standard',
+      temporalContext: { hasDateReference: true, recency: 'recent' },
+      biasIndicators: { overallBiasScore: 40 },
+    },
+    semanticExtraction: { primaryKeywords: [], searchableKeywordGroups: { highPriority: [], mediumPriority: [] } },
+    querySynthesis: { primaryQueries: [], crossReferenceQueries: [], temporalQueries: [], sourceTargetedQueries: { factCheckSites: [], newsAgencies: [], academicSources: [], governmentSources: [] }, queryExecutionPlan: { phase1: [], phase2: [], phase3: [] } },
+    validatedQueries: [],
+    rankedQueries: [],
+    executionPlan: { immediate: [], followUp: [], deepDive: [] },
+    cacheKey: 'mock-cache-key',
+    metadata: { pipelineVersion: '1.0.0-mock', totalProcessingTime: 150, stagesCompleted: ['all'], timestamp: new Date().toISOString() },
+  };
+
+  const mockAggregatedEvidence = [
+    { id: 'agg-e1', url: 'http://example.com/agg-source1', publisher: 'Agg Source 1', quote: 'q1-agg', score: 85, type: 'news', source: { name: 'Agg Source 1', url: 'http://example.com/agg-source1', credibility: { rating: 'High', classification: 'News', warnings: [] } } }
+  ];
+
+  const mockExecutionMetrics = {
+    totalQueriesExecuted: 5,
+    totalResultsReturned: 20,
+    averageQueryTime: 150,
+    phaseTimings: { phase1: 100, phase2: 50, phase3: 0 },
+  };
+
+  const PipelineIntegration = {
+    getInstance: vi.fn().mockReturnValue({
+      processAndSearch: vi.fn().mockResolvedValue({
+        pipelineResult: mockPipelineResult,
+        aggregatedEvidence: mockAggregatedEvidence,
+        executionMetrics: mockExecutionMetrics,
+      }),
+    }),
+  };
+  return { PipelineIntegration };
 });
 
 
