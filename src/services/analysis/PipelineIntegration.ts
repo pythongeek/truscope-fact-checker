@@ -48,7 +48,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     MAIN INTEGRATION METHOD
     Processes text through pipeline and executes queries
     */
@@ -158,7 +158,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Execute a batch of queries
     */
     private async executeQueries(
@@ -199,7 +199,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Build search string from query
     */
     private buildSearchString(query: RankedQuery): string {
@@ -233,7 +233,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Execute actual search query based on expected source types
     */
     private async executeSearchQuery(
@@ -262,7 +262,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Check if result is relevant to the query
     */
     private isRelevantResult(result: any, query: RankedQuery): boolean {
@@ -274,7 +274,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Check if source is authoritative
     */
     private isAuthoritativeSource(result: any): boolean {
@@ -291,7 +291,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Aggregate evidence from all search results
     */
     private aggregateEvidence(
@@ -342,7 +342,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Calculate evidence credibility score
     */
     private calculateEvidenceScore(result: any): number {
@@ -365,7 +365,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Determine evidence type
     */
     private determineEvidenceType(result: any): 'claim' | 'news' | 'search_result' {
@@ -380,7 +380,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Utility: Chunk array for batch processing
     */
     private chunkArray<T>(array: T[], chunkSize: number): T[][] {
@@ -392,7 +392,7 @@ export class PipelineIntegration {
     }
 
     /**
-    
+
     Get simple query strings for backward compatibility
     */
     getSimpleQueries(pipelineResult: PipelineResult): string[] {
