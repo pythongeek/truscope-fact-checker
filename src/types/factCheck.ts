@@ -100,6 +100,17 @@ export interface FactCheckMetadata {
         conflicting: number;
     };
     warnings: string[];
+    pipelineMetadata?: {
+      complexity: string;
+      suggestedSearchDepth: string;
+      entitiesExtracted: number;
+      atomicClaimsIdentified: number;
+      queriesGenerated: number;
+      queriesExecuted: number;
+      avgQueryTime: number;
+      pipelineVersion: string;
+      processingTime: number;
+    };
     tier_breakdown?: {
         tier: string;
         success: boolean;
@@ -186,6 +197,18 @@ export interface FactCheckReport {
     };
 
     // Enhanced metadata
+    claimBreakdown?: {
+        id: string;
+        text: string;
+        type: string;
+        verifiability: string;
+        priority: number;
+    }[];
+    extractedEntities?: {
+        name: string;
+        type: string;
+        relevance: number;
+    }[];
 }
 
 

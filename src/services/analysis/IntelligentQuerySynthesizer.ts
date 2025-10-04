@@ -1,5 +1,5 @@
 // src/services/analysis/IntelligentQuerySynthesizer.ts
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, Schema } from "@google/generative-ai";
 import { getGeminiApiKey, getGeminiModel } from '@/services/apiKeyService';
 import { parseAIJsonResponse } from '@/utils/jsonParser';
 import { DeepTextAnalysis, AtomicClaim } from '@/services/analysis/AdvancedTextAnalyzer';
@@ -53,7 +53,7 @@ export interface QuerySynthesisResult {
 // ============================================================================
 // SCHEMA DEFINITIONS
 // ============================================================================
-const searchOperatorSchema = {
+const searchOperatorSchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         type: {
@@ -65,7 +65,7 @@ const searchOperatorSchema = {
     },
     required: ['type', 'value', 'purpose']
 };
-const factCheckQuerySchema = {
+const factCheckQuerySchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         queryId: { type: SchemaType.STRING },
@@ -98,7 +98,7 @@ const factCheckQuerySchema = {
     },
     required: ['queryId', 'queryText', 'queryType', 'targetClaims', 'searchOperators', 'expectedSourceTypes', 'priority', 'estimatedRelevance', 'alternatives']
 };
-const temporalQuerySchema = {
+const temporalQuerySchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         baseQuery: { type: SchemaType.STRING },
@@ -122,7 +122,7 @@ const temporalQuerySchema = {
     },
     required: ['baseQuery', 'temporalModifiers', 'recencyFocus']
 };
-const querySynthesisSchema = {
+const querySynthesisSchema: any = {
     type: SchemaType.OBJECT,
     properties: {
         primaryQueries: {
