@@ -603,7 +603,7 @@ export class TieredFactCheckService {
       score_breakdown: {
         final_score_formula: 'Phase 1: Direct fact-check average',
         metrics: [{
-          name: 'Fact-Check Sources',
+          name: 'Source Reliability',
           score: phase1.confidence,
           description: `${phase1.evidence.length} authoritative fact-check results`
         }]
