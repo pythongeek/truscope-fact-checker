@@ -3,19 +3,21 @@ import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
 import { SourceCredibilityService } from './core/SourceCredibilityService';
 import { CategoryRatingService } from './core/CategoryRatingService';
-import { search as webSearch } from './webSearch';
+import { PipelineIntegration, EnhancedSearchResult } from './analysis/PipelineIntegration';
 
 export class EnhancedFactCheckService {
   private citationService: CitationAugmentedService;
   private temporalService: TemporalContextService;
   private credibilityService: SourceCredibilityService;
   private ratingService: CategoryRatingService;
+  private pipelineIntegration: PipelineIntegration;
 
   constructor() {
     this.citationService = new CitationAugmentedService();
     this.temporalService = TemporalContextService.getInstance();
     this.credibilityService = SourceCredibilityService.getInstance();
     this.ratingService = CategoryRatingService.getInstance();
+    this.pipelineIntegration = PipelineIntegration.getInstance();
   }
 
   async orchestrateFactCheck(text: string, method: FactCheckMethod): Promise<FactCheckReport> {
@@ -36,31 +38,160 @@ export class EnhancedFactCheckService {
     }
   }
 
+  /**
+  * UPDATED METHOD: Uses Advanced Query Pipeline
+  */
   private async _fetchAndAugmentWithSearch(text: string): Promise<FactCheckReport> {
-    // Step 1: Normalize the claim and generate search queries.
-    // This part is missing in the current implementation, but is crucial.
-    // You can adapt the logic from geminiService.ts's `normalizeClaim` and `generateSearchQueries`.
-    const searchQueries = [
-        `fact check "${text}"`,
-        `${text} controversy`,
-        `is ${text} true`
+    console.log('🚀 Starting Enhanced Search with Advanced Query Pipeline...');
+    const startTime = Date.now();
+
+    try {
+      // ========== STEP 1: Process through Advanced Pipeline ==========
+      const enhancedSearch: EnhancedSearchResult = await this.pipelineIntegration.processAndSearch(
+        text,
+        {
+          executePhase2: true,  // Execute follow-up queries
+          executePhase3: false, // Skip deep dive for performance (enable for complex claims)
+          maxResultsPerQuery: 10
+        }
+      );
+
+      const { pipelineResult, aggregatedEvidence, executionMetrics } = enhancedSearch;
+
+      // ========== STEP 2: Log Pipeline Insights ==========
+      console.log('\n📊 Pipeline Analysis Results:');
+      console.log(`   - Entities Extracted: ${pipelineResult.textAnalysis.namedEntities.length}`);
+      console.log(`   - Atomic Claims: ${pipelineResult.textAnalysis.atomicClaims.length}`);
+      console.log(`   - Primary Keywords: ${pipelineResult.semanticExtraction.primaryKeywords.length}`);
+      console.log(`   - Queries Generated: ${pipelineResult.rankedQueries.length}`);
+      console.log(`   - Queries Executed: ${executionMetrics.totalQueriesExecuted}`);
+      console.log(`   - Results Retrieved: ${executionMetrics.totalResultsReturned}`);
+      console.log(`   - Evidence Items: ${aggregatedEvidence.length}\n`);
+
+      // ========== STEP 3: Process Evidence with Citation Service ==========
+      const processedReport = await this.citationService.processSearchResults(
+        text,
+        aggregatedEvidence
+      );
+
+      // ========== STEP 4: Enrich Report with Pipeline Metadata ==========
+      const enrichedReport: FactCheckReport = {
+        ...processedReport,
+        metadata: {
+          ...processedReport.metadata,
+          apis_used: [
+            ...processedReport.metadata.apis_used,
+            'advanced-query-pipeline',
+            'deep-text-analysis',
+            'semantic-extraction',
+            'intelligent-query-synthesis'
+          ],
+          warnings: [
+            ...processedReport.metadata.warnings,
+            ...this.generatePipelineWarnings(pipelineResult, executionMetrics)
+          ],
+          // Add custom pipeline metadata
+          pipelineMetadata: {
+            complexity: pipelineResult.textAnalysis.complexity,
+            suggestedSearchDepth: pipelineResult.textAnalysis.suggestedSearchDepth,
+            entitiesExtracted: pipelineResult.textAnalysis.namedEntities.length,
+            atomicClaimsIdentified: pipelineResult.textAnalysis.atomicClaims.length,
+            queriesGenerated: pipelineResult.rankedQueries.length,
+            queriesExecuted: executionMetrics.totalQueriesExecuted,
+            avgQueryTime: executionMetrics.averageQueryTime,
+            pipelineVersion: pipelineResult.metadata.pipelineVersion,
+            processingTime: pipelineResult.metadata.totalProcessingTime
+          }
+        },
+        // Add detailed claim breakdown to report
+        claimBreakdown: pipelineResult.textAnalysis.atomicClaims.map(claim => ({
+          id: claim.id,
+          text: claim.claimText,
+          type: claim.claimType,
+          verifiability: claim.verifiability,
+          priority: claim.priority
+        })),
+        // Add extracted entities to report
+        extractedEntities: pipelineResult.textAnalysis.namedEntities.map(entity => ({
+          name: entity.text,
+          type: entity.type,
+          relevance: entity.relevance
+        }))
+      };
+
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ Enhanced search completed in ${processingTime}ms`);
+      return enrichedReport;
+
+    } catch (error) {
+      console.error('❌ Enhanced search with pipeline failed:', error);
+
+      // Fallback to basic search if pipeline fails
+      console.warn('⚠️  Falling back to basic search method...');
+      return await this.fallbackBasicSearch(text);
+    }
+  }
+
+  /**
+  * Generate warnings based on pipeline analysis
+  */
+  private generatePipelineWarnings(
+    pipelineResult: any,
+    executionMetrics: any
+  ): string[] {
+    const warnings: string[] = [];
+
+    // Complexity warnings
+    if (pipelineResult.textAnalysis.complexity === 'complex') {
+      warnings.push('Complex claim structure detected - verification may require multiple sources');
+    }
+
+    // Temporal warnings
+    if (pipelineResult.textAnalysis.temporalContext.hasDateReference) {
+      if (pipelineResult.textAnalysis.temporalContext.recency === 'breaking') {
+        warnings.push('Recent claim - information may still be developing');
+      }
+    }
+
+    // Search effectiveness warnings
+    if (executionMetrics.totalResultsReturned < 5) {
+      warnings.push('Limited search results found - claim may be obscure or very recent');
+    }
+
+    // Bias warnings
+    if (pipelineResult.textAnalysis.biasIndicators.overallBiasScore > 70) {
+      warnings.push('High bias indicators detected in original text');
+    }
+
+    // Entity warnings
+    if (pipelineResult.textAnalysis.namedEntities.length === 0) {
+      warnings.push('No named entities extracted - verification may be challenging');
+    }
+
+    return warnings;
+  }
+
+  /**
+  * Fallback method when advanced pipeline fails
+  */
+  private async fallbackBasicSearch(text: string): Promise<FactCheckReport> {
+    const { search } = await import('./webSearch');
+
+    // Generate basic search queries
+    const basicQueries = [
+      `fact check "${text.substring(0, 50)}"`,
+      `${text.substring(0, 30)} verification`,
+      `is "${text.substring(0, 40)}" true`
     ];
 
-    const searchEvidence = await Promise.all(
-      searchQueries.map(query => webSearch(query, 10))
+    const searchResults = await Promise.all(
+      basicQueries.map(query => search(query, 5))
     );
 
-    // Flatten search results and filter for uniqueness
-    const allSearchResults = searchEvidence.flat().filter((result, index, self) =>
-        index === self.findIndex((r) => r.link === result.link)
-    );
+    const allResults = searchResults.flat();
 
-    // Now, feed these search results into the citation service for processing
-    // You'll need to create a helper function in CitationAugmentedService to process raw search results.
-    // This is a simplified example, demonstrating the flow.
-    const processedReport = await this.citationService.processSearchResults(text, allSearchResults);
-
-    return processedReport;
+    // Process with citation service
+    return await this.citationService.processSearchResults(text, allResults);
   }
 
   private async runComprehensiveAnalysis(text: string): Promise<FactCheckReport> {
