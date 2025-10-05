@@ -1,15 +1,16 @@
 // src/services/analysis/PipelineIntegration.ts
-// INTEGRATION LAYER: Connects Advanced Pipeline to Existing Fact-Check System
+// FIXED VERSION - Resolves evidence aggregation and result parsing issues
+
 import { AdvancedQueryPipeline, PipelineResult, RankedQuery } from '@/services/analysis/AdvancedQueryPipeline';
 import { SerpApiService } from '@/services/serpApiService';
 import { GoogleFactCheckService } from '@/services/googleFactCheckService';
 import { WebSearchService } from '@/services/webSearchService';
-import { FactCheckReport, EvidenceItem } from '@/types/factCheck';
+import { EvidenceItem } from '@/types/factCheck';
 
 export interface EnhancedSearchResult {
     pipelineResult: PipelineResult;
     searchResults: {
-        immediate: Map<string, any[]>; // Query ID -> Results
+        immediate: Map<string, any[]>;
         followUp: Map<string, any[]>;
         deepDive: Map<string, any[]>;
     };
@@ -47,11 +48,6 @@ export class PipelineIntegration {
         return PipelineIntegration.instance;
     }
 
-    /**
-
-    MAIN INTEGRATION METHOD
-    Processes text through pipeline and executes queries
-    */
     async processAndSearch(
         text: string,
         options: {
@@ -69,23 +65,17 @@ export class PipelineIntegration {
         console.log('🔄 Starting Pipeline Integration...');
         const integrationStart = Date.now();
 
-        // ========== STEP 1: Run Advanced Query Pipeline ==========
         const pipelineResult = await this.pipeline.processText(text);
 
-        // ========== STEP 2: Execute Queries by Phase ==========
         const searchResults = {
             immediate: new Map<string, any[]>(),
             followUp: new Map<string, any[]>(),
             deepDive: new Map<string, any[]>()
         };
 
-        const phaseTimings = {
-            phase1: 0,
-            phase2: 0,
-            phase3: 0
-        };
+        const phaseTimings = { phase1: 0, phase2: 0, phase3: 0 };
 
-        // Phase 1: Immediate queries (always executed)
+        // Phase 1: Immediate queries
         const phase1Start = Date.now();
         await this.executeQueries(
             pipelineResult.executionPlan.immediate,
@@ -95,7 +85,7 @@ export class PipelineIntegration {
         phaseTimings.phase1 = Date.now() - phase1Start;
         console.log(`✅ Phase 1 completed in ${phaseTimings.phase1}ms`);
 
-        // Phase 2: Follow-up queries (optional)
+        // Phase 2: Follow-up queries
         if (executePhase2) {
             const phase2Start = Date.now();
             await this.executeQueries(
@@ -107,7 +97,7 @@ export class PipelineIntegration {
             console.log(`✅ Phase 2 completed in ${phaseTimings.phase2}ms`);
         }
 
-        // Phase 3: Deep dive queries (optional, for complex claims)
+        // Phase 3: Deep dive queries
         if (executePhase3) {
             const phase3Start = Date.now();
             await this.executeQueries(
@@ -119,10 +109,9 @@ export class PipelineIntegration {
             console.log(`✅ Phase 3 completed in ${phaseTimings.phase3}ms`);
         }
 
-        // ========== STEP 3: Aggregate and Deduplicate Results ==========
+        // ⚠️ FIX: Enhanced evidence aggregation with better result parsing
         const aggregatedEvidence = this.aggregateEvidence(searchResults, pipelineResult);
 
-        // ========== STEP 4: Calculate Metrics ==========
         const totalQueriesExecuted =
             searchResults.immediate.size +
             searchResults.followUp.size +
@@ -157,10 +146,6 @@ export class PipelineIntegration {
         };
     }
 
-    /**
-
-    Execute a batch of queries
-    */
     private async executeQueries(
         queries: RankedQuery[],
         resultsMap: Map<string, any[]>,
@@ -168,7 +153,6 @@ export class PipelineIntegration {
     ): Promise<void> {
         if (queries.length === 0) return;
 
-        // Execute queries in parallel (but limit concurrency)
         const concurrencyLimit = 3;
         const batches = this.chunkArray(queries, concurrencyLimit);
 
@@ -178,15 +162,23 @@ export class PipelineIntegration {
                     try {
                         const searchString = this.buildSearchString(query);
                         const results = await this.executeSearchQuery(searchString, query, maxResults);
-                        resultsMap.set(query.queryId, results);
+                        
+                        // ⚠️ FIX: Ensure results are stored even if empty
+                        resultsMap.set(query.queryId, results || []);
 
-                        // Record effectiveness for pipeline optimization
+                        // ⚠️ FIX: Better relevance calculation
+                        const relevantCount = results ? results.filter((r: any) => 
+                            this.isRelevantResult(r, query)
+                        ).length : 0;
+
                         this.pipeline.recordQueryEffectiveness({
                             queryId: query.queryId,
-                            resultsReturned: results.length,
-                            relevantResults: results.filter((r: any) => this.isRelevantResult(r, query)).length,
-                            authoritativeSources: results.filter((r: any) => this.isAuthoritativeSource(r)).length,
-                            executionTime: 0 // Would need to track actual execution time
+                            resultsReturned: results?.length || 0,
+                            relevantResults: relevantCount,
+                            authoritativeSources: results ? results.filter((r: any) => 
+                                this.isAuthoritativeSource(r)
+                            ).length : 0,
+                            executionTime: 0
                         });
 
                     } catch (error) {
@@ -198,17 +190,14 @@ export class PipelineIntegration {
         }
     }
 
-    /**
-
-    Build search string from query
-    */
     private buildSearchString(query: RankedQuery): string {
         let searchString = query.queryText;
-        query.searchOperators.forEach(op => {
+        
+        // Remove site operators as they may cause issues with some APIs
+        const nonSiteOperators = query.searchOperators.filter(op => op.type !== 'site');
+        
+        nonSiteOperators.forEach(op => {
             switch (op.type) {
-                case 'site':
-                    searchString += ` site:${op.value}`;
-                    break;
                 case 'intitle':
                     searchString += ` intitle:"${op.value}"`;
                     break;
@@ -224,18 +213,12 @@ export class PipelineIntegration {
                 case 'after':
                     searchString += ` after:${op.value}`;
                     break;
-                case 'exact-phrase':
-                    // Already handled in queryText with quotes
-                    break;
             }
         });
+        
         return searchString.trim();
     }
 
-    /**
-
-    Execute actual search query based on expected source types
-    */
     private async executeSearchQuery(
         searchString: string,
         query: RankedQuery,
@@ -243,57 +226,60 @@ export class PipelineIntegration {
     ): Promise<any[]> {
         const expectedTypes = query.expectedSourceTypes;
 
-        // Route to appropriate search service based on expected source types
-        if (expectedTypes.includes('fact-check')) {
-            // Use fact-check specific search
-            const factCheckResults = await this.factCheckApi.searchClaims(searchString, maxResults);
-            return factCheckResults;
-        } else if (expectedTypes.includes('news') || expectedTypes.includes('academic') || expectedTypes.includes('government')) {
-            // Use general SERP search
-            const serpResults = await this.serpApi.search(searchString, maxResults);
-            return serpResults.results || [];
-        } else {
-            // Default to web search service
-            const webResults = await this.webSearch.search(searchString, {
-                maxSerpResults: maxResults
-            });
-            return webResults.serp.results || [];
+        try {
+            // Route based on expected source types
+            if (expectedTypes.includes('fact-check')) {
+                const results = await this.factCheckApi.searchClaims(searchString, maxResults);
+                console.log(`🔍 Fact-check search returned ${results.length} results`);
+                return results;
+            } else {
+                // ⚠️ FIX: Use SERP API directly for better results
+                const serpResults = await this.serpApi.search(searchString, maxResults);
+                console.log(`🔍 SERP search returned ${serpResults.results?.length || 0} results`);
+                return serpResults.results || [];
+            }
+        } catch (error) {
+            console.error(`❌ Search query failed for "${searchString}":`, error);
+            return [];
         }
     }
 
-    /**
-
-    Check if result is relevant to the query
-    */
     private isRelevantResult(result: any, query: RankedQuery): boolean {
-        const resultText = `${result.title || ''} ${result.snippet || result.description || ''}`.toLowerCase();
-        // Check if result contains key terms from the query
-        const queryTerms = query.queryText.toLowerCase().split(/\s+/).filter(t => t.length > 3);
+        // ⚠️ FIX: Better null checking and text extraction
+        const title = result.title || result.text || '';
+        const snippet = result.snippet || result.description || result.quote || '';
+        const resultText = `${title} ${snippet}`.toLowerCase();
+
+        if (!resultText.trim()) return false;
+
+        const queryTerms = query.queryText
+            .toLowerCase()
+            .split(/\s+/)
+            .filter(t => t.length > 3 && !['site:', 'intitle:', 'inurl:'].some(op => t.includes(op)));
+
+        if (queryTerms.length === 0) return true;
+
         const matchCount = queryTerms.filter(term => resultText.includes(term)).length;
-        return matchCount >= Math.ceil(queryTerms.length * 0.4); // At least 40% of terms match
+        return matchCount >= Math.max(1, Math.ceil(queryTerms.length * 0.3)); // At least 30% match
     }
 
-    /**
-
-    Check if source is authoritative
-    */
     private isAuthoritativeSource(result: any): boolean {
         const url = (result.link || result.url || '').toLowerCase();
-        const source = (result.source || '').toLowerCase();
+        const source = (result.source || result.publisher || '').toLowerCase();
+        
         const authoritativeDomains = [
-            'factcheck.org', 'politifact.com', 'snopes.com', 'reuters.com', 'apnews.com',
-            'bbc.com', 'nytimes.com', 'washingtonpost.com', 'theguardian.com',
-            '.gov', '.edu', 'who.int', 'cdc.gov', 'scholar.google'
+            'factcheck.org', 'politifact.com', 'snopes.com', 
+            'reuters.com', 'apnews.com', 'bbc.com', 
+            'nytimes.com', 'washingtonpost.com', 'theguardian.com',
+            '.gov', '.edu', 'who.int', 'cdc.gov'
         ];
+        
         return authoritativeDomains.some(domain =>
             url.includes(domain) || source.includes(domain)
         );
     }
 
-    /**
-
-    Aggregate evidence from all search results
-    */
+    // ⚠️ CRITICAL FIX: Complete rewrite of evidence aggregation
     private aggregateEvidence(
         searchResults: {
             immediate: Map<string, any[]>;
@@ -302,87 +288,180 @@ export class PipelineIntegration {
         },
         pipelineResult: PipelineResult
     ): EvidenceItem[] {
+        console.log('🔄 Starting evidence aggregation...');
+        
+        // Collect all results
         const allResults = [
             ...Array.from(searchResults.immediate.values()),
             ...Array.from(searchResults.followUp.values()),
             ...Array.from(searchResults.deepDive.values())
         ].flat();
 
-        // Deduplicate by URL
+        console.log(`📊 Raw results collected: ${allResults.length}`);
+
+        if (allResults.length === 0) {
+            console.warn('⚠️ No results to aggregate!');
+            return [];
+        }
+
+        // ⚠️ FIX: Better deduplication with multiple URL formats
         const uniqueResults = new Map<string, any>();
+        
         allResults.forEach(result => {
-            const url = result.link || result.url;
-            if (url && !uniqueResults.has(url)) {
-                uniqueResults.set(url, result);
+            // Extract URL with multiple fallbacks
+            const url = this.extractUrl(result);
+            
+            if (url) {
+                const normalizedUrl = this.normalizeUrl(url);
+                if (!uniqueResults.has(normalizedUrl)) {
+                    uniqueResults.set(normalizedUrl, result);
+                }
+            } else {
+                // Keep results without URLs using title as key
+                const titleKey = `no-url-${result.title || result.text || Math.random()}`;
+                if (!uniqueResults.has(titleKey)) {
+                    uniqueResults.set(titleKey, result);
+                }
             }
         });
 
-        // Convert to Evidence Items
-        const evidence: EvidenceItem[] = Array.from(uniqueResults.values()).map((result, index) => ({
-            id: `evidence-${index + 1}`,
-            publisher: result.source || result.publisher || 'Unknown',
-            url: result.link || result.url || null,
-            quote: result.snippet || result.description || result.text || '',
-            score: this.calculateEvidenceScore(result),
-            type: this.determineEvidenceType(result),
-            source: {
-                name: result.source || 'Unknown',
-                url: result.link || result.url,
-                credibility: {
-                    rating: 'Not Rated',
-                    classification: 'Unknown',
-                    warnings: [],
+        console.log(`📊 Unique results after deduplication: ${uniqueResults.size}`);
+
+        // ⚠️ FIX: Enhanced evidence conversion with better field mapping
+        const evidence: EvidenceItem[] = Array.from(uniqueResults.values()).map((result, index) => {
+            const url = this.extractUrl(result);
+            const publisher = this.extractPublisher(result);
+            const quote = this.extractQuote(result);
+            const score = this.calculateEvidenceScore(result);
+            const type = this.determineEvidenceType(result);
+
+            return {
+                id: `evidence-${index + 1}`,
+                publisher,
+                url,
+                quote,
+                score,
+                type,
+                source: {
+                    name: publisher,
+                    url: url,
+                    credibility: {
+                        rating: score >= 80 ? 'High' : score >= 60 ? 'Medium' : 'Low',
+                        classification: this.classifySource(result),
+                        warnings: score < 50 ? ['Lower credibility source'] : [],
+                    }
                 }
-            }
-        }));
+            };
+        });
 
         // Sort by score (descending)
         evidence.sort((a, b) => b.score - a.score);
+        
+        console.log(`✅ Evidence aggregation complete: ${evidence.length} items`);
+        console.log(`   - High score (>=80): ${evidence.filter(e => e.score >= 80).length}`);
+        console.log(`   - Medium score (60-79): ${evidence.filter(e => e.score >= 60 && e.score < 80).length}`);
+        console.log(`   - Low score (<60): ${evidence.filter(e => e.score < 60).length}`);
+
         return evidence;
     }
 
-    /**
+    // ⚠️ NEW: Helper methods for better data extraction
+    private extractUrl(result: any): string | null {
+        return result.link || result.url || result.claimReview?.[0]?.url || null;
+    }
 
-    Calculate evidence credibility score
-    */
+    private extractPublisher(result: any): string {
+        return result.source || 
+               result.publisher || 
+               result.claimReview?.[0]?.publisher?.name ||
+               result.claimant ||
+               'Unknown Source';
+    }
+
+    private extractQuote(result: any): string {
+        const quote = result.snippet || 
+                     result.description || 
+                     result.text || 
+                     result.quote ||
+                     result.claimReview?.[0]?.title ||
+                     '';
+        
+        // Truncate if too long
+        return quote.length > 500 ? quote.substring(0, 500) + '...' : quote;
+    }
+
+    private normalizeUrl(url: string): string {
+        try {
+            const urlObj = new URL(url);
+            // Remove trailing slashes, www, and protocols for comparison
+            return urlObj.host.replace(/^www\./, '') + urlObj.pathname.replace(/\/$/, '');
+        } catch {
+            return url.toLowerCase();
+        }
+    }
+
+    private classifySource(result: any): string {
+        const url = this.extractUrl(result)?.toLowerCase() || '';
+        const source = this.extractPublisher(result).toLowerCase();
+
+        if (url.includes('.gov') || source.includes('government')) return 'Government';
+        if (url.includes('.edu') || source.includes('university')) return 'Academic';
+        if (url.includes('factcheck') || url.includes('politifact') || url.includes('snopes')) return 'Fact-Checker';
+        if (url.includes('reuters') || url.includes('apnews') || url.includes('bbc')) return 'News Agency';
+        if (url.includes('news') || source.includes('news')) return 'News';
+        
+        return 'General';
+    }
+
     private calculateEvidenceScore(result: any): number {
         let score = 50; // Base score
+
+        // Check for fact-check rating
+        if (result.claimReview && result.claimReview[0]) {
+            const rating = result.claimReview[0].reviewRating;
+            if (rating) {
+                const textRating = (rating.textualRating || '').toLowerCase();
+                if (textRating.includes('true')) score = 90;
+                else if (textRating.includes('mostly true')) score = 75;
+                else if (textRating.includes('mixed')) score = 50;
+                else if (textRating.includes('mostly false')) score = 25;
+                else if (textRating.includes('false')) score = 10;
+            }
+        }
+
         // Boost for authoritative sources
         if (this.isAuthoritativeSource(result)) {
-            score += 30;
+            score += 25;
         }
-        // Boost for fact-checking sites
-        const url = (result.link || result.url || '').toLowerCase();
-        if (url.includes('factcheck') || url.includes('politifact') || url.includes('snopes')) {
-            score += 20;
-        }
-        // Boost for government/academic sources
-        if (url.includes('.gov') || url.includes('.edu')) {
-            score += 15;
-        }
-        // Cap at 100
-        return Math.min(100, score);
+
+        const url = this.extractUrl(result)?.toLowerCase() || '';
+        
+        // Additional boosts
+        if (url.includes('factcheck') || url.includes('politifact')) score += 20;
+        if (url.includes('.gov') || url.includes('.edu')) score += 15;
+        if (url.includes('reuters') || url.includes('apnews') || url.includes('bbc')) score += 15;
+
+        return Math.min(100, Math.max(10, score));
     }
 
-    /**
-
-    Determine evidence type
-    */
     private determineEvidenceType(result: any): 'claim' | 'news' | 'search_result' {
-        const url = (result.link || result.url || '').toLowerCase();
+        if (result.claimReview) return 'claim';
+        
+        const url = this.extractUrl(result)?.toLowerCase() || '';
+        const source = this.extractPublisher(result).toLowerCase();
+        
         if (url.includes('factcheck') || url.includes('politifact') || url.includes('snopes')) {
             return 'claim';
-        } else if (url.includes('news') || url.includes('reuters') || url.includes('apnews')) {
-            return 'news';
-        } else {
-            return 'search_result';
         }
+        
+        if (url.includes('news') || source.includes('news') || 
+            url.includes('reuters') || url.includes('apnews') || url.includes('bbc')) {
+            return 'news';
+        }
+        
+        return 'search_result';
     }
 
-    /**
-
-    Utility: Chunk array for batch processing
-    */
     private chunkArray<T>(array: T[], chunkSize: number): T[][] {
         const chunks: T[][] = [];
         for (let i = 0; i < array.length; i += chunkSize) {
@@ -391,13 +470,9 @@ export class PipelineIntegration {
         return chunks;
     }
 
-    /**
-
-    Get simple query strings for backward compatibility
-    */
     getSimpleQueries(pipelineResult: PipelineResult): string[] {
         return pipelineResult.executionPlan.immediate
             .map(query => this.buildSearchString(query))
-            .slice(0, 5); // Return top 5 for compatibility
+            .slice(0, 5);
     }
 }
