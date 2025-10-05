@@ -173,14 +173,19 @@ export class TieredFactCheckService {
         };
       }
 
-      const evidence: EvidenceItem[] = results.map((result, index) => ({
-        id: `factcheck_${index}`,
-        publisher: result.claimReview[0]?.publisher?.name || 'Fact Checker',
-        url: result.claimReview[0]?.url || null,
-        quote: `${result.text} - Rating: ${result.claimReview[0]?.reviewRating?.textualRating || 'Unknown'}`,
-        score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
-        type: 'claim'
-      }));
+      const evidence: EvidenceItem[] = results.map((result, index) => {
+        const publisher = result.claimReview[0]?.publisher;
+        const publisherName = typeof publisher === 'string' ? publisher : publisher?.name || 'Fact Checker';
+        
+        return {
+          id: `factcheck_${index}`,
+          publisher: publisherName,
+          url: result.claimReview[0]?.url || null,
+          quote: `${result.text} - Rating: ${result.claimReview[0]?.reviewRating?.textualRating || 'Unknown'}`,
+          score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
+          type: 'claim' as const
+        };
+      });
 
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
       console.log(`✅ Found ${evidence.length} fact-check results (avg: ${avgScore.toFixed(1)}%)`);
