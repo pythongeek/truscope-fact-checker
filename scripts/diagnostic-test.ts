@@ -52,7 +52,9 @@ async function testDirectAPIs() {
         console.log(`   - Results returned: ${factCheckResults.length}`);
         console.log(`   - Sample result:`, factCheckResults[0] ? {
             hasClaimReview: !!factCheckResults[0].claimReview,
-            publisher: factCheckResults[0].claimReview?.[0]?.publisher?.name
+            publisher: typeof factCheckResults[0].claimReview?.[0]?.publisher === 'string'
+                ? factCheckResults[0].claimReview[0].publisher
+                : factCheckResults[0].claimReview?.[0]?.publisher?.name
         } : 'None');
 
     } catch (error) {

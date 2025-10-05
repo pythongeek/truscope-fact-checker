@@ -173,14 +173,19 @@ export class TieredFactCheckService {
         };
       }
 
-      const evidence: EvidenceItem[] = results.map((result, index) => ({
+    const evidence: EvidenceItem[] = results.map((result, index) => {
+      const publisher = result.claimReview[0]?.publisher;
+      const publisherName = typeof publisher === 'string' ? publisher : publisher?.name || 'Fact Checker';
+
+      return {
         id: `factcheck_${index}`,
-        publisher: result.claimReview[0]?.publisher?.name || 'Fact Checker',
+        publisher: publisherName,
         url: result.claimReview[0]?.url || null,
         quote: `${result.text} - Rating: ${result.claimReview[0]?.reviewRating?.textualRating || 'Unknown'}`,
         score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
-        type: 'claim'
-      }));
+        type: 'claim' as const
+      };
+    });
 
       const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
       console.log(`✅ Found ${evidence.length} fact-check results (avg: ${avgScore.toFixed(1)}%)`);
@@ -520,12 +525,12 @@ export class TieredFactCheckService {
         final_score_formula: 'Statistical average of source credibility',
         metrics: [
           {
-            name: 'Source Credibility Average',
+            name: 'Source Reliability' as const,
             score: avgScore,
             description: `Weighted average of ${evidence.length} sources`
           },
           {
-            name: 'High-Credibility Sources',
+            name: 'Corroboration' as const,
             score: (highCredSources / evidence.length) * 100,
             description: `${highCredSources} sources with ≥75% credibility`
           }
@@ -662,7 +667,7 @@ export class TieredFactCheckService {
         score_breakdown: {
           final_score_formula: 'Fallback weighted average',
           metrics: [{
-            name: 'Source Average',
+            name: 'Source Reliability' as const,
             score: avgScore,
             description: `${evidence.length} sources analyzed`
           }]
