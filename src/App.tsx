@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import HistoryView from './components/HistoryView';
 import SettingsModal from './components/SettingsModal';
 import TrendingMisinformation from './components/TrendingMisinformation';
-import { FactCheckInterface } from './components/FactCheckInterface';
+import TruScopeJournalismPlatform from './components/TruScopeJournalismPlatform';
 import { FactCheckReport } from '@/types/factCheck';
 import { parseAIJsonResponse } from './utils/jsonParser';
 
@@ -73,10 +73,7 @@ const App: React.FC = () => {
         switch (currentView) {
             case 'checker':
                 return (
-                    <FactCheckInterface
-                        initialReport={selectedReport}
-                        initialClaimText={selectedClaim}
-                    />
+                    <TruScopeJournalismPlatform />
                 );
             case 'history':
                 return (
