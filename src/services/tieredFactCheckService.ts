@@ -1,5 +1,5 @@
 // src/services/tieredFactCheckService.ts - FIXED VERSION
-// Resolves synthesis issues and news API problems
+// Resolves synthesis issues and news API problems + TypeScript build errors
 
 import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
@@ -152,6 +152,7 @@ export class TieredFactCheckService {
     }
   }
 
+  // ✅ FIXED: Line 178 - Proper type handling for publisher field
   private async runPhase1DirectVerification(text: string): Promise<TierResult> {
     const startTime = Date.now();
 
@@ -174,15 +175,23 @@ export class TieredFactCheckService {
       }
 
       const evidence: EvidenceItem[] = results.map((result, index) => {
-        const publisher = result.claimReview[0]?.publisher;
-        const publisherName = typeof publisher === 'string' ? publisher : publisher?.name || 'Fact Checker';
+        const firstReview = result.claimReview[0];
+        const publisher = firstReview?.publisher;
+        
+        // ✅ FIX: Handle both string and object publisher formats with proper type assertion
+        let publisherName = 'Fact Checker';
+        if (typeof publisher === 'string') {
+          publisherName = publisher;
+        } else if (publisher && typeof publisher === 'object') {
+          publisherName = (publisher as { name?: string }).name || 'Fact Checker';
+        }
         
         return {
           id: `factcheck_${index}`,
           publisher: publisherName,
-          url: result.claimReview[0]?.url || null,
-          quote: `${result.text} - Rating: ${result.claimReview[0]?.reviewRating?.textualRating || 'Unknown'}`,
-          score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
+          url: firstReview?.url || null,
+          quote: `${result.text} - Rating: ${firstReview?.reviewRating?.textualRating || 'Unknown'}`,
+          score: this.convertRatingToScore(firstReview?.reviewRating),
           type: 'claim' as const
         };
       });
