@@ -1,4 +1,5 @@
-// src/services/tieredFactCheckService.ts - COMPLETE VERSION
+// src/services/tieredFactCheckService.ts - FIXED VERSION
+// Resolves synthesis issues and news API problems
 
 import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
@@ -35,9 +36,9 @@ const THRESHOLDS = {
     minEvidence: 2
   },
   phase2ToPhase3: {
-    minConfidence: 65,
-    minEvidence: 3,
-    minAvgScore: 65
+    minConfidence: 60, // Lowered from 65
+    minEvidence: 2, // Lowered from 3
+    minAvgScore: 55 // Lowered from 65
   }
 };
 
@@ -84,7 +85,10 @@ export class TieredFactCheckService {
         const phase2Result = await this.runPhase2AdvancedPipeline(claimText);
         tierResults.push(phase2Result);
 
-        if (!this.shouldEscalate(2, phase2Result)) {
+        // ⚠️ FIX: Check if we actually got evidence before deciding
+        const hasGoodEvidence = phase2Result.evidence.length >= 3 && phase2Result.confidence >= 60;
+
+        if (hasGoodEvidence && !this.shouldEscalate(2, phase2Result)) {
           console.log('✅ Phase 2 COMPLETE - Sufficient evidence found');
           finalReport = phase2Result.report!;
         } else {
@@ -94,13 +98,19 @@ export class TieredFactCheckService {
           const phase3Result = await this.runPhase3SpecializedAnalysis(claimText, phase2Result.report!);
           tierResults.push(phase3Result);
 
+          // Combine evidence from phase 2 and 3
+          const combinedEvidence = [
+            ...phase2Result.evidence,
+            ...phase3Result.evidence
+          ];
+
           console.log('⏭️  Phase 3 → Phase 4: Final Synthesis');
 
           // PHASE 4: AI Synthesis
           const phase4Result = await this.runPhase4Synthesis(
             claimText,
             phase2Result.report!,
-            phase3Result.evidence,
+            combinedEvidence,
             publishingContext
           );
           tierResults.push(phase4Result);
@@ -110,8 +120,14 @@ export class TieredFactCheckService {
       }
 
       const enrichedReport = this.enrichReportWithTierData(finalReport!, tierResults, startTime);
-      await this.uploadReportToBlob(enrichedReport);
-      console.log('✅ Report uploaded to blob storage');
+      
+      // ⚠️ FIX: Only upload if we have actual evidence
+      if (enrichedReport.evidence.length > 0) {
+        await this.uploadReportToBlob(enrichedReport);
+        console.log('✅ Report uploaded to blob storage');
+      } else {
+        console.warn('⚠️ Skipping blob upload - no evidence collected');
+      }
 
       this.performanceMonitor.recordMetric({
         operation: 'tiered-fact-check',
@@ -159,7 +175,7 @@ export class TieredFactCheckService {
 
       const evidence: EvidenceItem[] = results.map((result, index) => ({
         id: `factcheck_${index}`,
-        publisher: result.claimReview[0]?.publisher || 'Fact Checker',
+        publisher: result.claimReview[0]?.publisher?.name || 'Fact Checker',
         url: result.claimReview[0]?.url || null,
         quote: `${result.text} - Rating: ${result.claimReview[0]?.reviewRating?.textualRating || 'Unknown'}`,
         score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
@@ -210,14 +226,17 @@ export class TieredFactCheckService {
       console.log(`   - Entities: ${report.extractedEntities?.length || 0}`);
       console.log(`   - Claims: ${report.claimBreakdown?.length || 0}`);
 
+      // ⚠️ FIX: Better escalation logic
+      const shouldEscalate = evidenceCount < THRESHOLDS.phase2ToPhase3.minEvidence ||
+                            avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore ||
+                            report.final_score < THRESHOLDS.phase2ToPhase3.minConfidence;
+
       return {
         tier: 'pipeline-search',
-        success: true,
+        success: evidenceCount > 0,
         confidence: report.final_score,
         evidence: report.evidence,
-        shouldEscalate: evidenceCount < THRESHOLDS.phase2ToPhase3.minEvidence ||
-                        avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore ||
-                        report.final_score < THRESHOLDS.phase2ToPhase3.minConfidence,
+        shouldEscalate,
         processingTime: Date.now() - startTime,
         report,
         metadata: {
@@ -262,12 +281,12 @@ export class TieredFactCheckService {
     console.log(`   - Claim complexity: ${pipelineMetadata?.complexity || 'unknown'}`);
 
     try {
-      // Temporal Analysis
-      if (phase2Report.temporal_verification?.hasTemporalClaims) {
-        console.log('📅 Temporal claims detected → searching recent news');
+      // ⚠️ FIX: Better News API usage with fallback
+      if (phase2Report.temporal_verification?.hasTemporalClaims || extractedEntities.length > 0) {
+        console.log('📅 Searching for related news articles');
 
         const entityNames = extractedEntities
-          .filter(e => ['PERSON', 'ORGANIZATION', 'EVENT'].includes(e.type))
+          .filter(e => ['PERSON', 'ORGANIZATION', 'EVENT', 'LOCATION'].includes(e.type))
           .slice(0, 3)
           .map(e => e.name);
 
@@ -275,23 +294,35 @@ export class TieredFactCheckService {
           const newsQuery = entityNames.join(' ');
           console.log(`🔍 News query: "${newsQuery}"`);
 
-          const newsResults = await this.newsService.searchNews({
-            query: newsQuery,
-            fromDate: this.extractRecentDate(text)
-          });
+          try {
+            const newsResults = await this.newsService.searchNews({
+              query: newsQuery,
+              fromDate: this.extractRecentDate(text)
+            });
 
-          if (newsResults?.posts?.length > 0) {
-            const newsEvidence = newsResults.posts.slice(0, 5).map((article, i) => ({
-              id: `news_${i}`,
-              publisher: article.author,
-              url: article.url,
-              quote: article.text.substring(0, 200),
-              score: 70,
-              type: 'news' as const,
-              publishedDate: article.published
-            }));
-            evidence.push(...newsEvidence);
-            console.log(`✅ Found ${newsEvidence.length} news articles`);
+            if (newsResults?.posts?.length > 0) {
+              const newsEvidence = newsResults.posts.slice(0, 5).map((article, i) => ({
+                id: `news_${i}`,
+                publisher: article.author || 'News Source',
+                url: article.url,
+                quote: article.text.substring(0, 300) + '...',
+                score: 70,
+                type: 'news' as const,
+                publishedDate: article.published
+              }));
+              evidence.push(...newsEvidence);
+              console.log(`✅ Found ${newsEvidence.length} news articles`);
+            } else {
+              console.log('ℹ️  No news results from Webz API, trying SERP fallback...');
+              
+              // ⚠️ FIX: Fallback to SERP for news
+              const newsFromSerp = await this.getNewsFromSerp(newsQuery);
+              evidence.push(...newsFromSerp);
+            }
+          } catch (newsError) {
+            console.warn('⚠️  News API failed, using SERP fallback:', newsError);
+            const newsFromSerp = await this.getNewsFromSerp(newsQuery);
+            evidence.push(...newsFromSerp);
           }
         }
       }
@@ -334,6 +365,34 @@ export class TieredFactCheckService {
     }
   }
 
+  // ⚠️ NEW: Fallback news search using SERP
+  private async getNewsFromSerp(query: string): Promise<EvidenceItem[]> {
+    try {
+      const newsQuery = `${query} news`;
+      const results = await this.serpApi.search(newsQuery, 5);
+      
+      return results.results
+        .filter(r => {
+          const url = r.link?.toLowerCase() || '';
+          return url.includes('news') || 
+                 url.includes('reuters') || 
+                 url.includes('apnews') ||
+                 url.includes('bbc');
+        })
+        .map((r, i) => ({
+          id: `news_serp_${i}`,
+          publisher: r.source || 'News Source',
+          url: r.link,
+          quote: r.snippet || '',
+          score: 65,
+          type: 'news' as const
+        }));
+    } catch (error) {
+      console.error('News SERP fallback failed:', error);
+      return [];
+    }
+  }
+
   private async runPhase4Synthesis(
     text: string,
     baseReport: FactCheckReport,
@@ -343,12 +402,17 @@ export class TieredFactCheckService {
     const startTime = Date.now();
     console.log('🧠 Phase 4: AI-Powered Synthesis');
 
-    const allEvidence = [...baseReport.evidence, ...additionalEvidence];
-    console.log(`📊 Synthesizing ${allEvidence.length} total evidence items`);
+    // ⚠️ FIX: Deduplicate evidence before synthesis
+    const allEvidence = this.deduplicateEvidence([
+      ...baseReport.evidence, 
+      ...additionalEvidence
+    ]);
+    
+    console.log(`📊 Synthesizing ${allEvidence.length} unique evidence items`);
 
     try {
       if (allEvidence.length === 0) {
-        console.warn('⚠️  No evidence to synthesize');
+        console.warn('⚠️  No evidence to synthesize - using empty report');
         return {
           tier: 'synthesis',
           success: false,
@@ -356,12 +420,26 @@ export class TieredFactCheckService {
           evidence: [],
           shouldEscalate: false,
           processingTime: Date.now() - startTime,
-          report: baseReport
+          report: {
+            ...baseReport,
+            final_verdict: 'INSUFFICIENT EVIDENCE',
+            final_score: 0,
+            reasoning: 'Unable to find sufficient evidence to verify this claim.',
+            evidence: []
+          }
         };
       }
 
-      const synthesisReport = await synthesizeEvidenceWithGemini(text, allEvidence, publishingContext);
-      console.log(`✅ Synthesis complete: ${synthesisReport.final_score}% confidence`);
+      // ⚠️ FIX: Better Gemini synthesis with error handling
+      let synthesisReport: FactCheckReport;
+      
+      try {
+        synthesisReport = await synthesizeEvidenceWithGemini(text, allEvidence, publishingContext);
+        console.log(`✅ Synthesis complete: ${synthesisReport.final_score}% confidence`);
+      } catch (geminiError) {
+        console.warn('⚠️  Gemini synthesis failed, using statistical fallback:', geminiError);
+        synthesisReport = this.createStatisticalSynthesis(text, allEvidence, baseReport);
+      }
 
       const finalReport: FactCheckReport = {
         ...baseReport,
@@ -374,7 +452,7 @@ export class TieredFactCheckService {
           ...baseReport.metadata,
           warnings: [
             ...baseReport.metadata.warnings,
-            ...synthesisReport.metadata.warnings
+            ...(synthesisReport.metadata?.warnings || [])
           ]
         }
       };
@@ -390,25 +468,88 @@ export class TieredFactCheckService {
       };
 
     } catch (error) {
-      console.warn('⚠️  Gemini synthesis failed, using fallback:', error);
+      console.error('❌ Phase 4 synthesis completely failed:', error);
 
-      const avgScore = allEvidence.reduce((sum, e) => sum + e.score, 0) / allEvidence.length;
+      // Final fallback - statistical average
+      const avgScore = allEvidence.length > 0
+        ? Math.round(allEvidence.reduce((sum, e) => sum + e.score, 0) / allEvidence.length)
+        : 0;
 
       return {
         tier: 'synthesis',
-        success: true,
-        confidence: Math.round(avgScore),
+        success: allEvidence.length > 0,
+        confidence: avgScore,
         evidence: allEvidence,
         shouldEscalate: false,
         processingTime: Date.now() - startTime,
         report: {
           ...baseReport,
           evidence: allEvidence,
-          final_score: Math.round(avgScore),
-          final_verdict: this.generateVerdict(Math.round(avgScore))
-        }
+          final_score: avgScore,
+          final_verdict: this.generateVerdict(avgScore),
+          reasoning: `Based on ${allEvidence.length} sources with average credibility of ${avgScore}%.`
+        },
+        error: error instanceof Error ? error.message : 'Synthesis failed'
       };
     }
+  }
+
+  // ⚠️ NEW: Statistical synthesis fallback
+  private createStatisticalSynthesis(
+    text: string, 
+    evidence: EvidenceItem[], 
+    baseReport: FactCheckReport
+  ): FactCheckReport {
+    const avgScore = Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length);
+    const highCredSources = evidence.filter(e => e.score >= 75).length;
+    const lowCredSources = evidence.filter(e => e.score < 50).length;
+
+    let reasoning = `Analysis based on ${evidence.length} sources:\n`;
+    reasoning += `- ${highCredSources} high-credibility sources (≥75%)\n`;
+    reasoning += `- ${evidence.length - highCredSources - lowCredSources} medium-credibility sources\n`;
+    reasoning += `- ${lowCredSources} lower-credibility sources (<50%)\n`;
+    reasoning += `\nAverage credibility score: ${avgScore}%`;
+
+    return {
+      ...baseReport,
+      final_score: avgScore,
+      final_verdict: this.generateVerdict(avgScore),
+      reasoning,
+      evidence,
+      score_breakdown: {
+        final_score_formula: 'Statistical average of source credibility',
+        metrics: [
+          {
+            name: 'Source Credibility Average',
+            score: avgScore,
+            description: `Weighted average of ${evidence.length} sources`
+          },
+          {
+            name: 'High-Credibility Sources',
+            score: (highCredSources / evidence.length) * 100,
+            description: `${highCredSources} sources with ≥75% credibility`
+          }
+        ]
+      }
+    };
+  }
+
+  // ⚠️ NEW: Evidence deduplication
+  private deduplicateEvidence(evidence: EvidenceItem[]): EvidenceItem[] {
+    const seen = new Set<string>();
+    const unique: EvidenceItem[] = [];
+
+    evidence.forEach(item => {
+      const key = item.url || `${item.publisher}-${item.quote.substring(0, 50)}`;
+      const normalizedKey = key.toLowerCase().replace(/\/$/, '');
+      
+      if (!seen.has(normalizedKey)) {
+        seen.add(normalizedKey);
+        unique.push(item);
+      }
+    });
+
+    return unique;
   }
 
   private shouldEscalate(phase: 1 | 2, result: TierResult): boolean {
@@ -439,11 +580,13 @@ export class TieredFactCheckService {
   }
 
   private extractRecentDate(text: string): string {
+    // Try to extract year from text
     const yearMatch = text.match(/\b20(2[0-9])\b/);
     if (yearMatch) {
       return `${yearMatch[0]}-01-01`;
     }
     
+    // Default to 90 days ago
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     return ninetyDaysAgo.toISOString().split('T')[0];
@@ -477,13 +620,14 @@ export class TieredFactCheckService {
 
       return results.results.map((r, i) => ({
         id: `specialized_${i}`,
-        publisher: r.source,
+        publisher: r.source || 'Unknown',
         url: r.link,
-        quote: r.snippet,
+        quote: r.snippet || '',
         score: this.calculateSourceScore(r.source) + 10,
         type: 'search_result' as const
       }));
-    } catch {
+    } catch (error) {
+      console.error('Specialized search failed:', error);
       return [];
     }
   }
@@ -496,39 +640,47 @@ export class TieredFactCheckService {
       const results = await this.serpApi.search(query, 10);
       const evidence = results.results.slice(0, 8).map((r, i) => ({
         id: `fallback_${i}`,
-        publisher: r.source,
+        publisher: r.source || 'Unknown',
         url: r.link,
-        quote: r.snippet,
+        quote: r.snippet || '',
         score: this.calculateSourceScore(r.source),
         type: 'search_result' as const
       }));
 
       const avgScore = evidence.length > 0
-        ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
+        ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length)
         : 0;
 
       return {
         id: `fallback_${Date.now()}`,
         originalText: text,
-        final_verdict: this.generateVerdict(Math.round(avgScore)),
-        final_score: Math.round(avgScore),
-        reasoning: `Fallback search found ${evidence.length} sources`,
+        final_verdict: this.generateVerdict(avgScore),
+        final_score: avgScore,
+        reasoning: `Fallback search found ${evidence.length} sources with average credibility of ${avgScore}%.`,
         evidence,
         enhanced_claim_text: text,
         score_breakdown: {
           final_score_formula: 'Fallback weighted average',
-          metrics: []
+          metrics: [{
+            name: 'Source Average',
+            score: avgScore,
+            description: `${evidence.length} sources analyzed`
+          }]
         },
         metadata: {
           method_used: 'fallback-search',
           processing_time_ms: 0,
           apis_used: ['serp-api'],
-          sources_consulted: { total: evidence.length, high_credibility: 0, conflicting: 0 },
+          sources_consulted: { 
+            total: evidence.length, 
+            high_credibility: evidence.filter(e => e.score >= 75).length,
+            conflicting: 0 
+          },
           warnings: ['Pipeline failed - using fallback search']
         },
         source_credibility_report: {
-          overallScore: Math.round(avgScore),
-          highCredibilitySources: 0,
+          overallScore: avgScore,
+          highCredibilitySources: evidence.filter(e => e.score >= 75).length,
           flaggedSources: 0,
           biasWarnings: [],
           credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
@@ -546,7 +698,7 @@ export class TieredFactCheckService {
   }
 
   private calculateSourceScore(source: string): number {
-    const lower = source.toLowerCase();
+    const lower = (source || '').toLowerCase();
     
     if (/reuters|ap\.org|apnews|bbc/i.test(lower)) return 85;
     if (/factcheck|snopes|politifact/i.test(lower)) return 85;
@@ -562,12 +714,12 @@ export class TieredFactCheckService {
   private convertRatingToScore(rating: any): number {
     if (!rating) return 50;
 
-    const textualRating = rating.textualRating?.toLowerCase() || '';
-    if (textualRating.includes('true') || textualRating.includes('accurate')) return 90;
+    const textualRating = (rating.textualRating || '').toLowerCase();
+    if (textualRating.includes('true')) return 90;
     if (textualRating.includes('mostly true')) return 75;
-    if (textualRating.includes('mixed') || textualRating.includes('half')) return 50;
+    if (textualRating.includes('mixed')) return 50;
     if (textualRating.includes('mostly false')) return 25;
-    if (textualRating.includes('false') || textualRating.includes('pants on fire')) return 10;
+    if (textualRating.includes('false')) return 10;
 
     if (rating.ratingValue && rating.bestRating) {
       return Math.round((rating.ratingValue / rating.bestRating) * 100);
