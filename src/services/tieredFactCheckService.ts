@@ -676,7 +676,7 @@ export class TieredFactCheckService {
         score_breakdown: {
           final_score_formula: 'Fallback weighted average',
           metrics: [{
-            name: 'Source Average',
+            name: 'Source Reliability',
             score: avgScore,
             description: `${evidence.length} sources analyzed`
           }]
