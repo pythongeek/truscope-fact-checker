@@ -534,12 +534,12 @@ export class TieredFactCheckService {
         final_score_formula: 'Statistical average of source credibility',
         metrics: [
           {
-            name: 'Source Credibility Average',
+            name: 'Source Reliability',
             score: avgScore,
             description: `Weighted average of ${evidence.length} sources`
           },
           {
-            name: 'High-Credibility Sources',
+            name: 'Corroboration',
             score: (highCredSources / evidence.length) * 100,
             description: `${highCredSources} sources with ≥75% credibility`
           }
