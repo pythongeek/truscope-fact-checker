@@ -29,7 +29,7 @@ export async function runDiagnostics() {
  */
 async function testDirectAPIs() {
     console.log('📋 TEST 1: Direct API Verification');
-    console.log('=' .repeat(50));
+    console.log('='.repeat(50));
     
     try {
         // Test SERP API
@@ -50,12 +50,26 @@ async function testDirectAPIs() {
         
         console.log('✅ Fact-Check API:');
         console.log(`   - Results returned: ${factCheckResults.length}`);
-        console.log(`   - Sample result:`, factCheckResults[0] ? {
-            hasClaimReview: !!factCheckResults[0].claimReview,
-            publisher: typeof factCheckResults[0].claimReview?.[0]?.publisher === 'string' 
-                ? factCheckResults[0].claimReview[0].publisher 
-                : factCheckResults[0].claimReview?.[0]?.publisher?.name
-        } : 'None');
+        
+        if (factCheckResults[0]?.claimReview?.[0]) {
+            const firstReview = factCheckResults[0].claimReview[0];
+            const publisher = firstReview.publisher;
+            
+            // FIX: Handle both string and object publisher types
+            let publisherName = 'Unknown';
+            if (typeof publisher === 'string') {
+                publisherName = publisher;
+            } else if (publisher && typeof publisher === 'object') {
+                publisherName = (publisher as { name?: string }).name || 'Unknown';
+            }
+            
+            console.log(`   - Sample result:`, {
+                hasClaimReview: true,
+                publisher: publisherName
+            });
+        } else {
+            console.log(`   - Sample result: None`);
+        }
         
     } catch (error) {
         console.error('❌ API Test Failed:', error);
@@ -69,7 +83,7 @@ async function testDirectAPIs() {
  */
 async function testPipelineIntegration() {
     console.log('📋 TEST 2: Pipeline Integration');
-    console.log('=' .repeat(50));
+    console.log('='.repeat(50));
     
     const testClaim = 'The Eiffel Tower was built in 1889';
     
@@ -128,7 +142,7 @@ async function testPipelineIntegration() {
  */
 async function testEvidenceAggregation() {
     console.log('📋 TEST 3: Evidence Aggregation Logic');
-    console.log('=' .repeat(50));
+    console.log('='.repeat(50));
     
     // Create mock search results with different formats
     const mockResults = new Map([
@@ -196,7 +210,7 @@ async function testEvidenceAggregation() {
         console.log(`   - Output evidence: ${evidence.length} items`);
         
         if (evidence.length > 0) {
-            evidence.forEach((item, index) => {
+            evidence.forEach((item: any, index: number) => {
                 console.log(`   - Evidence ${index + 1}:`);
                 console.log(`     • Publisher: ${item.publisher}`);
                 console.log(`     • URL: ${item.url}`);
@@ -206,7 +220,7 @@ async function testEvidenceAggregation() {
             });
             
             // Verify deduplication
-            const urls = evidence.map(e => e.url).filter(Boolean);
+            const urls = evidence.map((e: any) => e.url).filter(Boolean);
             const uniqueUrls = new Set(urls);
             if (urls.length !== uniqueUrls.size) {
                 console.warn('⚠️  Duplicate URLs detected - deduplication may not be working');
@@ -215,7 +229,7 @@ async function testEvidenceAggregation() {
             }
             
             // Verify scoring
-            const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
+            const avgScore = evidence.reduce((sum: number, e: any) => sum + e.score, 0) / evidence.length;
             console.log(`✅ Average score: ${avgScore.toFixed(1)}% (target: 50-80%)`);
             
         } else {
