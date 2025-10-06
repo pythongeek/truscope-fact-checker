@@ -10,7 +10,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!query) {
       console.error('[webz-news-search] Error: Missing "query" parameter in the request body.');
-      return res.status(400).json({ error: 'Bad Request: Missing required "query" parameter.' });
+      res.status(400).json({ error: 'Bad Request: Missing required "query" parameter.' });
+      return;
     }
 
     // CRITICAL: Truncate query to Webz.io's 100 character limit
@@ -23,7 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const apiKey = process.env.WEBZ_API_KEY;
     if (!apiKey) {
       console.error('[webz-news-search] FATAL: WEBZ_API_KEY environment variable not found!');
-      return res.status(500).json({ error: 'Server Configuration Error: Webz.io API key not configured.' });
+      res.status(500).json({ error: 'Server Configuration Error: Webz.io API key not configured.' });
+      return;
     }
 
     console.log(`[webz-news-search] API Key loaded successfully.`);
@@ -55,16 +57,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const errorText = await response.text();
       console.error(`[webz-news-search] Webz.io API Error: ${response.status}`, errorText);
 
-      return res.status(500).json({
+      res.status(500).json({
         message: 'Failed to fetch from the news API.',
         details: errorText,
         hint: 'Query may exceed Webz.io API limits (100 characters max)'
       });
+      return;
     }
 
     const data = await response.json();
     console.log('[webz-news-search] Successfully fetched data. Sending 200 OK response.');
     res.status(200).json(data);
+    return;
 
   } catch (error: any) {
     console.error('[webz-news-search] An unexpected error occurred in the handler:', error);
@@ -72,5 +76,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Internal Server Error',
       details: error.message || 'An unknown error occurred.',
     });
+    return;
   }
 }

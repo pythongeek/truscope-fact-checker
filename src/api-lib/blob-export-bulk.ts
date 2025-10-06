@@ -4,7 +4,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
@@ -36,15 +37,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contentType: 'application/json'
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       exportId: bulkExportData.exportId,
       downloadUrl: blob.url,
       totalSessions: factCheckIds.length,
       format
     });
+    return;
   } catch (error) {
     console.error('Bulk export error:', error);
-    return res.status(500).json({ error: 'Failed to create bulk export' });
+    res.status(500).json({ error: 'Failed to create bulk export' });
+    return;
   }
 }

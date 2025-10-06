@@ -7,17 +7,20 @@ const MAX_QUERY_LENGTH = 2048;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Method Not Allowed' });
+        res.status(405).json({ message: 'Method Not Allowed' });
+        return;
     }
 
     let { query } = req.body;
     const apiKey = process.env.SERP_API_KEY;
 
     if (!apiKey) {
-        return res.status(500).json({ message: 'SERP API key not configured' });
+        res.status(500).json({ message: 'SERP API key not configured' });
+        return;
     }
     if (!query || typeof query !== 'string') {
-        return res.status(400).json({ message: 'Query is required and must be a string' });
+        res.status(400).json({ message: 'Query is required and must be a string' });
+        return;
     }
 
     // --- START OF FIX ---
@@ -40,12 +43,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const data = await response.json();
         if (!response.ok) {
             console.error('[serp-search] Serper API returned an error:', data);
-            return res.status(response.status).json(data);
+            res.status(response.status).json(data);
+            return;
         }
 
-        return res.status(200).json(data);
+        res.status(200).json(data);
+        return;
     } catch (error: any) {
         console.error('[serp-search] An unexpected error occurred:', error);
-        return res.status(500).json({ message: 'An internal error occurred' });
+        res.status(500).json({ message: 'An internal error occurred' });
+        return;
     }
 }

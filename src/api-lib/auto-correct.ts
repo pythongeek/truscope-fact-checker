@@ -63,14 +63,16 @@ function buildAutoCorrectPrompt(text: string, factCheckResult: any, mode: string
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   const startTime = Date.now();
   const { text, factCheckResult, mode }: AutoCorrectRequest = req.body;
 
   if (!text || !factCheckResult) {
-    return res.status(400).json({ error: 'Text and factCheckResult are required.' });
+    res.status(400).json({ error: 'Text and factCheckResult are required.' });
+    return;
   }
 
   try {
@@ -96,7 +98,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     res.status(200).json(editorResult);
-
   } catch (error: any) {
     console.error('❌ Auto-correction failed:', error);
     res.status(500).json({

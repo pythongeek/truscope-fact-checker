@@ -4,7 +4,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
@@ -49,14 +50,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     );
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       batchUrl: batchBlob.url,
       urls: individualUrls,
       totalResults: results.length
     });
+    return;
   } catch (error) {
     console.error('Batch blob save error:', error);
-    return res.status(500).json({ error: 'Failed to save batch results' });
+    res.status(500).json({ error: 'Failed to save batch results' });
+    return;
   }
 }

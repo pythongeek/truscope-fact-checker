@@ -33,9 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     };
 
-    return res.status(200).json(analyticsData);
+    res.status(200).json(analyticsData);
+    return;
   } catch (error) {
     console.error('Analytics error:', error);
-    return res.status(500).json({ error: 'Failed to load analytics' });
+    res.status(500).json({ error: 'Failed to load analytics' });
+    return;
   }
 }

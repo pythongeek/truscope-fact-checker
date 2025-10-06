@@ -6,7 +6,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { factCheckId, mode } = req.query;
 
     if (!factCheckId) {
-      return res.status(400).json({ error: 'factCheckId is required' });
+      res.status(400).json({ error: 'factCheckId is required' });
+      return;
     }
 
     // In a real implementation, you would query your database
@@ -16,9 +17,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       results: [] // This would be populated from actual blob storage
     };
 
-    return res.status(200).json(mockHistory);
+    res.status(200).json(mockHistory);
+    return;
   } catch (error) {
     console.error('Load history error:', error);
-    return res.status(500).json({ error: 'Failed to load editor history' });
+    res.status(500).json({ error: 'Failed to load editor history' });
+    return;
   }
 }

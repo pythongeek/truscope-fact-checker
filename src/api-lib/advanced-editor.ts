@@ -3,14 +3,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
     const { text, mode, prompt } = req.body;
 
     if (!text || !mode || !prompt) {
-      return res.status(400).json({ error: 'Missing required parameters' });
+      res.status(400).json({ error: 'Missing required parameters' });
+      return;
     }
 
     // Simple text processing based on mode
@@ -35,10 +37,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       processingTime: Date.now(),
       confidence: 90
     });
+    return;
 
   } catch (error) {
     console.error('Advanced editor API error:', error);
     res.status(500).json({ error: 'Failed to process text' });
+    return;
   }
 }
 

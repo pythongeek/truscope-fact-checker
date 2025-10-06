@@ -11,14 +11,16 @@ interface FactCheckRequest {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   const startTime = Date.now();
   const { text, publishingContext = 'journalism' }: FactCheckRequest = req.body;
 
   if (!text || text.trim().length === 0) {
-    return res.status(400).json({ error: 'Text is required for fact-checking' });
+    res.status(400).json({ error: 'Text is required for fact-checking' });
+    return;
   }
 
   console.log('🎯 Starting Optimized Tiered Fact-Check');
@@ -56,11 +58,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     console.log('✅ Tiered Fact-Check Complete:', finalReport.final_score);
-    return res.status(200).json(finalReport);
+    res.status(200).json(finalReport);
+    return;
 
   } catch (error: any) {
     console.error('❌ Fact-check failed:', error);
-    return res.status(500).json({
+    res.status(500).json({
       error: 'Fact-check failed',
       details: error.message,
       id: `error_${Date.now()}`,
@@ -70,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       evidence: [],
       processingTime: Date.now() - startTime
     });
+    return;
   }
 }
 
