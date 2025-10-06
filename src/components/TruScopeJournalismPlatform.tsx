@@ -37,10 +37,24 @@ export default function TruScopeJournalismPlatform() {
     checkAPIAvailability();
   }, []);
 
+  // API helper function
+  const callApi = async (action: string, body: any) => {
+    const response = await fetch('/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...body }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.details || `API action '${action}' failed`);
+    }
+    return response.json();
+  };
+
   const checkAPIAvailability = async () => {
     try {
-      const response = await fetch('/api/health-check');
-      setApiStatus(response.ok ? 'available' : 'unavailable');
+      await callApi('health-check', {});
+      setApiStatus('available');
     } catch {
       setApiStatus('unavailable');
     }
@@ -56,27 +70,12 @@ export default function TruScopeJournalismPlatform() {
     setActiveTab('analyze');
 
     try {
-      const response = await fetch('/api/fact-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: content,
-          publishingContext
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Fact-check API failed');
-      }
-
-      const result = await response.json();
-
+      const result = await callApi('fact-check', { text: content, publishingContext });
       setFactCheckResult(result);
       setActiveTab('report');
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Analysis failed:', error);
-      alert('Analysis failed. Please check your API configuration and try again.');
+      alert(`Analysis failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -88,22 +87,11 @@ export default function TruScopeJournalismPlatform() {
     setIsAnalyzing(true);
 
     try {
-      const response = await fetch('/api/auto-correct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: content,
-          factCheckResult: factCheckResult,
-          mode: mode,
-        }),
+      const result = await callApi('auto-correct', {
+        text: content,
+        factCheckResult: factCheckResult,
+        mode: mode,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || 'Auto-correction API failed');
-      }
-
-      const result = await response.json();
       setEditorResult(result);
       setActiveTab('edit');
     } catch (error: any) {
@@ -122,23 +110,13 @@ export default function TruScopeJournalismPlatform() {
     if (!factCheckResult) return;
 
     try {
-      const response = await fetch('/api/generate-schema', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Schema generation API failed');
-      }
-
-      const data = await response.json();
+      const data = await callApi('generate-schema', formData);
       setSchemaData(data);
       setShowSchemaInputModal(false);
       setShowSchemaModal(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Schema generation failed:', error);
-      alert('Schema generation failed. Please check the console for details.');
+      alert(`Schema generation failed: ${error.message}`);
     }
   };
 

@@ -1,11 +1,9 @@
-// api/blob/analytics/route.ts
-import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const { searchParams } = new URL(request.url);
-    const period = searchParams.get('period') || '7d'; // 7d, 30d, 90d
-    const type = searchParams.get('type'); // 'editor-result', 'batch-results'
+    const { period = '7d', type } = req.query; // 7d, 30d, 90d
 
     // Mock analytics data - in production, aggregate from blob storage
     const analyticsData = {
@@ -35,12 +33,9 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    return NextResponse.json(analyticsData);
+    return res.status(200).json(analyticsData);
   } catch (error) {
     console.error('Analytics error:', error);
-    return NextResponse.json(
-      { error: 'Failed to load analytics' },
-      { status: 500 }
-    );
+    return res.status(500).json({ error: 'Failed to load analytics' });
   }
 }
