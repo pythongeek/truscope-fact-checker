@@ -4,7 +4,7 @@ def run(playwright):
     browser = playwright.chromium.launch()
     context = browser.new_context(viewport={'width': 414, 'height': 896})  # iPhone XR viewport
     page = context.new_page()
-    page.goto("http://localhost:5173/")
+    page.goto("http://localhost:5174/")
 
     # Give the page a moment to load
     page.wait_for_selector('button[class="md:hidden text-gray-500 hover:text-gray-700"]')
