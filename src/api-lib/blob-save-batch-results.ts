@@ -1,11 +1,14 @@
-// api/blob/save-batch-results/route.ts
-import { put } from '@vercel/blob';
-import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
+import { put } from '@vercel/blob';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
-    const body = await request.json();
-    const { id, results, originalText, factCheckId, timestamp } = body;
+    const { id, results, originalText, factCheckId, timestamp } = req.body;
 
     const batchData = {
       id,
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({
+    return res.status(200).json({
       success: true,
       batchUrl: batchBlob.url,
       urls: individualUrls,
@@ -54,9 +57,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Batch blob save error:', error);
-    return NextResponse.json(
-      { error: 'Failed to save batch results' },
-      { status: 500 }
-    );
+    return res.status(500).json({ error: 'Failed to save batch results' });
   }
 }

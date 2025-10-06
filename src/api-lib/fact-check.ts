@@ -1,4 +1,4 @@
-// /api/fact-check.ts
+// src/api-lib/fact-check.ts
 import { VercelRequest, VercelResponse } from '@vercel/node';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';

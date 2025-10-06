@@ -1,11 +1,14 @@
-// api/blob/export-bulk/route.ts
-import { put } from '@vercel/blob';
-import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(request: NextRequest) {
+import { put } from '@vercel/blob';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   try {
-    const body = await request.json();
-    const { factCheckIds, format = 'json', includeAnalytics = false } = body;
+    const { factCheckIds, format = 'json', includeAnalytics = false } = req.body;
 
     // Aggregate data from multiple fact-check sessions
     const bulkExportData = {
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       contentType: 'application/json'
     });
 
-    return NextResponse.json({
+    return res.status(200).json({
       success: true,
       exportId: bulkExportData.exportId,
       downloadUrl: blob.url,
@@ -42,9 +45,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Bulk export error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create bulk export' },
-      { status: 500 }
-    );
+    return res.status(500).json({ error: 'Failed to create bulk export' });
   }
 }
