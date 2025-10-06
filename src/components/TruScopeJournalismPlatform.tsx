@@ -88,47 +88,30 @@ export default function TruScopeJournalismPlatform() {
     setIsAnalyzing(true);
 
     try {
-      const mockEditorResult = {
-        mode,
-        originalText: content,
-        editedText: generateCorrectedText(content, factCheckResult),
-        changesApplied: generateChanges(factCheckResult),
-        improvementScore: 92,
-        processingTime: 1850,
-        confidence: 89
-      };
+      const response = await fetch('/api/auto-correct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: content,
+          factCheckResult: factCheckResult,
+          mode: mode,
+        }),
+      });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setEditorResult(mockEditorResult);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Auto-correction API failed');
+      }
+
+      const result = await response.json();
+      setEditorResult(result);
       setActiveTab('edit');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auto-correction failed:', error);
-      alert('Auto-correction failed. Please try again.');
+      alert(`Auto-correction failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
-  };
-
-  const generateCorrectedText = (original: string, result: any): string => {
-    let corrected = original;
-    result.evidence.slice(0, 2).forEach((ev: any, idx: number) => {
-      const citation = ` [${idx + 1}]`;
-      const insertPoint = Math.floor(corrected.length / (idx + 2));
-      corrected = corrected.slice(0, insertPoint) + citation + corrected.slice(insertPoint);
-    });
-    corrected += `\n\n**Fact-Check Verification**: This content has been verified with a confidence score of ${result.final_score}/100 based on ${result.evidence.length} independent sources.`;
-    return corrected;
-  };
-
-  const generateChanges = (result: any) => {
-    return result.evidence.slice(0, 3).map((ev: any, idx: number) => ({
-      type: 'addition',
-      originalPhrase: 'End of paragraph',
-      newPhrase: formatCitation(ev, 'ap', idx + 1),
-      reason: `Add citation from ${ev.publisher}`,
-      confidence: 0.9,
-      position: { start: 0, end: 0 }
-    }));
   };
 
   const handleShowSchemaInput = () => {
