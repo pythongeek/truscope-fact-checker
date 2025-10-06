@@ -1,4 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
+// import { runTieredFactCheck } from '../services/tieredFactCheckService';
+import { CitationValidatorService } from '../services/citationValidator';
+import { AutoEditorIntegrationService, EditorMode } from '../services/autoEditorIntegration';
 import {
   FileText, CheckCircle, AlertTriangle, Link as LinkIcon,
   Download, Copy, Check, X, Search, Edit3, BookOpen,
@@ -41,6 +45,9 @@ interface EvidenceItem {
   type: string;
   publishedDate?: string;
   credibilityScore?: number;
+  isValid?: boolean;
+  accessibility?: 'accessible' | 'inaccessible' | 'error';
+  warnings?: string[];
 }
 
 interface TextSegment {
@@ -97,119 +104,62 @@ export default function TruScopeJournalismPlatform() {
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
 
-  // Check API availability on mount
-  useEffect(() => {
-    checkAPIAvailability();
-  }, []);
-
-  const checkAPIAvailability = async () => {
-    try {
-      const response = await fetch('/api/gemini-service', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: 'Test',
-          model: 'gemini-2.0-flash-exp',
-          max_tokens: 10
-        })
-      });
-      setApiStatus(response.ok ? 'available' : 'unavailable');
-    } catch (error) {
-      setApiStatus('unavailable');
-    }
-  };
-
   const handleAnalyze = async () => {
-    if (!content.trim()) {
-      alert('Please enter content to analyze');
-      return;
-    }
+    console.log("Analyze clicked");
+    // if (!content.trim()) {
+    //   alert('Please enter content to analyze');
+    //   return;
+    // }
 
-    setIsAnalyzing(true);
-    setActiveTab('analyze');
+    // setIsAnalyzing(true);
+    // setActiveTab('analyze');
 
-    try {
-      // Simulate comprehensive fact-check (replace with actual API call)
-      const mockResult: FactCheckResult = {
-        id: 'fc-' + Date.now(),
-        originalText: content,
-        final_verdict: 'MOSTLY TRUE',
-        final_score: 78,
-        reasoning: 'The content contains factually accurate information with minor clarifications needed.',
-        evidence: [
-          {
-            id: 'ev-1',
-            publisher: 'Reuters',
-            url: 'https://reuters.com/article/fact-check',
-            quote: 'Official confirmation from reliable source',
-            score: 92,
-            type: 'news',
-            publishedDate: '2024-10-01',
-            credibilityScore: 95
-          },
-          {
-            id: 'ev-2',
-            publisher: 'AP News',
-            url: 'https://apnews.com/verified',
-            quote: 'Corroborating evidence from independent verification',
-            score: 88,
-            type: 'news',
-            publishedDate: '2024-10-03',
-            credibilityScore: 92
-          },
-          {
-            id: 'ev-3',
-            publisher: 'Nature Journal',
-            url: 'https://nature.com/article/12345',
-            quote: 'Peer-reviewed research supporting the claim',
-            score: 95,
-            type: 'academic',
-            publishedDate: '2024-09-15',
-            credibilityScore: 98
-          }
-        ],
-        metadata: {
-          method_used: 'citation-augmented',
-          processing_time_ms: 3420,
-          apis_used: ['gemini', 'google-search', 'fact-database'],
-          sources_consulted: {
-            total: 15,
-            high_credibility: 12,
-            conflicting: 1
-          },
-          warnings: ['One source showed minor discrepancy in dates']
-        },
-        originalTextSegments: [
-          {
-            text: content.substring(0, Math.floor(content.length / 2)),
-            score: 82,
-            color: 'green'
-          },
-          {
-            text: content.substring(Math.floor(content.length / 2)),
-            score: 74,
-            color: 'yellow'
-          }
-        ],
-        source_credibility_report: {
-          overallScore: 91,
-          highCredibilitySources: 12,
-          flaggedSources: 0,
-          biasWarnings: []
-        }
-      };
+    // try {
+    //   // Use your existing fact-check orchestrator
+    //   const result = await runTieredFactCheck(content, 'comprehensive');
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    //   // Validate citations
+    //   const citationService = CitationValidatorService.getInstance();
+    //   const validation = await citationService.validateCitations(result.evidence);
 
-      setFactCheckResult(mockResult);
-      setActiveTab('report');
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      alert('Analysis failed. Please try again.');
-    } finally {
-      setIsAnalyzing(false);
-    }
+    //   // Enhance evidence with validation data
+    //   const enhancedEvidence = result.evidence.map(item => {
+    //     const validated = validation.citations.find(c => c.url === item.url);
+    //     if (validated) {
+    //       return {
+    //         ...item,
+    //         isValid: validated.isValid,
+    //         accessibility: validated.accessibility,
+    //         credibilityScore: validated.credibilityScore,
+    //         warnings: validated.warnings,
+    //       };
+    //     }
+    //     return item;
+    //   });
+
+    //   // Combine warnings
+    //   const allWarnings = [
+    //     ...(result.metadata.warnings || []),
+    //     ...validation.citations.flatMap(c => c.warnings || [])
+    //   ];
+
+    //   const finalResult: FactCheckResult = {
+    //     ...result,
+    //     evidence: enhancedEvidence,
+    //     metadata: {
+    //       ...result.metadata,
+    //       warnings: allWarnings,
+    //     },
+    //   };
+
+    //   setFactCheckResult(finalResult);
+    //   setActiveTab('report');
+    // } catch (error: any) {
+    //   console.error('Analysis failed:', error);
+    //   alert(`Analysis failed: ${error.message}`);
+    // } finally {
+    //   setIsAnalyzing(false);
+    // }
   };
 
   const handleAutoCorrect = async (mode: string) => {
@@ -218,41 +168,23 @@ export default function TruScopeJournalismPlatform() {
     setIsAnalyzing(true);
 
     try {
-      // Simulate auto-correction (replace with actual API call)
-      const mockEditorResult: EditorResult = {
-        mode,
-        originalText: content,
-        editedText: generateCorrectedText(content, factCheckResult),
-        changesApplied: [
-          {
-            type: 'modification',
-            originalPhrase: 'According to reports',
-            newPhrase: 'According to Reuters (2024)',
-            reason: 'Added proper citation with date',
-            confidence: 0.95,
-            position: { start: 0, end: 20 }
-          },
-          {
-            type: 'addition',
-            originalPhrase: '',
-            newPhrase: 'This claim has been verified by multiple independent sources.',
-            reason: 'Added verification statement',
-            confidence: 0.88,
-            position: { start: 100, end: 100 }
-          }
-        ],
-        improvementScore: 92,
-        processingTime: 1850,
-        confidence: 89
-      };
+      const editorService = AutoEditorIntegrationService.getInstance();
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Perform fact-check analysis first
+      const analysis = await editorService.performFactCheckAnalysis(content);
 
-      setEditorResult(mockEditorResult);
+      // Apply auto-correction
+      const result = await editorService.performAutoCorrection(
+        content,
+        analysis,
+        mode as EditorMode
+      );
+
+      setEditorResult(result);
       setActiveTab('edit');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Auto-correction failed:', error);
-      alert('Auto-correction failed. Please try again.');
+      alert(`Auto-correction failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -397,7 +329,6 @@ export default function TruScopeJournalismPlatform() {
     </div>
   );
 }
-
 // ============================================================================
 // TAB NAVIGATION COMPONENT
 // ============================================================================
