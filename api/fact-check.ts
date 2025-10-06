@@ -21,39 +21,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Text is required for fact-checking' });
   }
 
-  console.log('🎯 Starting Tiered Fact-Check');
+  console.log('🎯 Starting Optimized Tiered Fact-Check');
   console.log('📝 Text length:', text.length);
   console.log('📋 Context:', publishingContext);
 
   try {
-    const tierResults = [];
+    // Run data gathering phases in parallel
+    console.log('\n🚀 Executing data gathering phases in parallel...');
+    const [phase1Result, phase2Result, phase3Result] = await Promise.all([
+      runPhase1(text),
+      runPhase2(text),
+      runPhase3(text, []) // Pass empty array initially for phase 3
+    ]);
 
-    // PHASE 1: Direct Fact-Check Verification
-    console.log('\n📋 Phase 1: Direct Fact-Check Verification');
-    const phase1Result = await runPhase1(text);
-    tierResults.push(phase1Result);
-
-    if (phase1Result.confidence >= 75 && phase1Result.evidence.length >= 2) {
-      console.log('✅ Phase 1 COMPLETE - High confidence');
-      const report = buildReportFromPhase1(text, phase1Result, tierResults, startTime);
-      return res.status(200).json(report);
-    }
-
-    // PHASE 2: Web Search Pipeline
-    console.log('\n🔍 Phase 2: Advanced Search Pipeline');
-    const phase2Result = await runPhase2(text);
-    tierResults.push(phase2Result);
-
-    if (phase2Result.confidence >= 60 && phase2Result.evidence.length >= 3) {
-      console.log('✅ Phase 2 COMPLETE - Sufficient evidence');
-      const report = buildReportFromPhase2(text, phase2Result, tierResults, startTime);
-      return res.status(200).json(report);
-    }
-
-    // PHASE 3: News & Specialized Analysis
-    console.log('\n📰 Phase 3: News & Specialized Analysis');
-    const phase3Result = await runPhase3(text, phase2Result.evidence);
-    tierResults.push(phase3Result);
+    const tierResults = [phase1Result, phase2Result, phase3Result];
+    console.log('✅ Parallel data gathering complete.');
 
     // PHASE 4: AI Synthesis
     console.log('\n🧠 Phase 4: AI Synthesis');
@@ -64,7 +46,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ]);
 
     const validatedEvidence = await validateCitations(allEvidence);
-
 
     const finalReport = await runPhase4Synthesis(
       text,
@@ -497,37 +478,75 @@ function createStatisticalReport(text: string, evidence: any[], tierResults: any
   };
 }
 
-// Citation Validation Phase
+// Citation Validation Phase (Now consolidated)
+const calculateCredibilityInternal = (url: string): { score: number; warnings: string[] } => {
+  const warnings: string[] = [];
+  let score = 75;
+
+  if (!url) {
+    return { score: 30, warnings: ['Missing URL'] };
+  }
+
+  if (url.includes('.gov') || url.includes('.edu')) score += 15;
+  else if (url.includes('reuters.com') || url.includes('apnews.com')) score += 10;
+  else if (url.includes('wikipedia.org')) {
+    score -= 10;
+    warnings.push('Wikipedia is a user-generated source.');
+  } else if (url.includes('blogspot.com') || url.includes('wordpress.com')) {
+    score -= 25;
+    warnings.push('Blog sources are generally not highly credible.');
+  }
+
+  if (url.startsWith('http://')) {
+    warnings.push('Source does not use HTTPS.');
+    score -= 5;
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  return { score, warnings };
+};
+
 async function validateCitations(evidence: any[]) {
   if (evidence.length === 0) {
     return [];
   }
 
+  console.log('🔬 Running local citation validation...');
   try {
-    const response = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/validate-citations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ citations: evidence })
-    });
+    const validationPromises = evidence.map(async (item) => {
+      const { url } = item;
+      let accessibility: 'accessible' | 'inaccessible' | 'error' = 'error';
+      let isValid = false;
 
-    if (!response.ok) {
-      console.warn('⚠️ Citation validation API failed, returning original evidence.');
-      return evidence;
-    }
-
-    const validationResult = await response.json();
-
-    // Merge validation data back into evidence
-    return evidence.map(item => {
-      const validated = validationResult.citations.find((c: any) => c.url === item.url);
-      if (validated) {
-        return { ...item, ...validated };
+      if (url) {
+        try {
+          // Simulate accessibility check
+          const response = await fetch(url, { method: 'HEAD', timeout: 2000 });
+          accessibility = response.ok ? 'accessible' : 'inaccessible';
+          isValid = true;
+        } catch (error) {
+          accessibility = 'inaccessible';
+          isValid = false;
+        }
       }
-      return item;
+
+      const { score, warnings } = calculateCredibilityInternal(url);
+
+      return {
+        ...item,
+        isValid,
+        accessibility,
+        credibilityScore: score,
+        warnings,
+      };
     });
+
+    const validatedEvidence = await Promise.all(validationPromises);
+    console.log(`✅ Citation validation complete for ${validatedEvidence.length} items.`);
+    return validatedEvidence;
 
   } catch (error: any) {
-    console.error('❌ Error during citation validation:', error.message);
+    console.error('❌ Error during local citation validation:', error.message);
     return evidence; // Return original evidence on error
   }
 }
