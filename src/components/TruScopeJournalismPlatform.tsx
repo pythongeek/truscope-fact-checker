@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import HistoryView from './HistoryView';
 import TrendingMisinformation from './TrendingMisinformation';
+import SettingsModal from './SettingsModal';
 
 // Import citation formatter
 const formatCitation = (source: any, style: string = 'ap', num?: number) => {
@@ -36,6 +37,7 @@ export default function TruScopeJournalismPlatform() {
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [schemaData, setSchemaData] = useState<any>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'checker' | 'history' | 'trending'>('checker');
 
   const handleNavigate = (view: 'checker' | 'history' | 'trending') => {
@@ -143,10 +145,7 @@ export default function TruScopeJournalismPlatform() {
         onClose={() => setIsSidebarOpen(false)}
         currentView={currentView}
         onNavigate={handleNavigate}
-        onSettingsClick={() => {
-          // Placeholder for settings functionality
-          console.log('Settings clicked');
-        }}
+        onSettingsClick={() => setIsSettingsModalOpen(true)}
       />
       <div className="flex-1 flex flex-col">
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -250,6 +249,11 @@ export default function TruScopeJournalismPlatform() {
           onClose={() => setShowSchemaModal(false)}
         />
       )}
+
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+      />
     </div>
   );
 }
