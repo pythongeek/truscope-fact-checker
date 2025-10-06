@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
   FileText, CheckCircle, AlertTriangle, Link as LinkIcon,
@@ -6,6 +7,8 @@ import {
   Globe, Calendar, Award, Shield, ExternalLink, Info,
   RefreshCw, Settings, TrendingUp, Database
 } from 'lucide-react';
+import HistoryView from './HistoryView';
+import TrendingMisinformation from './TrendingMisinformation';
 
 // Import citation formatter
 const formatCitation = (source: any, style: string = 'ap', num?: number) => {
@@ -32,6 +35,12 @@ export default function TruScopeJournalismPlatform() {
   const [showSchemaInputModal, setShowSchemaInputModal] = useState(false);
   const [apiStatus, setApiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [schemaData, setSchemaData] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'checker' | 'history' | 'trending'>('checker');
+
+  const handleNavigate = (view: 'checker' | 'history' | 'trending') => {
+    setCurrentView(view);
+  };
 
   useEffect(() => {
     checkAPIAvailability();
@@ -120,12 +129,39 @@ export default function TruScopeJournalismPlatform() {
     }
   };
 
+  const handleSelectReport = (report: any, claimText: string) => {
+    setFactCheckResult(report);
+    setContent(claimText);
+    setActiveTab('report');
+    setCurrentView('checker');
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex">
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        currentView={currentView}
+        onNavigate={handleNavigate}
+        onSettingsClick={() => {
+          // Placeholder for settings functionality
+          console.log('Settings clicked');
+        }}
+      />
+      <div className="flex-1 flex flex-col">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
+              <button
+                type="button"
+                className="md:hidden text-gray-500 hover:text-gray-700"
+                onClick={() => setIsSidebarOpen(true)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
               <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
                 <CheckCircle className="w-7 h-7 text-white" />
               </div>
@@ -154,44 +190,48 @@ export default function TruScopeJournalismPlatform() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <TabNavigation
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          hasResult={!!factCheckResult}
-          correctionCount={editorResult?.changesApplied?.length || 0}
-        />
-
-        <div className="mt-6">
-          {activeTab === 'analyze' && (
-            <AnalysisPanel
-              content={content}
-              setContent={setContent}
-              publishingContext={publishingContext}
-              setPublishingContext={setPublishingContext}
-              onAnalyze={handleAnalyze}
-              isAnalyzing={isAnalyzing}
-            />
+        <main className="flex-1 overflow-y-auto p-8">
+          {currentView === 'checker' && (
+            <div>
+              <TabNavigation
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                hasResult={!!factCheckResult}
+                correctionCount={editorResult?.changesApplied?.length || 0}
+              />
+              <div className="mt-6">
+                {activeTab === 'analyze' && (
+                  <AnalysisPanel
+                    content={content}
+                    setContent={setContent}
+                    publishingContext={publishingContext}
+                    setPublishingContext={setPublishingContext}
+                    onAnalyze={handleAnalyze}
+                    isAnalyzing={isAnalyzing}
+                  />
+                )}
+                {activeTab === 'report' && factCheckResult && (
+                  <ReportPanel
+                    result={factCheckResult}
+                    onAutoCorrect={handleAutoCorrect}
+                    onShowSchema={handleShowSchemaInput}
+                    isProcessing={isAnalyzing}
+                  />
+                )}
+                {activeTab === 'edit' && factCheckResult && (
+                  <EditorialPanel
+                    originalContent={content}
+                    result={factCheckResult}
+                    editorResult={editorResult}
+                    onContentUpdate={setContent}
+                  />
+                )}
+              </div>
+            </div>
           )}
-
-          {activeTab === 'report' && factCheckResult && (
-            <ReportPanel
-              result={factCheckResult}
-              onAutoCorrect={handleAutoCorrect}
-              onShowSchema={handleShowSchemaInput}
-              isProcessing={isAnalyzing}
-            />
-          )}
-
-          {activeTab === 'edit' && factCheckResult && (
-            <EditorialPanel
-              originalContent={content}
-              result={factCheckResult}
-              editorResult={editorResult}
-              onContentUpdate={setContent}
-            />
-          )}
-        </div>
+          {currentView === 'history' && <HistoryView onSelectReport={handleSelectReport} />}
+          {currentView === 'trending' && <TrendingMisinformation />}
+        </main>
       </div>
 
       {showSchemaInputModal && (
