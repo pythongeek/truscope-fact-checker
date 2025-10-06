@@ -15,7 +15,7 @@ import blobSaveBatchResultsHandler from '../src/api-lib/blob-save-batch-results'
 import blobSaveFactDatabaseHandler from '../src/api-lib/blob-save-fact-database';
 import blobSaveReportHandler from '../src/api-lib/blob-save-report';
 
-type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void> | void;
+type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void | VercelResponse> | void | VercelResponse;
 
 const handlers: { [key: string]: Handler } = {
   'advanced-editor': advancedEditorHandler,
