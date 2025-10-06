@@ -19,7 +19,7 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
+    "@types/node": "^22.18.8",
     "@types/react": "^18.0.0",
     "@vercel/node": "^5.3.24",
     "@vitejs/plugin-react": "^5.0.0",
