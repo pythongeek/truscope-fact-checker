@@ -30,18 +30,21 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).end('Method Not Allowed');
+    res.status(405).end('Method Not Allowed');
+    return;
   }
 
   const { claim, score, verdict, evidence, publisherInfo } = req.body as SchemaRequestBody;
 
   if (!claim || score === undefined || !verdict || !publisherInfo) {
-    return res.status(400).json({ error: 'Missing required fields: claim, score, verdict, publisherInfo' });
+    res.status(400).json({ error: 'Missing required fields: claim, score, verdict, publisherInfo' });
+    return;
   }
 
   const { organizationName, organizationUrl, articleUrl, headline, authorName } = publisherInfo;
