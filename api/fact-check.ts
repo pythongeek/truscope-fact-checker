@@ -519,14 +519,22 @@ async function validateCitations(evidence: any[]) {
       let isValid = false;
 
       if (url) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
         try {
           // Simulate accessibility check
-          const response = await fetch(url, { method: 'HEAD', timeout: 2000 });
+          const response = await fetch(url, {
+            method: 'HEAD',
+            signal: controller.signal,
+          });
           accessibility = response.ok ? 'accessible' : 'inaccessible';
           isValid = true;
         } catch (error) {
           accessibility = 'inaccessible';
           isValid = false;
+        } finally {
+          clearTimeout(timeoutId);
         }
       }
 
