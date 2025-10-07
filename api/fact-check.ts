@@ -1,12 +1,19 @@
-// api/fact-check.ts - COMPLETE VERSION
+// api/fact-check.ts - Updated with user API key support
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
 interface FactCheckRequest {
   text: string;
   publishingContext?: 'journalism' | 'editorial' | 'content';
+  config?: {
+    gemini?: string;
+    geminiModel?: string;
+    factCheck?: string;
+    search?: string;
+    searchId?: string;
+  };
 }
 
 interface EvidenceItem {
@@ -39,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const startTime = Date.now();
-  const { text, publishingContext = 'journalism' }: FactCheckRequest = req.body;
+  const { text, publishingContext = 'journalism', config = {} }: FactCheckRequest = req.body;
 
   if (!text || text.trim().length === 0) {
     return res.status(400).json({ error: 'Text is required for fact-checking' });
@@ -48,14 +55,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('🎯 Starting Tiered Fact-Check');
   console.log('📝 Text length:', text.length);
   console.log('📋 Context:', publishingContext);
+  console.log('🔑 User API keys provided:', Object.keys(config).filter(k => config[k as keyof typeof config]));
 
   try {
     // Run data gathering phases in parallel
     console.log('\n🚀 Executing phases in parallel...');
     const [phase1Result, phase2Result, phase3Result] = await Promise.all([
-      runPhase1(text),
-      runPhase2(text, req),
-      runPhase3(text, [], req)
+      runPhase1(text, config),
+      runPhase2(text, req, config),
+      runPhase3(text, [], req, config)
     ]);
 
     const tierResults = [phase1Result, phase2Result, phase3Result];
@@ -73,13 +81,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Validate citations
     const validatedEvidence = await validateCitations(allEvidence);
 
-    // PHASE 4: AI Synthesis
+    // PHASE 4: AI Synthesis with user's Gemini key
     const finalReport = await runPhase4Synthesis(
       text,
       validatedEvidence,
       publishingContext,
       tierResults,
-      startTime
+      startTime,
+      config
     );
 
     console.log('✅ Fact-Check Complete:', finalReport.final_score);
@@ -101,13 +110,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // PHASE 1: Google Fact Check API
-async function runPhase1(text: string) {
+async function runPhase1(text: string, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
 
   try {
     const query = extractSmartQuery(text, 100);
-    const apiKey = process.env.GOOGLE_FACT_CHECK_API_KEY;
+    // Prioritize user's API key over environment variable
+    const apiKey = config.factCheck || process.env.GOOGLE_FACT_CHECK_API_KEY;
 
     if (!apiKey) {
       console.warn('⚠️ Google Fact Check API key not configured');
@@ -178,14 +188,13 @@ async function runPhase1(text: string) {
 }
 
 // PHASE 2: SERP API Search
-async function runPhase2(text: string, req: VercelRequest) {
+async function runPhase2(text: string, req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
 
   try {
     const query = extractSmartQuery(text, 100);
     
-    // Get the base URL for internal API calls
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
@@ -195,7 +204,7 @@ async function runPhase2(text: string, req: VercelRequest) {
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, config })
     });
 
     if (!response.ok) {
@@ -245,7 +254,7 @@ async function runPhase2(text: string, req: VercelRequest) {
 }
 
 // PHASE 3: News Search
-async function runPhase3(text: string, existingEvidence: any[], req: VercelRequest) {
+async function runPhase3(text: string, existingEvidence: any[], req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
 
@@ -274,13 +283,14 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: newsQuery,
-        fromDate: getRecentDate()
+        fromDate: getRecentDate(),
+        config
       })
     });
 
     if (!response.ok) {
       console.warn('⚠️ News API failed, using SERP fallback');
-      return await fallbackNewsSearch(newsQuery, startTime, req);
+      return await fallbackNewsSearch(newsQuery, startTime, req, config);
     }
 
     const data = await response.json();
@@ -322,7 +332,7 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
   }
 }
 
-async function fallbackNewsSearch(query: string, startTime: number, req: VercelRequest) {
+async function fallbackNewsSearch(query: string, startTime: number, req: VercelRequest, config: any) {
   try {
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const host = req.headers['x-forwarded-host'] || req.headers.host;
@@ -331,7 +341,7 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `${query} news` })
+      body: JSON.stringify({ query: `${query} news`, config })
     });
 
     if (!response.ok) throw new Error('Fallback failed');
@@ -372,16 +382,19 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
   }
 }
 
-// PHASE 4: AI Synthesis
+// PHASE 4: AI Synthesis with user's Gemini key
 async function runPhase4Synthesis(
   text: string,
   evidence: EvidenceItem[],
   context: string,
   tierResults: any[],
-  startTime: number
+  startTime: number,
+  config: any
 ) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Prioritize user's API key over environment variable
+    const apiKey = config.gemini || process.env.GEMINI_API_KEY;
+    const modelName = config.geminiModel || 'gemini-1.5-flash-latest';
 
     if (!apiKey || evidence.length === 0) {
       console.warn('⚠️ Using statistical fallback');
@@ -390,7 +403,9 @@ async function runPhase4Synthesis(
 
     const prompt = buildSynthesisPrompt(text, evidence, context);
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    console.log(`🤖 Calling Gemini API (model: ${modelName})`);
+
+    const response = await fetch(`${GEMINI_API_URL}/${modelName}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -405,11 +420,19 @@ async function runPhase4Synthesis(
     });
 
     if (!response.ok) {
-      throw new Error('Gemini API failed');
+      const errorData = await response.json();
+      console.error('Gemini API error:', errorData);
+      throw new Error(`Gemini API failed: ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     const geminiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    if (!geminiText) {
+      throw new Error('Empty response from Gemini');
+    }
+
+    console.log('✅ Gemini synthesis successful');
 
     const synthesis = parseGeminiResponse(geminiText, evidence);
 
