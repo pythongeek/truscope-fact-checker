@@ -70,17 +70,42 @@ export default function TruScopeJournalismPlatform() {
       return;
     }
 
+    // Import API key service
+    const { getApiKeys } = await import('../services/apiKeyService');
+    const apiKeys = getApiKeys();
+
+    // Check if Gemini API key is configured
+    if (!apiKeys.gemini || apiKeys.gemini.trim() === '') {
+      const shouldOpenSettings = confirm(
+        '⚠️ Gemini API key is required for fact-checking.\\n\\n' +
+        'Would you like to configure your API keys now?'
+      );
+      if (shouldOpenSettings) {
+        setIsSettingsModalOpen(true);
+      }
+      return;
+    }
+
     setIsAnalyzing(true);
     setActiveTab('analyze');
 
     try {
+      console.log('🚀 Starting fact-check with user-provided API keys');
+
       const response = await fetch('/api/fact-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: content,
-          publishingContext
-        })
+          publishingContext,
+          config: {
+            gemini: apiKeys.gemini,
+            geminiModel: apiKeys.geminiModel || 'gemini-1.5-flash-latest',
+            factCheck: apiKeys.factCheck,
+            search: apiKeys.search,
+            searchId: apiKeys.searchId,
+          },
+        }),
       });
 
       if (!response.ok) {
@@ -89,11 +114,16 @@ export default function TruScopeJournalismPlatform() {
       }
 
       const result = await response.json();
+
+      console.log('✅ Fact-check completed successfully');
+      console.log('📊 Final Score:', result.final_score);
+      console.log('📋 Evidence Count:', result.evidence?.length || 0);
+
       setFactCheckResult(result);
       setActiveTab('report');
     } catch (error: any) {
-      console.error('Analysis failed:', error);
-      alert(`Analysis failed: ${error.message}`);
+      console.error('❌ Analysis failed:', error);
+      alert(`Analysis failed: ${error.message}\\n\\nPlease check your API keys in Settings.`);
     } finally {
       setIsAnalyzing(false);
     }
