@@ -1,6 +1,7 @@
 // Enhanced autoEditorIntegration.ts using front-facing API
 import { FactCheckReport } from '../types/factCheck';
 import { EditorMode, EditorResult, ContentChange, FactCheckSegment, FactCheckAnalysis } from '../types/advancedEditor';
+import { getApiKeys } from './apiKeyService';
 import { runFactCheckOrchestrator } from './geminiService';
 
 export class AutoEditorIntegrationService {
@@ -21,15 +22,9 @@ export class AutoEditorIntegrationService {
 
   // Get selected model from UI state
   private getSelectedModel(): string {
-    // Try to get from localStorage/sessionStorage first
-    try {
-      const savedModel = localStorage.getItem('truescope-selected-model') ||
-                        sessionStorage.getItem('truescope-selected-model');
-      if (savedModel) {
-        return savedModel;
-      }
-    } catch (error) {
-      console.warn('Could not access storage for model selection');
+    const apiKeys = getApiKeys();
+    if (apiKeys.geminiModel) {
+      return apiKeys.geminiModel;
     }
 
     // Try to get from DOM elements (if model selector is visible)
@@ -122,16 +117,9 @@ export class AutoEditorIntegrationService {
 
   private isRetryableError(error: any): boolean {
     const retryableErrors = [
-      '503', // Service Unavailable
-      '502', // Bad Gateway
-      '500', // Internal Server Error
-      '429', // Too Many Requests
-      '408', // Request Timeout
-      'ECONNRESET',
-      'ENOTFOUND',
-      'TIMEOUT',
-      'network error',
-      'fetch error'
+      '503', '502', '500', '429', '408',
+      'ECONNRESET', 'ENOTFOUND', 'TIMEOUT',
+      'network error', 'fetch error'
     ];
 
     const errorString = error.toString().toLowerCase();
@@ -147,7 +135,6 @@ export class AutoEditorIntegrationService {
     try {
       const selectedModel = this.getSelectedModel();
 
-      // Make a simple test request to check if API is working
       const testResponse = await fetch('/api/gemini-service', {
         method: 'POST',
         headers: {
@@ -248,22 +235,21 @@ export class AutoEditorIntegrationService {
 
   // Calculate optimal token usage to be economical
   private calculateOptimalTokens(originalText: string, mode: EditorMode): number {
-    const baseTokens = Math.ceil(originalText.length / 3); // Rough estimate: 1 token ≈ 3 chars
+    const baseTokens = Math.ceil(originalText.length / 3);
     const inputTokens = baseTokens;
 
-    const modeMultipliers = {
-      'quick-fix': 1.2,      // Minimal changes
-      'enhanced': 1.5,       // Moderate expansion
-      'complete-rewrite': 2.0, // Full rewrite
-      'seo-optimized': 1.8,  // SEO additions
-      'academic': 1.7,       // Formal expansion
-      'expansion': 2.5       // Significant expansion
+    const modeMultipliers: Record<EditorMode, number> = {
+      'quick-fix': 1.2,
+      'enhanced': 1.5,
+      'complete-rewrite': 2.0,
+      'seo-optimized': 1.8,
+      'academic': 1.7,
+      'expansion': 2.5
     };
 
     const multiplier = modeMultipliers[mode] || 1.5;
     const estimatedOutputTokens = Math.ceil(inputTokens * multiplier);
 
-    // Cap at reasonable limits to control costs
     const maxTokens = Math.min(estimatedOutputTokens, 4096);
 
     console.log(`💰 Token estimate - Input: ~${inputTokens}, Output: ~${estimatedOutputTokens}, Max: ${maxTokens}`);
@@ -296,7 +282,6 @@ export class AutoEditorIntegrationService {
         feature: 'auto-correction'
       });
 
-      // Keep only last 100 entries to avoid storage bloat
       if (usageStats.length > 100) {
         usageStats.splice(0, usageStats.length - 100);
       }
@@ -319,10 +304,8 @@ export class AutoEditorIntegrationService {
     let correctedText = originalText;
     const changes: ContentChange[] = [];
 
-    // Apply corrections based on analysis segments
     for (const segment of analysis.segments) {
       if (segment.color === 'red') {
-        // For red segments, add disclaimers
         const disclaimer = ' [⚠️ This claim needs verification - please check reliable sources]';
         if (!correctedText.includes(disclaimer)) {
           correctedText = correctedText.replace(segment.text, segment.text + disclaimer);
@@ -336,7 +319,6 @@ export class AutoEditorIntegrationService {
           });
         }
       } else if (segment.color === 'orange') {
-        // For orange segments, add context note
         const contextNote = ' [ℹ️ Additional context may be needed]';
         if (!correctedText.includes(contextNote)) {
           correctedText = correctedText.replace(segment.text, segment.text + contextNote);
@@ -352,7 +334,6 @@ export class AutoEditorIntegrationService {
       }
     }
 
-    // Add corrections from evidence
     analysis.corrections.forEach((correction, index) => {
       const evidenceNote = `\n\n📚 Additional Information ${index + 1}: ${correction.corrected}`;
       if (!correctedText.includes(evidenceNote)) {
@@ -368,7 +349,6 @@ export class AutoEditorIntegrationService {
       }
     });
 
-    // If no changes were made, add a general disclaimer
     if (changes.length === 0 && analysis.overallScore < 50) {
       const generalDisclaimer = '\n\n⚠️ **Fact-Check Notice**: This content contains claims that may require verification. Please check information against reliable sources.';
       correctedText += generalDisclaimer;
@@ -387,13 +367,12 @@ export class AutoEditorIntegrationService {
       originalText,
       editedText: correctedText,
       changesApplied: changes,
-      improvementScore: Math.min(analysis.overallScore + 15, 85), // Modest improvement
+      improvementScore: Math.min(analysis.overallScore + 15, 85),
       processingTime: Date.now() - startTime,
-      confidence: 70 // Lower confidence for rule-based corrections
+      confidence: 70
     };
   }
 
-  // Rest of the existing methods...
   async performFactCheckAnalysis(text: string): Promise<FactCheckAnalysis> {
     console.log('🔍 Starting comprehensive fact-check analysis...');
 
@@ -494,7 +473,7 @@ export class AutoEditorIntegrationService {
   }
 
   private buildCorrectionPrompt(text: string, analysis: FactCheckAnalysis, mode: EditorMode): string {
-    const modeInstructions = {
+    const modeInstructions: Record<EditorMode, string> = {
       'quick-fix': 'Make minimal changes to fix only the most critical factual errors while preserving the original style and tone.',
       'enhanced': 'Fix factual errors, add context where needed, improve clarity, and enhance readability while maintaining the author\'s voice.',
       'complete-rewrite': 'Completely rewrite the content to be factually accurate, well-structured, and engaging while covering the same topics.',
@@ -536,11 +515,9 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
   private extractCorrectedText(response: string): string {
     let cleaned = response.trim();
 
-    // Remove code blocks and markdown
     cleaned = cleaned.replace(/```[\s\S]*?```/g, '');
     cleaned = cleaned.replace(/`([^`]*)`/g, '$1');
 
-    // Remove common prefixes that AI might add
     const prefixes = [
       'Here is the corrected text:',
       'Corrected text:',
@@ -571,7 +548,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
       return changes;
     }
 
-    // Analyze changes based on problem segments
     analysis.segments.forEach((segment) => {
       if (segment.color === 'red' || segment.color === 'orange') {
         changes.push({
@@ -585,7 +561,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
       }
     });
 
-    // Analyze length changes
     const wordDiff = corrected.split(' ').length - original.split(' ').length;
     if (Math.abs(wordDiff) > 10) {
       changes.push({
@@ -617,7 +592,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
     return Math.round((avgSegmentScore + changeConfidence * 100) / 2);
   }
 
-  // Storage methods (using sessionStorage for better performance)
   private saveAnalysisToStorage(text: string, analysis: FactCheckAnalysis): void {
     try {
       const storageData = {
@@ -630,20 +604,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
       console.log('✅ Fact-check analysis saved to sessionStorage');
     } catch (error) {
       console.warn('Failed to save analysis to storage:', error);
-    }
-  }
-
-  private saveEditorResultToStorage(result: EditorResult): void {
-    try {
-      const storageData = {
-        result,
-        timestamp: new Date().toISOString(),
-        model: this.getSelectedModel()
-      };
-      sessionStorage.setItem('truescope-editor-result', JSON.stringify(storageData));
-      console.log('✅ Editor result saved to sessionStorage');
-    } catch (error) {
-      console.warn('Failed to save editor result to storage:', error);
     }
   }
 
@@ -667,7 +627,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
     }
   }
 
-  // Get token usage statistics
   getTokenUsageStats(): Array<{
     timestamp: string;
     model: string;
@@ -684,7 +643,6 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
     }
   }
 
-  // Clear token usage stats
   clearTokenUsageStats(): void {
     try {
       localStorage.removeItem('truescope-token-usage');

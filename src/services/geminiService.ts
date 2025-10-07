@@ -1,5 +1,6 @@
 // src/services/geminiService.ts - Key functions updated for user API keys
 import { getApiKeys } from './apiKeyService';
+import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
@@ -102,161 +103,164 @@ export async function generateText(
 }
 
 /**
+ * Main orchestrator for fact-checking that routes to appropriate services
+ * This is a wrapper that can be used by batch processing and other services
+ */
+export async function runFactCheckOrchestrator(
+  claimText: string,
+  method: FactCheckMethod = 'comprehensive'
+): Promise<FactCheckReport> {
+  const apiKeys = getApiKeys();
+
+  // Call the main fact-check API endpoint
+  const response = await fetch('/api/fact-check', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: claimText,
+      publishingContext: 'journalism',
+      config: {
+        gemini: apiKeys.gemini,
+        geminiModel: apiKeys.geminiModel || 'gemini-1.5-flash-latest',
+        factCheck: apiKeys.factCheck,
+        search: apiKeys.search,
+        searchId: apiKeys.searchId,
+      },
+      method: method
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || errorData.details || 'Fact-check failed');
+  }
+
+  const result = await response.json();
+  return result as FactCheckReport;
+}
+
+/**
  * List available Gemini models
  */
 export async function listGeminiModels(): Promise<string[]> {
   const apiKeys = getApiKeys();
-  const apiKey = apiKeys.gemini || process.env.VITE_GEMINI_API_KEY;
 
-  if (!apiKey) {
-    console.warn('⚠️ No API key available for listing models');
+  if (!apiKeys.gemini) {
+    console.warn('No Gemini API key configured');
     return [];
   }
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKeys.gemini}`
     );
 
     if (!response.ok) {
-      console.error('Failed to fetch models:', response.status);
-      return [];
+      throw new Error('Failed to fetch models');
     }
 
     const data = await response.json();
 
-    if (data && Array.isArray(data.models)) {
-      const supportedModels = data.models
-        .filter((model: any) =>
-          model.supportedGenerationMethods &&
-          model.supportedGenerationMethods.includes('generateContent') &&
-          !model.name.includes('vision') &&
-          !model.name.includes('embedding')
-        )
-        .map((model: any) => model.name.replace('models/', ''));
-
-      console.log('✅ Found Gemini models:', supportedModels);
-      return supportedModels;
+    if (data.models && Array.isArray(data.models)) {
+      return data.models
+        .filter((model: any) => model.name && model.name.includes('gemini'))
+        .map((model: any) => model.name.replace('models/', ''))
+        .sort();
     }
 
     return [];
   } catch (error) {
-    console.error('Failed to list Gemini models:', error);
+    console.error('Error fetching Gemini models:', error);
     return [];
   }
-}
-
-/**
- * Synthesize evidence using Gemini AI
- */
-export async function synthesizeEvidenceWithGemini(
-  claimText: string,
-  evidence: any[],
-  publishingContext: string,
-  userApiKey?: string
-): Promise<any> {
-  const apiKeys = getApiKeys();
-  const apiKey = userApiKey || apiKeys.gemini;
-  const model = apiKeys.geminiModel || 'gemini-1.5-flash-latest';
-
-  if (!apiKey) {
-    throw new Error('Gemini API key is required for synthesis');
-  }
-
-  const evidenceSummary = evidence.slice(0, 15).map((e, i) =>
-    `${i + 1}. ${e.publisher} (${e.score}%) - "${e.quote?.substring(0, 200) || ''}"`
-  ).join('\n');
-
-  const prompt = `You are a professional fact-checker analyzing a claim for ${publishingContext} publication.
-
-CLAIM TO VERIFY:
-"${claimText}"
-
-EVIDENCE (${evidence.length} sources):
-${evidenceSummary}
-
-Analyze this evidence and provide:
-1. VERDICT: One of [TRUE, MOSTLY TRUE, MIXED, MOSTLY FALSE, FALSE, UNVERIFIED]
-2. SCORE: 0-100 based on evidence quality and consensus
-3. REASONING: 2-3 sentences explaining your verdict
-4. WARNINGS: Any concerns about the evidence or claim
-
-Format your response as:
-VERDICT: [verdict]
-SCORE: [number]
-REASONING: [explanation]
-WARNINGS: [concerns or "None"]`;
-
-  try {
-    const responseText = await generateText(prompt, { apiKey, model });
-
-    // Parse the response
-    const verdictMatch = responseText.match(/VERDICT:\s*(.+)/i);
-    const scoreMatch = responseText.match(/SCORE:\s*(\d+)/i);
-    const reasoningMatch = responseText.match(/REASONING:\s*(.+?)(?=WARNINGS:|$)/is);
-    const warningsMatch = responseText.match(/WARNINGS:\s*(.+?)$/is);
-
-    const score = scoreMatch ? parseInt(scoreMatch[1]) :
-                  evidence.length > 0 ? Math.round(evidence.reduce((s, e) => s + e.score, 0) / evidence.length) : 0;
-
-    return {
-      id: `synthesis_${Date.now()}`,
-      originalText: claimText,
-      final_verdict: verdictMatch?.[1]?.trim() || generateVerdictFromScore(score),
-      final_score: score,
-      reasoning: reasoningMatch?.[1]?.trim() || `Based on ${evidence.length} sources.`,
-      evidence,
-      score_breakdown: {
-        final_score_formula: 'AI-powered synthesis of evidence',
-        metrics: [
-          {
-            name: 'Source Reliability',
-            score: Math.round(evidence.reduce((s, e) => s + e.score, 0) / evidence.length),
-            description: `Average credibility of ${evidence.length} sources`
-          },
-          {
-            name: 'Consensus',
-            score: score,
-            description: 'Agreement across sources'
-          }
-        ]
-      },
-      metadata: {
-        method_used: 'gemini-synthesis',
-        processing_time_ms: 0,
-        apis_used: ['gemini-ai'],
-        sources_consulted: {
-          total: evidence.length,
-          high_credibility: evidence.filter(e => e.score >= 75).length,
-          conflicting: 0
-        },
-        warnings: warningsMatch?.[1]?.trim() !== 'None' ?
-          [warningsMatch?.[1]?.trim()].filter(Boolean) : []
-      }
-    };
-  } catch (error) {
-    console.error('❌ Gemini synthesis failed:', error);
-    throw error;
-  }
-}
-
-function generateVerdictFromScore(score: number): string {
-  if (score >= 85) return 'TRUE';
-  if (score >= 70) return 'MOSTLY TRUE';
-  if (score >= 50) return 'MIXED';
-  if (score >= 30) return 'MOSTLY FALSE';
-  return 'FALSE';
 }
 
 /**
  * Test Gemini API connection
  */
-export async function testGeminiConnection(apiKey: string, model: string = 'gemini-1.5-flash-latest'): Promise<boolean> {
+export async function testGeminiConnection(apiKey?: string): Promise<boolean> {
+  const key = apiKey || getApiKeys().gemini;
+
+  if (!key) {
+    return false;
+  }
+
   try {
-    await generateText('Hello', { apiKey, model });
-    return true;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: 'Test' }]
+          }]
+        })
+      }
+    );
+
+    return response.ok;
   } catch (error) {
     console.error('Gemini connection test failed:', error);
     return false;
+  }
+}
+
+/**
+ * Generate content using Gemini
+ */
+export async function generateGeminiContent(
+  prompt: string,
+  options?: {
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  }
+): Promise<string> {
+  const apiKeys = getApiKeys();
+
+  if (!apiKeys.gemini) {
+    throw new Error('Gemini API key not configured');
+  }
+
+  const model = options?.model || apiKeys.geminiModel || 'gemini-1.5-flash-latest';
+  const temperature = options?.temperature ?? 0.7;
+  const maxTokens = options?.maxTokens ?? 2048;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeys.gemini}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+          }
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Gemini API request failed');
+    }
+
+    const data = await response.json();
+
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    throw new Error('Invalid response format from Gemini API');
+  } catch (error) {
+    console.error('Gemini content generation failed:', error);
+    throw error;
   }
 }
