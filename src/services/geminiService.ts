@@ -1,7 +1,8 @@
-// src/services/geminiService.ts - Key functions updated for user API keys
+// src/services/geminiService.ts - Updated with Gemini AI Studio API
 import { getApiKeys } from './apiKeyService';
 import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
 
+// ✅ CORRECT: Gemini AI Studio API URL
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 interface GeminiConfig {
@@ -12,7 +13,7 @@ interface GeminiConfig {
 }
 
 /**
- * Generate text using Gemini API with user-provided or environment API key
+ * Generate text using Gemini AI Studio API
  * @param prompt The prompt to send to Gemini
  * @param config Configuration including optional user API key
  */
@@ -20,9 +21,8 @@ export async function generateText(
   prompt: string,
   config: GeminiConfig = {}
 ): Promise<string> {
-  // Priority: 1. Passed API key, 2. User's stored key, 3. Environment key
   const apiKeys = getApiKeys();
-  const apiKey = config.apiKey || apiKeys.gemini || process.env.VITE_GEMINI_API_KEY;
+  const apiKey = config.apiKey || apiKeys.gemini;
   const model = config.model || apiKeys.geminiModel || 'gemini-1.5-flash-latest';
 
   if (!apiKey || apiKey.trim() === '') {
@@ -31,6 +31,7 @@ export async function generateText(
     );
   }
 
+  // ✅ CORRECT: AI Studio API endpoint format
   const fullApiUrl = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
 
   console.log(`🤖 Calling Gemini API (model: ${model})`);
@@ -58,7 +59,6 @@ export async function generateText(
       const errorBody = await response.json();
       console.error('[Gemini Error] API response:', errorBody);
 
-      // Provide helpful error messages
       if (response.status === 400) {
         throw new Error(
           `Invalid API request: ${errorBody.error?.message || 'Bad request'}. ` +
@@ -94,7 +94,6 @@ export async function generateText(
   } catch (error) {
     console.error('[Gemini Fatal Error] Failed to call Gemini API:', error);
 
-    // Re-throw with context
     if (error instanceof Error) {
       throw error;
     }
@@ -103,8 +102,7 @@ export async function generateText(
 }
 
 /**
- * Main orchestrator for fact-checking that routes to appropriate services
- * This is a wrapper that can be used by batch processing and other services
+ * Main orchestrator for fact-checking that routes to API endpoint
  */
 export async function runFactCheckOrchestrator(
   claimText: string,
@@ -112,7 +110,7 @@ export async function runFactCheckOrchestrator(
 ): Promise<FactCheckReport> {
   const apiKeys = getApiKeys();
 
-  // Call the main fact-check API endpoint
+  // Call the main fact-check API endpoint with user API keys
   const response = await fetch('/api/fact-check', {
     method: 'POST',
     headers: {
@@ -142,14 +140,14 @@ export async function runFactCheckOrchestrator(
 }
 
 /**
- * List available Gemini models
+ * List available Gemini models from AI Studio
  */
 export async function listGeminiModels(): Promise<string[]> {
   const apiKeys = getApiKeys();
 
   if (!apiKeys.gemini) {
     console.warn('No Gemini API key configured');
-    return [];
+    return getDefaultGeminiModels();
   }
 
   try {
@@ -158,23 +156,42 @@ export async function listGeminiModels(): Promise<string[]> {
     );
 
     if (!response.ok) {
-      throw new Error('Failed to fetch models');
+      console.warn('Failed to fetch models, using defaults');
+      return getDefaultGeminiModels();
     }
 
     const data = await response.json();
 
     if (data.models && Array.isArray(data.models)) {
       return data.models
-        .filter((model: any) => model.name && model.name.includes('gemini'))
+        .filter((model: any) => {
+          const name = model.name?.replace('models/', '') || '';
+          return name.includes('gemini') && model.supportedGenerationMethods?.includes('generateContent');
+        })
         .map((model: any) => model.name.replace('models/', ''))
         .sort();
     }
 
-    return [];
+    return getDefaultGeminiModels();
   } catch (error) {
     console.error('Error fetching Gemini models:', error);
-    return [];
+    return getDefaultGeminiModels();
   }
+}
+
+/**
+ * Default Gemini models available in AI Studio
+ */
+function getDefaultGeminiModels(): string[] {
+  return [
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro-latest',
+    'gemini-1.5-pro',
+    'gemini-1.0-pro-latest',
+    'gemini-1.0-pro',
+    'gemini-2.0-flash-exp'
+  ];
 }
 
 /**
@@ -189,14 +206,17 @@ export async function testGeminiConnection(apiKey?: string): Promise<boolean> {
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`,
+      `${GEMINI_API_URL}/gemini-1.5-flash-latest:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: 'Test' }]
-          }]
+            parts: [{ text: 'Test connection' }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 10
+          }
         })
       }
     );
@@ -231,7 +251,7 @@ export async function generateGeminiContent(
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKeys.gemini}`,
+      `${GEMINI_API_URL}/${model}:generateContent?key=${apiKeys.gemini}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -264,12 +284,9 @@ export async function generateGeminiContent(
     throw error;
   }
 }
+
 /**
  * Synthesizes evidence using the Gemini API to generate a fact-check report.
- * @param originalClaim The original text of the claim being checked.
- * @param evidence An array of evidence items.
- * @param publishingContext The context in which the claim is being published.
- * @returns A promise that resolves to a FactCheckReport.
  */
 export async function synthesizeEvidenceWithGemini(
   originalClaim: string,
@@ -277,60 +294,57 @@ export async function synthesizeEvidenceWithGemini(
   publishingContext: string
 ): Promise<FactCheckReport> {
   const evidenceSummary = evidence
-    .slice(0, 15) // Limit evidence to avoid exceeding token limits
+    .slice(0, 15)
     .map((e, i) => `[Source ${i + 1} - ${e.publisher} - Credibility: ${e.score}%]: "${e.quote}"`)
     .join('\n');
 
   const prompt = `
-    As an expert fact-checker, your task is to analyze the following claim based on the provided evidence.
-    Your analysis must be objective, impartial, and strictly based on the sources.
+As an expert fact-checker, analyze the following claim based on the provided evidence.
+Your analysis must be objective, impartial, and strictly based on the sources.
 
-    **Claim:** "${originalClaim}"
+**Claim:** "${originalClaim}"
 
-    **Publishing Context:** ${publishingContext}
+**Publishing Context:** ${publishingContext}
 
-    **Evidence:**
-    ${evidenceSummary}
+**Evidence:**
+${evidenceSummary}
 
-    **Your Task:**
-    Provide a final verdict and a numerical score (0-100).
-    Explain your reasoning clearly and concisely.
-    The output MUST be a valid JSON object in the following format, with no additional text or explanations before or after the JSON block.
+**Your Task:**
+Provide a final verdict and a numerical score (0-100).
+Explain your reasoning clearly and concisely.
+Output MUST be valid JSON in this exact format:
 
-    {
-      "final_verdict": "...",
-      "final_score": ...,
-      "reasoning": "...",
-      "score_breakdown": {
-        "final_score_formula": "Weighted analysis of source credibility and corroboration.",
-        "metrics": [
-          {
-            "name": "Source Reliability",
-            "score": ...,
-            "description": "Average credibility of provided sources."
-          },
-          {
-            "name": "Corroboration",
-            "score": ...,
-            "description": "Degree to which sources confirm each other."
-          }
-        ]
+{
+  "final_verdict": "...",
+  "final_score": ...,
+  "reasoning": "...",
+  "score_breakdown": {
+    "final_score_formula": "Weighted analysis of source credibility and corroboration.",
+    "metrics": [
+      {
+        "name": "Source Reliability",
+        "score": ...,
+        "description": "Average credibility of provided sources."
+      },
+      {
+        "name": "Corroboration",
+        "score": ...,
+        "description": "Degree to which sources confirm each other."
       }
-    }
-  `;
+    ]
+  }
+}
+`;
 
   try {
     const jsonString = await generateText(prompt, { maxOutputTokens: 1500 });
-    // Clean the response to ensure it's valid JSON
     const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanedJson);
 
-    // Basic validation of the parsed object
     if (!result.final_verdict || typeof result.final_score !== 'number') {
       throw new Error('Invalid JSON structure from Gemini');
     }
 
-    // Return a partial FactCheckReport - other services will fill the rest
     return result as Partial<FactCheckReport> as FactCheckReport;
   } catch (error) {
     console.error('Error during Gemini synthesis:', error);
