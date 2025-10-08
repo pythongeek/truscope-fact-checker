@@ -75,7 +75,7 @@ export class SerpApiService {
         return { results: [], totalResults: 0, searchQuery };
       }
 
-      await this.cache.set(cacheKey, normalizedResponse, 'serpApiTTL');
+      await this.cache.set(cacheKey, normalizedResponse);
 
       console.log(`✅ SERP API returned ${normalizedResponse.results.length} results`);
       return normalizedResponse;

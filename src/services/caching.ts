@@ -31,7 +31,7 @@ export class FactCheckCache {
         }
         try {
             console.log('Hydrating fact-check cache from persistent storage...');
-            const persistedEntries = await advancedCache.fetchAllFromLocalStorage();
+            const persistedEntries = await advancedCache.fetchAllFromLocalStorage<FactCheckReport>();
             for (const [key, entry] of persistedEntries) {
                 // Hydrate all valid entries into the in-memory cache
                 this.cache.set(key, {
@@ -84,9 +84,7 @@ export class FactCheckCache {
 
         // Asynchronously write to the advanced cache without blocking.
         // This is a "fire and forget" operation to avoid breaking the synchronous interface.
-        advancedCache.set(key, data, 'factCheckTTL').catch(err => {
-            console.warn('Advanced cache write-through failed:', err);
-        });
+        advancedCache.set(key, data);
     }
 
     /**

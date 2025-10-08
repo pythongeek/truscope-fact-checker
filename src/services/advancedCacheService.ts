@@ -1,8 +1,7 @@
 // src/services/advancedCacheService.ts - Fixed version
-import { FactCheckReport } from '../types/factCheck';
 
-interface CacheEntry {
-  data: FactCheckReport;
+interface CacheEntry<T> {
+  data: T;
   timestamp: number;
   accessCount: number;
   lastAccessed: number;
@@ -16,7 +15,7 @@ interface CacheConfig {
 
 export class AdvancedCacheService {
   private static instance: AdvancedCacheService;
-  private cache: Map<string, CacheEntry>;
+  private cache: Map<string, CacheEntry<any>>;
   private config: CacheConfig;
   private persistenceEnabled: boolean;
 
@@ -128,7 +127,7 @@ export class AdvancedCacheService {
     }
   }
 
-  set(key: string, data: FactCheckReport): void {
+  set<T>(key: string, data: T): void {
     const now = Date.now();
 
     // If cache is full, remove least recently used entry
@@ -146,7 +145,7 @@ export class AdvancedCacheService {
     this.persistToStorage();
   }
 
-  get(key: string): FactCheckReport | null {
+  get<T>(key: string): T | null {
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -247,6 +246,39 @@ export class AdvancedCacheService {
 
     this.persistToStorage();
     console.log(`🧹 Cache cleanup complete. Current size: ${this.cache.size}`);
+  }
+
+  /**
+   * Generates a consistent cache key.
+   * @param prefix A prefix for the key.
+   * @param uniqueIdentifier A unique identifier for the data.
+   * @returns A string to be used as a cache key.
+   */
+  generateKey(prefix: string, uniqueIdentifier: string): string {
+    return `${prefix}:${uniqueIdentifier}`;
+  }
+
+  /**
+   * Fetches all non-expired entries from local storage.
+   * This is useful for hydrating an in-memory cache on startup.
+   * @returns A promise that resolves to an array of [key, entry] tuples.
+   */
+  async fetchAllFromLocalStorage<T>(): Promise<[string, CacheEntry<T>][]> {
+    if (!this.persistenceEnabled) {
+      return [];
+    }
+    try {
+      const stored = localStorage.getItem(this.config.persistKey);
+      if (!stored) {
+        return [];
+      }
+      const parsed = JSON.parse(stored) as [string, CacheEntry<T>][];
+      const now = Date.now();
+      return parsed.filter(([, entry]) => now - entry.timestamp < this.config.ttl);
+    } catch (error) {
+      console.error('Failed to fetch all from local storage:', error);
+      return [];
+    }
   }
 
   getStats() {

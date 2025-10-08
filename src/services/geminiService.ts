@@ -264,3 +264,76 @@ export async function generateGeminiContent(
     throw error;
   }
 }
+/**
+ * Synthesizes evidence using the Gemini API to generate a fact-check report.
+ * @param originalClaim The original text of the claim being checked.
+ * @param evidence An array of evidence items.
+ * @param publishingContext The context in which the claim is being published.
+ * @returns A promise that resolves to a FactCheckReport.
+ */
+export async function synthesizeEvidenceWithGemini(
+  originalClaim: string,
+  evidence: any[],
+  publishingContext: string
+): Promise<FactCheckReport> {
+  const evidenceSummary = evidence
+    .slice(0, 15) // Limit evidence to avoid exceeding token limits
+    .map((e, i) => `[Source ${i + 1} - ${e.publisher} - Credibility: ${e.score}%]: "${e.quote}"`)
+    .join('\n');
+
+  const prompt = `
+    As an expert fact-checker, your task is to analyze the following claim based on the provided evidence.
+    Your analysis must be objective, impartial, and strictly based on the sources.
+
+    **Claim:** "${originalClaim}"
+
+    **Publishing Context:** ${publishingContext}
+
+    **Evidence:**
+    ${evidenceSummary}
+
+    **Your Task:**
+    Provide a final verdict and a numerical score (0-100).
+    Explain your reasoning clearly and concisely.
+    The output MUST be a valid JSON object in the following format, with no additional text or explanations before or after the JSON block.
+
+    {
+      "final_verdict": "...",
+      "final_score": ...,
+      "reasoning": "...",
+      "score_breakdown": {
+        "final_score_formula": "Weighted analysis of source credibility and corroboration.",
+        "metrics": [
+          {
+            "name": "Source Reliability",
+            "score": ...,
+            "description": "Average credibility of provided sources."
+          },
+          {
+            "name": "Corroboration",
+            "score": ...,
+            "description": "Degree to which sources confirm each other."
+          }
+        ]
+      }
+    }
+  `;
+
+  try {
+    const jsonString = await generateText(prompt, { maxOutputTokens: 1500 });
+    // Clean the response to ensure it's valid JSON
+    const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleanedJson);
+
+    // Basic validation of the parsed object
+    if (!result.final_verdict || typeof result.final_score !== 'number') {
+      throw new Error('Invalid JSON structure from Gemini');
+    }
+
+    // Return a partial FactCheckReport - other services will fill the rest
+    return result as Partial<FactCheckReport> as FactCheckReport;
+  } catch (error) {
+    console.error('Error during Gemini synthesis:', error);
+    throw new Error(`Failed to synthesize evidence with Gemini: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
