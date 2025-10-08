@@ -3,6 +3,7 @@
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
+import { FactCheckReport, EvidenceItem } from '../types/factCheck';
 
 export interface GoogleFactCheckResult {
   text: string;
@@ -34,22 +35,15 @@ export class GoogleFactCheckService {
     return GoogleFactCheckService.instance;
   }
 
-  async searchClaims(claimText: string, maxResults: number = 5): Promise<GoogleFactCheckResult[]> {
+  async searchClaims(claimText: string, maxResults: number = 5): Promise<FactCheckReport | null> {
     const factCheckQuery = this.createFactCheckQuery(claimText, maxResults);
-
-    // Create cache key manually
     const queryHash = await generateSHA256(claimText);
     const cacheKey = `google_fact_check_${queryHash}`;
 
-    // Try to get from cache with type checking
-    try {
-      const cached = await this.cache.get(cacheKey);
-      if (cached && Array.isArray(cached)) {
-        console.log('✅ Using cached fact-check results');
-        return cached as GoogleFactCheckResult[];
-      }
-    } catch (error) {
-      console.warn('Cache retrieval failed, proceeding with fresh request:', error);
+    const cachedReport = await this.cache.get<FactCheckReport>(cacheKey);
+    if (cachedReport) {
+      console.log('✅ Using cached fact-check report');
+      return cachedReport;
     }
 
     try {
@@ -58,39 +52,35 @@ export class GoogleFactCheckService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: factCheckQuery,
-          num: maxResults
+          num: maxResults,
         }),
         timeout: 15000,
-        retryConfig: { maxRetries: 2 }
+        retryConfig: { maxRetries: 2 },
       });
 
       if (!response) {
         console.warn('Empty response from SERP API for fact-check');
-        return [];
+        return null;
       }
 
       const results = this.extractResults(response);
-
       if (results.length === 0) {
-        console.log('ℹ️  No fact-check results found');
-        return [];
+        console.log('ℹ️ No fact-check results found');
+        return null;
       }
 
       const transformedResults = this.transformSerpResults(results, claimText);
+      const report = this._transformResultsToReport(transformedResults, claimText);
 
-      // Save to cache with error handling
-      try {
-        await this.cache.set(cacheKey, transformedResults);
-      } catch (cacheError) {
-        console.warn('Failed to cache results:', cacheError);
+      if (report) {
+        await this.cache.set(cacheKey, report);
+        console.log(`✅ Fact-check search returned a report with score: ${report.final_score}`);
       }
 
-      console.log(`✅ Fact-check search returned ${transformedResults.length} results`);
-      return transformedResults;
-
+      return report;
     } catch (error) {
       console.error('Fact-check search error:', error);
-      return [];
+      return null;
     }
   }
 
@@ -289,5 +279,101 @@ export class GoogleFactCheckService {
     }
 
     return null;
+  }
+
+  private _transformResultsToReport(
+    results: GoogleFactCheckResult[],
+    claimText: string
+  ): FactCheckReport | null {
+    if (results.length === 0) {
+      return null;
+    }
+
+    const evidenceItems: EvidenceItem[] = results.map((result, index) => ({
+      id: `gfc-${index}`,
+      publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
+      url: result.claimReview[0]?.url || null,
+      quote: result.text,
+      score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
+      type: 'claim',
+    }));
+
+    const averageScore =
+      evidenceItems.reduce((acc, item) => acc + item.score, 0) / evidenceItems.length;
+
+    const report: FactCheckReport = {
+      id: `gfc-report-${new Date().getTime()}`,
+      originalText: claimText,
+      final_verdict: this.generateVerdict(averageScore),
+      final_score: averageScore,
+      evidence: evidenceItems,
+      score_breakdown: {
+        final_score_formula: 'Average of Google Fact Check ratings',
+        metrics: [
+          {
+            name: 'Corroboration',
+            score: averageScore,
+            description: `${evidenceItems.length} sources found via Google Fact Check API.`,
+          },
+        ],
+      },
+      metadata: {
+        method_used: 'google-fact-check',
+        processing_time_ms: 0,
+        apis_used: ['google-fact-check-api'],
+        sources_consulted: {
+          total: evidenceItems.length,
+          high_credibility: evidenceItems.filter(e => e.score >= 75).length,
+          conflicting: 0,
+        },
+        warnings: [],
+      },
+      enhanced_claim_text: claimText,
+       source_credibility_report: {
+        overallScore: averageScore,
+        highCredibilitySources: evidenceItems.filter(e => e.score >= 75).length,
+        flaggedSources: 0,
+        biasWarnings: [],
+        credibilityBreakdown: {
+          academic: 0,
+          news: 0,
+          government: 0,
+          social: 0,
+        },
+      },
+      temporal_verification: {
+        hasTemporalClaims: false,
+        validations: [],
+        overallTemporalScore: 100,
+        temporalWarnings: [],
+      },
+    };
+
+    return report;
+  }
+
+  private convertRatingToScore(rating: any): number {
+    if (!rating) return 50;
+
+    const textualRating = (rating.textualRating || '').toLowerCase();
+    if (textualRating.includes('true')) return 90;
+    if (textualRating.includes('mostly true')) return 75;
+    if (textualRating.includes('mixed')) return 50;
+    if (textualRating.includes('mostly false')) return 25;
+    if (textualRating.includes('false')) return 10;
+
+    if (rating.ratingValue && rating.bestRating) {
+      return Math.round((rating.ratingValue / rating.bestRating) * 100);
+    }
+
+    return 50;
+  }
+
+    private generateVerdict(score: number): string {
+    if (score >= 85) return 'TRUE';
+    if (score >= 70) return 'MOSTLY TRUE';
+    if (score >= 50) return 'MIXED';
+    if (score >= 30) return 'MOSTLY FALSE';
+    return 'FALSE';
   }
 }
