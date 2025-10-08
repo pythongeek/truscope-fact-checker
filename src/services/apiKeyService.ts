@@ -63,6 +63,14 @@ export function hasApiKeys(): boolean {
 }
 
 /**
+ * Check if required API keys are configured
+ */
+export function areRequiredKeysConfigured(): boolean {
+    const keys = getApiKeys();
+    return !!keys.gemini;
+}
+
+/**
  * Get API key configuration status
  */
 export function getApiKeyStatus(): {
