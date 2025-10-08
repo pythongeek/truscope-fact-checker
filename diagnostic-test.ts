@@ -47,27 +47,22 @@ async function testDirectAPIs() {
         // Test Fact-Check API
         const factCheckApi = GoogleFactCheckService.getInstance();
         const factCheckResults = await factCheckApi.searchClaims('Biden infrastructure bill', 3);
-        
+
         console.log('✅ Fact-Check API:');
-        console.log(`   - Results returned: ${factCheckResults.length}`);
-        
-        if (factCheckResults[0]?.claimReview?.[0]) {
-            const firstReview = factCheckResults[0].claimReview[0];
-            const publisher = firstReview.publisher;
-            
-            // FIX: Handle both string and object publisher types
-            let publisherName = 'Unknown';
-            if (typeof publisher === 'string') {
-                publisherName = publisher;
-            } else if (publisher && typeof publisher === 'object') {
-                publisherName = (publisher as { name?: string }).name || 'Unknown';
+        if (factCheckResults && factCheckResults.evidence) {
+            console.log(`   - Results returned: ${factCheckResults.evidence.length}`);
+
+            if (factCheckResults.evidence.length > 0) {
+                const firstEvidence = factCheckResults.evidence[0];
+                console.log(`   - Sample result:`, {
+                    hasClaimReview: true,
+                    publisher: firstEvidence.publisher
+                });
+            } else {
+                console.log(`   - Sample result: None`);
             }
-            
-            console.log(`   - Sample result:`, {
-                hasClaimReview: true,
-                publisher: publisherName
-            });
         } else {
+            console.log(`   - Results returned: 0`);
             console.log(`   - Sample result: None`);
         }
         
