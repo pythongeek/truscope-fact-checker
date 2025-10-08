@@ -1,4 +1,4 @@
-// src/services/googleFactCheckService.ts - FIXED VERSION
+// src/services/googleFactCheckService.ts - COMPLETE FIXED VERSION
 
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
@@ -37,12 +37,19 @@ export class GoogleFactCheckService {
   async searchClaims(claimText: string, maxResults: number = 5): Promise<GoogleFactCheckResult[]> {
     const factCheckQuery = this.createFactCheckQuery(claimText, maxResults);
 
-    const cacheKey = this.cache.generateKey('google_fact_check', await generateSHA256(claimText));
+    // Create cache key manually
+    const queryHash = await generateSHA256(claimText);
+    const cacheKey = `google_fact_check_${queryHash}`;
 
-    const cached = await this.cache.get<GoogleFactCheckResult[]>(cacheKey);
-    if (cached) {
-      console.log('✅ Using cached fact-check results');
-      return cached;
+    // Try to get from cache with type checking
+    try {
+      const cached = await this.cache.get(cacheKey);
+      if (cached && Array.isArray(cached)) {
+        console.log('✅ Using cached fact-check results');
+        return cached as GoogleFactCheckResult[];
+      }
+    } catch (error) {
+      console.warn('Cache retrieval failed, proceeding with fresh request:', error);
     }
 
     try {
@@ -71,7 +78,12 @@ export class GoogleFactCheckService {
 
       const transformedResults = this.transformSerpResults(results, claimText);
 
-      await this.cache.set(cacheKey, transformedResults, 'factCheckTTL');
+      // Save to cache with error handling
+      try {
+        await this.cache.set(cacheKey, transformedResults);
+      } catch (cacheError) {
+        console.warn('Failed to cache results:', cacheError);
+      }
 
       console.log(`✅ Fact-check search returned ${transformedResults.length} results`);
       return transformedResults;
