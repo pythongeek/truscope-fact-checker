@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { XCircleIcon } from './icons';
 import { setApiKeys, getApiKeys } from '../services/apiKeyService';
+import { ApiKeys, ApiKeyConfig } from '@/types/apiKeys';
 import { listGeminiModels } from '../services/geminiService';
 
 interface SettingsModalProps {
@@ -11,11 +12,12 @@ interface SettingsModalProps {
 const FALLBACK_GEMINI_MODELS = [
     'gemini-1.5-flash-latest',
     'gemini-1.5-pro-latest',
+    'gemini-2.0-flash-exp',
     'gemini-pro',
     'gemini-1.0-pro',
 ];
 
-const API_KEY_FIELDS = [
+const API_KEY_FIELDS: ApiKeyConfig[] = [
     { 
         id: 'gemini', 
         label: 'Gemini API Key', 
@@ -68,10 +70,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     useEffect(() => {
         if (isOpen) {
             const currentKeys = getApiKeys();
-            setKeys(currentKeys);
+            // Convert ApiKeys to Record<string, string> for state management
+            const keysRecord: Record<string, string> = {
+                gemini: currentKeys.gemini || '',
+                geminiModel: currentKeys.geminiModel || '',
+                factCheck: currentKeys.factCheck || '',
+                search: currentKeys.search || '',
+                searchId: currentKeys.searchId || ''
+            };
+            setKeys(keysRecord);
             
             // Set default model if not set
-            if (!currentKeys.geminiModel) {
+            if (!keysRecord.geminiModel) {
                 setKeys(prev => ({ ...prev, geminiModel: FALLBACK_GEMINI_MODELS[0] }));
             }
 
@@ -107,7 +117,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             return;
         }
 
-        setApiKeys(keys);
+        // Convert Record<string, string> back to ApiKeys type
+        const apiKeys: ApiKeys = {
+            gemini: keys.gemini,
+            geminiModel: keys.geminiModel,
+            factCheck: keys.factCheck,
+            search: keys.search,
+            searchId: keys.searchId
+        };
+
+        setApiKeys(apiKeys);
         setSaveSuccess(true);
         
         console.log('✅ API keys saved successfully');
@@ -163,10 +182,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     }
 
     const groupedFields = API_KEY_FIELDS.reduce((acc, field) => {
-        acc[field.group] = acc[field.group] || [];
+        if (!acc[field.group]) {
+            acc[field.group] = [];
+        }
         acc[field.group].push(field);
         return acc;
-    }, {} as Record<string, typeof API_KEY_FIELDS>);
+    }, {} as Record<string, ApiKeyConfig[]>);
 
     return (
         <div 
