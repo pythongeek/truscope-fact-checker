@@ -9,11 +9,11 @@ interface FactCheckRequest {
   text: string;
   publishingContext?: 'journalism' | 'editorial' | 'content';
   config?: {
-    gemini?: string;           // User's Gemini API key
-    geminiModel?: string;       // Selected model
-    factCheck?: string;         // Google Fact Check API key
-    search?: string;            // Google Search API key
-    searchId?: string;          // Google Search Engine ID
+    gemini?: string;
+    geminiModel?: string;
+    factCheck?: string;
+    search?: string;
+    searchId?: string;
   };
 }
 
@@ -32,7 +32,6 @@ interface EvidenceItem {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -59,7 +58,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('🔑 User API keys provided:', Object.keys(config).filter(k => config[k as keyof typeof config]));
 
   try {
-    // Run data gathering phases in parallel
     console.log('\n🚀 Executing phases in parallel...');
     const [phase1Result, phase2Result, phase3Result] = await Promise.all([
       runPhase1(text, config),
@@ -70,7 +68,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tierResults = [phase1Result, phase2Result, phase3Result];
     console.log('✅ Parallel gathering complete.');
 
-    // Combine and deduplicate evidence
     const allEvidence = deduplicateEvidence([
       ...phase1Result.evidence,
       ...phase2Result.evidence,
@@ -79,10 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`📊 Total evidence collected: ${allEvidence.length}`);
 
-    // Validate citations
     const validatedEvidence = await validateCitations(allEvidence);
 
-    // PHASE 4: AI Synthesis with user's Gemini key
     const finalReport = await runPhase4Synthesis(
       text,
       validatedEvidence,
@@ -110,16 +105,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// ============================================
-// PHASE 1: Google Fact Check API
-// ============================================
 async function runPhase1(text: string, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
 
   try {
     const query = extractSmartQuery(text, 100);
-    // ✅ Prioritize user's API key over environment variable
     const apiKey = config.factCheck || process.env.GOOGLE_FACT_CHECK_API_KEY;
 
     if (!apiKey) {
@@ -190,9 +181,6 @@ async function runPhase1(text: string, config: any) {
   }
 }
 
-// ============================================
-// PHASE 2: SERP API Search (Server-side)
-// ============================================
 async function runPhase2(text: string, req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
@@ -206,7 +194,6 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
 
     console.log(`🔍 Calling SERP API: ${baseUrl}/api/serp-search`);
 
-    // ✅ Server-side SERP API (uses environment variable)
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -259,9 +246,6 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
   }
 }
 
-// ============================================
-// PHASE 3: News Search (Webz API - Server-side)
-// ============================================
 async function runPhase3(text: string, existingEvidence: any[], req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
@@ -286,7 +270,6 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
-    // ✅ Server-side Webz API (uses environment variable)
     const response = await fetch(`${baseUrl}/api/webz-news-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -390,9 +373,6 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
   }
 }
 
-// ============================================
-// PHASE 4: AI Synthesis with Gemini AI Studio
-// ============================================
 async function runPhase4Synthesis(
   text: string,
   evidence: EvidenceItem[],
@@ -402,7 +382,6 @@ async function runPhase4Synthesis(
   config: any
 ) {
   try {
-    // ✅ Prioritize user's API key over environment variable
     const apiKey = config.gemini || process.env.GEMINI_API_KEY;
     const modelName = config.geminiModel || 'gemini-1.5-flash-latest';
 
@@ -415,7 +394,6 @@ async function runPhase4Synthesis(
 
     console.log(`🤖 Calling Gemini API (model: ${modelName})`);
 
-    // ✅ CORRECT: Gemini AI Studio API endpoint
     const response = await fetch(`${GEMINI_API_URL}/${modelName}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -473,10 +451,6 @@ async function runPhase4Synthesis(
     return createStatisticalReport(text, evidence, tierResults, startTime);
   }
 }
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
 
 function buildSynthesisPrompt(text: string, evidence: EvidenceItem[], context: string) {
   const evidenceSummary = evidence.slice(0, 15).map((e, i) =>
