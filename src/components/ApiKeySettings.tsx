@@ -1,11 +1,25 @@
-import React, { useState } from 'react';
-import { saveApiKeys, getApiKeys, testGeminiKey } from '@/services/apiKeyService';
+import React, { useState, useEffect } from 'react';
+import { saveApiKeys, getApiKeys, testGeminiKey, fetchGeminiModels } from '@/services/apiKeyService';
 import { listGeminiModels } from '@/services/geminiService';
 
 export function ApiKeySettings() {
   const [keys, setKeys] = useState(getApiKeys());
   const [models, setModels] = useState<string[]>([]);
   const [testing, setTesting] = useState(false);
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
+  useEffect(() => {
+      const loadModels = async () => {
+        if (keys.gemini) {
+          setIsLoadingModels(true);
+          const models = await fetchGeminiModels(keys.gemini);
+          setGeminiModels(models);
+          setIsLoadingModels(false);
+        }
+      };
+      loadModels();
+    }, [keys.gemini]);
 
   const handleSave = async () => {
     try {
@@ -71,22 +85,29 @@ export function ApiKeySettings() {
       </div>
 
       {/* Gemini Model Selection */}
-      {models.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium mb-2">
-            Gemini Model
-          </label>
-          <select
-            value={keys.geminiModel || 'gemini-1.5-flash-latest'}
-            onChange={(e) => setKeys({ ...keys, geminiModel: e.target.value })}
-            className="w-full px-4 py-2 border rounded"
-          >
-            {models.map((model) => (
-              <option key={model} value={model}>{model}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <div>
+        <label htmlFor="geminiModel" className="block text-sm font-medium mb-2">
+          Gemini Model
+        </label>
+        <select
+          id="geminiModel"
+          name="geminiModel"
+          value={keys.geminiModel}
+          onChange={(e) => setKeys({ ...keys, geminiModel: e.target.value })}
+          disabled={isLoadingModels || geminiModels.length === 0}
+          className="w-full px-4 py-2 border rounded"
+        >
+          {isLoadingModels ? (
+            <option>Loading models...</option>
+          ) : (
+            geminiModels.map(model => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
 
       {/* Google Fact Check API Key */}
       <div>

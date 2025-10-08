@@ -351,3 +351,39 @@ Output MUST be valid JSON in this exact format:
     throw new Error(`Failed to synthesize evidence with Gemini: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
+
+const GEMINI_MODEL_FALLBACK_ORDER = [
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-latest',
+  'gemini-pro',
+];
+
+export const generateContentWithFallback = async (prompt: string) => {
+  const { gemini, geminiModel } = getApiKeys();
+
+  if (!gemini) {
+    throw new Error('All Gemini models failed to generate content.');
+  }
+
+  const modelsToTry = [geminiModel, ...GEMINI_MODEL_FALLBACK_ORDER.filter(m => m !== geminiModel)].filter(Boolean);
+
+  for (const model of modelsToTry) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${gemini}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error(`Model ${model} failed:`, error);
+      // Continue to the next model
+    }
+  }
+
+  throw new Error('All Gemini models failed to generate content.');
+};
