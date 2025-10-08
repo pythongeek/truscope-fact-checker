@@ -383,7 +383,7 @@ async function runPhase4Synthesis(
 ) {
   try {
     const apiKey = config.gemini || process.env.GEMINI_API_KEY;
-    const modelName = config.geminiModel || 'gemini-1.5-flash-latest';
+    const modelName = config.geminiModel || 'gemini-pro';
 
     if (!apiKey || evidence.length === 0) {
       console.warn('⚠️ Using statistical fallback');
