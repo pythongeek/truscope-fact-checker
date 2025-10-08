@@ -19,18 +19,7 @@ async function initializeApp() {
   }
 
   // 2. Check API keys configuration
-  try {
-    const { getConfigurationStatus } = await import('./services/apiKeyService');
-    const status = getConfigurationStatus();
-
-    if (!status.hasGemini) {
-      console.warn('⚠️ Gemini API key not configured. Please configure in Settings.');
-    } else {
-      console.log('✅ API keys configured:', `${status.configuredCount}/${status.totalKeys}`);
-    }
-  } catch (error) {
-    console.warn('⚠️ API key check failed:', error);
-  }
+  // This check was moved into the main application component to avoid HMR issues.
 
   // 3. Check browser compatibility
   const compatibility = {

@@ -26,6 +26,78 @@ export function getApiKeys(): Partial<ApiKeyConfig> {
   }
 }
 
+// ============================================
+// BACKWARD COMPATIBILITY FUNCTIONS
+// These maintain compatibility with existing code
+// ============================================
+
+/**
+ * Get Gemini API key (backward compatible)
+ */
+export function getGeminiApiKey(): string {
+  const keys = getApiKeys();
+  return keys.gemini || '';
+}
+
+/**
+ * Get Gemini model (backward compatible)
+ */
+export function getGeminiModel(): string {
+  const keys = getApiKeys();
+  return keys.geminiModel || 'gemini-1.5-flash-latest';
+}
+
+/**
+ * Get Search API key (backward compatible)
+ */
+export function getSearchApiKey(): string {
+  const keys = getApiKeys();
+  return keys.search || '';
+}
+
+/**
+ * Get Search Engine ID (backward compatible)
+ */
+export function getSearchId(): string {
+  const keys = getApiKeys();
+  return keys.searchId || '';
+}
+
+/**
+ * Get Fact Check API key (backward compatible)
+ */
+export function getFactCheckApiKey(): string {
+  const keys = getApiKeys();
+  return keys.factCheck || '';
+}
+
+/**
+ * Get configuration status (backward compatible)
+ */
+export function getConfigurationStatus(): {
+  gemini: boolean;
+  geminiModel: boolean;
+  factCheck: boolean;
+  search: boolean;
+  searchId: boolean;
+  configured: boolean;
+} {
+  const keys = getApiKeys();
+
+  const status = {
+    gemini: !!keys.gemini,
+    geminiModel: !!keys.geminiModel,
+    factCheck: !!keys.factCheck,
+    search: !!keys.search,
+    searchId: !!keys.searchId,
+    configured: false
+  };
+
+  status.configured = status.gemini && status.factCheck && status.search && status.searchId;
+
+  return status;
+}
+
 /**
  * Save API keys to localStorage
  */
@@ -60,14 +132,6 @@ export function clearApiKeys(): void {
 export function hasApiKeys(): boolean {
   const keys = getApiKeys();
   return !!(keys.gemini && keys.factCheck && keys.search && keys.searchId);
-}
-
-/**
- * Check if required API keys are configured
- */
-export function areRequiredKeysConfigured(): boolean {
-    const keys = getApiKeys();
-    return !!keys.gemini;
 }
 
 /**
@@ -110,7 +174,6 @@ export function validateApiKey(key: string, type: keyof ApiKeyConfig): {
 
   switch (type) {
     case 'gemini':
-      // Gemini API keys typically start with "AIza"
       if (!key.startsWith('AIza')) {
         return { 
           valid: false, 
@@ -121,7 +184,6 @@ export function validateApiKey(key: string, type: keyof ApiKeyConfig): {
     
     case 'factCheck':
     case 'search':
-      // Google API keys typically start with "AIza"
       if (!key.startsWith('AIza')) {
         return { 
           valid: false, 
@@ -131,7 +193,6 @@ export function validateApiKey(key: string, type: keyof ApiKeyConfig): {
       break;
     
     case 'searchId':
-      // Search Engine IDs are alphanumeric
       if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
         return { 
           valid: false, 
@@ -182,15 +243,10 @@ export async function testGoogleKey(apiKey: string, type: 'factCheck' | 'search'
     if (type === 'factCheck') {
       url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=test&key=${apiKey}`;
     } else {
-      // For search, we need both API key and Search Engine ID
-      // This is a basic test - full validation requires Search Engine ID
       url = `https://www.googleapis.com/customsearch/v1?q=test&key=${apiKey}`;
     }
     
     const response = await fetch(url);
-    
-    // 400 is OK - means API key is valid but request parameters might be wrong
-    // 403 means API key is invalid or unauthorized
     return response.ok || response.status === 400;
   } catch (error) {
     console.error(`${type} key test failed:`, error);
