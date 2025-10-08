@@ -1,6 +1,7 @@
-// api/fact-check.ts - Updated with user API key support
+// api/fact-check.ts - Updated with Gemini AI Studio API support
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// ✅ CORRECT: Gemini AI Studio API URL (not Vertex AI)
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
@@ -8,11 +9,11 @@ interface FactCheckRequest {
   text: string;
   publishingContext?: 'journalism' | 'editorial' | 'content';
   config?: {
-    gemini?: string;
-    geminiModel?: string;
-    factCheck?: string;
-    search?: string;
-    searchId?: string;
+    gemini?: string;           // User's Gemini API key
+    geminiModel?: string;       // Selected model
+    factCheck?: string;         // Google Fact Check API key
+    search?: string;            // Google Search API key
+    searchId?: string;          // Google Search Engine ID
   };
 }
 
@@ -31,7 +32,7 @@ interface EvidenceItem {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
+  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -109,14 +110,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// ============================================
 // PHASE 1: Google Fact Check API
+// ============================================
 async function runPhase1(text: string, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
 
   try {
     const query = extractSmartQuery(text, 100);
-    // Prioritize user's API key over environment variable
+    // ✅ Prioritize user's API key over environment variable
     const apiKey = config.factCheck || process.env.GOOGLE_FACT_CHECK_API_KEY;
 
     if (!apiKey) {
@@ -187,7 +190,9 @@ async function runPhase1(text: string, config: any) {
   }
 }
 
-// PHASE 2: SERP API Search
+// ============================================
+// PHASE 2: SERP API Search (Server-side)
+// ============================================
 async function runPhase2(text: string, req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
@@ -201,10 +206,11 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
 
     console.log(`🔍 Calling SERP API: ${baseUrl}/api/serp-search`);
 
+    // ✅ Server-side SERP API (uses environment variable)
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, config })
+      body: JSON.stringify({ query })
     });
 
     if (!response.ok) {
@@ -253,7 +259,9 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
   }
 }
 
-// PHASE 3: News Search
+// ============================================
+// PHASE 3: News Search (Webz API - Server-side)
+// ============================================
 async function runPhase3(text: string, existingEvidence: any[], req: VercelRequest, config: any) {
   const startTime = Date.now();
   const evidence: EvidenceItem[] = [];
@@ -278,13 +286,13 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
+    // ✅ Server-side Webz API (uses environment variable)
     const response = await fetch(`${baseUrl}/api/webz-news-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: newsQuery,
-        fromDate: getRecentDate(),
-        config
+        fromDate: getRecentDate()
       })
     });
 
@@ -341,7 +349,7 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: `${query} news`, config })
+      body: JSON.stringify({ query: `${query} news` })
     });
 
     if (!response.ok) throw new Error('Fallback failed');
@@ -382,7 +390,9 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
   }
 }
 
-// PHASE 4: AI Synthesis with user's Gemini key
+// ============================================
+// PHASE 4: AI Synthesis with Gemini AI Studio
+// ============================================
 async function runPhase4Synthesis(
   text: string,
   evidence: EvidenceItem[],
@@ -392,7 +402,7 @@ async function runPhase4Synthesis(
   config: any
 ) {
   try {
-    // Prioritize user's API key over environment variable
+    // ✅ Prioritize user's API key over environment variable
     const apiKey = config.gemini || process.env.GEMINI_API_KEY;
     const modelName = config.geminiModel || 'gemini-1.5-flash-latest';
 
@@ -405,6 +415,7 @@ async function runPhase4Synthesis(
 
     console.log(`🤖 Calling Gemini API (model: ${modelName})`);
 
+    // ✅ CORRECT: Gemini AI Studio API endpoint
     const response = await fetch(`${GEMINI_API_URL}/${modelName}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -462,6 +473,10 @@ async function runPhase4Synthesis(
     return createStatisticalReport(text, evidence, tierResults, startTime);
   }
 }
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
 
 function buildSynthesisPrompt(text: string, evidence: EvidenceItem[], context: string) {
   const evidenceSummary = evidence.slice(0, 15).map((e, i) =>
@@ -601,7 +616,6 @@ function calculateCredibilityInternal(url: string): { score: number; warnings: s
   return { score: Math.max(0, Math.min(100, score)), warnings };
 }
 
-// Helper functions
 function extractSmartQuery(text: string, maxLength: number): string {
   const firstSentence = text.match(/^[^.!?]+[.!?]/)?.[0] || text;
   if (firstSentence.length <= maxLength) return firstSentence.trim();
