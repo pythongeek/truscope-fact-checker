@@ -208,30 +208,55 @@ export function validateApiKey(key: string, type: keyof ApiKeyConfig): {
 /**
  * Test if a Gemini API key is valid
  */
-export async function testGeminiKey(apiKey: string): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: 'Test' }]
-          }],
-          generationConfig: {
-            maxOutputTokens: 5
-          }
-        })
-      }
-    );
-    
-    return response.ok;
-  } catch (error) {
-    console.error('Gemini key test failed:', error);
+export const testGeminiKey = async (apiKey: string): Promise<boolean> => {
+  if (!apiKey) {
     return false;
   }
-}
+
+  // Use a common, known-good model for the validation check
+  const model = 'gemini-pro';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'hello' }] }],
+      }),
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Error validating Gemini API key:', error);
+    return false;
+  }
+};
+
+export const fetchGeminiModels = async (apiKey: string): Promise<string[]> => {
+      if (!apiKey) {
+        return [];
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Failed to fetch Gemini models');
+        }
+        const data = await response.json();
+        // Filter for models that support content generation
+        return data.models
+          .filter((model: any) => model.supportedGenerationMethods.includes('generateContent'))
+          .map((model: any) => model.name.replace('models/', ''));
+      } catch (error) {
+        console.error('Error fetching Gemini models:', error);
+        return [];
+      }
+    };
 
 /**
  * Test if a Google API key is valid (Fact Check or Search)
