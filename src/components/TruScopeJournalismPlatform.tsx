@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getApiKeys, areRequiredKeysConfigured } from '../services/apiKeyService';
+import { getApiKeys, hasApiKeys } from '../services/apiKeyService';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
@@ -72,7 +72,7 @@ const handleAnalyze = async () => {
   }
 
   // Check if Gemini API key is configured
-  if (!areRequiredKeysConfigured()) {
+  if (!hasApiKeys()) {
     const shouldOpenSettings = window.confirm(
       '⚠️ Gemini API Key Required\n\n' +
       'The Gemini API key is required for fact-checking analysis.\n\n' +
@@ -185,7 +185,7 @@ const handleAnalyze = async () => {
 
 useEffect(() => {
   const checkConfiguration = () => {
-    if (!areRequiredKeysConfigured()) {
+    if (!hasApiKeys()) {
       console.warn('⚠️ Gemini API key not configured');
       console.log('ℹ️ Please configure your API key in Settings to enable fact-checking');
     } else {
