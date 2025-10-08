@@ -229,9 +229,10 @@ export class PipelineIntegration {
         try {
             // Route based on expected source types
             if (expectedTypes.includes('fact-check')) {
-                const results = await this.factCheckApi.searchClaims(searchString, maxResults);
-                console.log(`🔍 Fact-check search returned ${results.length} results`);
-                return results;
+                const report = await this.factCheckApi.searchClaims(searchString, maxResults);
+                const evidence = report ? report.evidence : [];
+                console.log(`🔍 Fact-check search returned ${evidence.length} results`);
+                return evidence;
             } else {
                 // ⚠️ FIX: Use SERP API directly for better results
                 const serpResults = await this.serpApi.search(searchString, maxResults);

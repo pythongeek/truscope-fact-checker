@@ -75,7 +75,7 @@ export class AdvancedCacheService {
       let expiredCount = 0;
 
       if (Array.isArray(parsed)) {
-        parsed.forEach(([key, entry]: [string, CacheEntry]) => {
+        parsed.forEach(([key, entry]: [string, CacheEntry<any>]) => {
           // Check if entry is still valid
           if (now - entry.timestamp < this.config.ttl) {
             this.cache.set(key, entry);

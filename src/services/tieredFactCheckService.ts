@@ -160,43 +160,22 @@ export class TieredFactCheckService {
       const query = this.extractSmartQuery(text, 100);
       console.log('🔍 Fact-check query:', query);
 
-      const results = await this.googleFactCheck.searchClaims(query, 5);
+      const report = await this.googleFactCheck.searchClaims(query, 5);
 
-      if (results.length === 0) {
-        console.log('ℹ️  No direct fact-check matches found');
+      if (!report || report.evidence.length === 0) {
+        console.log('ℹ️ No direct fact-check matches found');
         return {
           tier: 'direct-verification',
           success: false,
           confidence: 0,
           evidence: [],
           shouldEscalate: true,
-          processingTime: Date.now() - startTime
+          processingTime: Date.now() - startTime,
         };
       }
 
-      const evidence: EvidenceItem[] = results.map((result, index) => {
-        const firstReview = result.claimReview[0];
-        const publisher = firstReview?.publisher;
-        
-        // ✅ FIX: Handle both string and object publisher formats with proper type assertion
-        let publisherName = 'Fact Checker';
-        if (typeof publisher === 'string') {
-          publisherName = publisher;
-        } else if (publisher && typeof publisher === 'object') {
-          publisherName = (publisher as { name?: string }).name || 'Fact Checker';
-        }
-        
-        return {
-          id: `factcheck_${index}`,
-          publisher: publisherName,
-          url: firstReview?.url || null,
-          quote: `${result.text} - Rating: ${firstReview?.reviewRating?.textualRating || 'Unknown'}`,
-          score: this.convertRatingToScore(firstReview?.reviewRating),
-          type: 'claim' as const
-        };
-      });
-
-      const avgScore = evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length;
+      const evidence: EvidenceItem[] = report.evidence;
+      const avgScore = report.final_score;
       console.log(`✅ Found ${evidence.length} fact-check results (avg: ${avgScore.toFixed(1)}%)`);
 
       return {
