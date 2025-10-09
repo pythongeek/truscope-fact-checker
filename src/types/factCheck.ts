@@ -278,3 +278,40 @@ export interface HybridReconciliation {
         description: string;
     }[];
 }
+
+export type Evidence = EvidenceItem;
+
+export interface SearchPhaseResult<T> {
+  queryUsed: string;
+  count: number;
+  // You can make rawResults generic to hold any type of search result
+  rawResults: T[];
+}
+
+export interface ClaimVerificationResult {
+  id: string; // Unique ID for the claim
+  claimText: string;
+  status: 'Verified' | 'Unverified' | 'Misleading' | 'Accurate' | 'Needs Context';
+  confidenceScore: number; // 0.0 to 1.0
+  explanation: string; // AI-generated summary of the verdict
+  evidence: Evidence[]; // Existing Evidence type
+}
+
+// This is the main, top-level interface for the entire operation
+export interface TieredFactCheckResult {
+  id: string; // Unique ID for this entire fact-check operation
+  timestamp: string;
+  originalText: string;
+  overallAuthenticityScore: number; // A weighted score from 0 to 100
+  summary: string; // A top-level, AI-generated summary of the findings
+
+  // Detailed breakdown of each claim
+  claimVerifications: ClaimVerificationResult[];
+
+  // Transparent view into the evidence gathering process
+  searchPhases: {
+    googleFactChecks: SearchPhaseResult<any>; // Replace 'any' with specific type
+    webSearches: SearchPhaseResult<any>;
+    newsSearches: SearchPhaseResult<any>;
+  };
+}
