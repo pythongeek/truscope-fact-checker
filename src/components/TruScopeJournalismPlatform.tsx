@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
+import { ApiKeys } from '../types/apiKeys';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
@@ -45,7 +46,7 @@ export default function TruScopeJournalismPlatform() {
   // State for settings modal
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [settings, setSettings] = useState({ apiKeys: { gemini: '', geminiModel: '', factCheck: '', search: '', searchId: '' } });
+  const [settings, setSettings] = useState<{ apiKeys: ApiKeys }>({ apiKeys: {} });
 
   const handleNavigate = (view: 'checker' | 'history' | 'trending') => {
     setCurrentView(view);
@@ -641,3 +642,28 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
 }
 
 // ... (Rest of the components: EditorialPanel, SchemaPreviewModal, etc.)
+
+function EditorialPanel(props: any) {
+  return (
+    <div>
+      <h2>Editorial Panel (Placeholder)</h2>
+      <p>Original Content: {props.originalContent}</p>
+    </div>
+  );
+}
+
+function SchemaPreviewModal(props: any) {
+  if (!props.schema) {
+    return null;
+  }
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full">
+        <div className="p-6">
+          <h3 className="text-xl font-bold">Schema Preview (Placeholder)</h3>
+          <button onClick={props.onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
