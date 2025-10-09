@@ -1,7 +1,6 @@
-// src/services/geminiService.ts - FIXED VERSION
+// src/services/geminiService.ts - REFACTORED VERSION
 
-// ✅ FIXED: Correct import path (relative path from services folder)
-import { getApiKeys } from './apiKeyService.js';
+// This service is now environment-agnostic and does not rely on browser-specific APIs for its core function.
 
 // ✅ CORRECT: Google AI Studio API URL
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -23,7 +22,8 @@ interface GeminiConfig {
 }
 
 /**
- * Fetches the list of available Gemini models from the API.
+ * Fetches the list of available Gemini models from the API. (Client-side use)
+ * This function is safe as it requires the API key to be passed in.
  */
 export async function fetchAvailableModels(apiKey: string): Promise<string[]> {
   if (!apiKey || apiKey.trim() === '') {
@@ -75,16 +75,18 @@ export async function fetchAvailableModels(apiKey: string): Promise<string[]> {
 
 /**
  * Generates text using the Gemini API with robust fallback mechanism.
+ * This function is now ENVIRONMENT-AGNOSTIC and can be used on the server.
  */
 export async function generateTextWithFallback(
   prompt: string,
   config: GeminiConfig = {}
 ): Promise<string> {
-  const apiKeys = getApiKeys();
-  const apiKey = config.apiKey || apiKeys.gemini;
+  // This function is now environment-agnostic. It relies SOLELY on the passed-in config.
+  const apiKey = config.apiKey;
 
   if (!apiKey || apiKey.trim() === '') {
-    throw new Error('❌ Gemini API key is required. Please configure it in Settings.');
+    // The error is now generic as it can be triggered from the server or client.
+    throw new Error('❌ Gemini API key is required.');
   }
 
   // Validate prompt
@@ -93,7 +95,7 @@ export async function generateTextWithFallback(
   }
 
   // Create unique, ordered list of models to try
-  const preferredModel = config.model || apiKeys.geminiModel || 'gemini-2.0-flash-exp';
+  const preferredModel = config.model || 'gemini-2.0-flash-exp';
   const modelsToTry = [
     preferredModel,
     ...GEMINI_MODEL_FALLBACK_ORDER.filter(m => m !== preferredModel)
@@ -168,13 +170,11 @@ export async function generateTextWithFallback(
         console.warn(`⚠️ Model ${model} failed: ${errorMessage}`);
         lastError = new Error(`Model ${model} failed: ${errorMessage}`);
 
-        // If 404, model doesn't exist - try next one
         if (response.status === 404) {
           console.log(`ℹ️ Model ${model} not found, trying next...`);
           continue;
         }
 
-        // For auth errors, stop trying
         if (response.status === 401 || response.status === 403) {
           throw new Error(`❌ Authentication failed: ${errorMessage}`);
         }
@@ -182,7 +182,6 @@ export async function generateTextWithFallback(
         continue;
       }
 
-      // Extract generated text
       const candidate = data.candidates?.[0];
 
       if (!candidate) {
@@ -191,7 +190,6 @@ export async function generateTextWithFallback(
         continue;
       }
 
-      // Check for safety blocks
       if (candidate.finishReason === 'SAFETY') {
         console.warn(`⚠️ Model ${model} blocked by safety filters`);
         lastError = new Error(`Model ${model} blocked by safety filters`);
@@ -213,14 +211,12 @@ export async function generateTextWithFallback(
       console.error(`🚨 Unexpected error with model ${model}:`, error.message);
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // If it's a network error, try next model
       if (error.message.includes('fetch') || error.message.includes('network')) {
         continue;
       }
     }
   }
 
-  // All models failed
   const errorMsg = lastError?.message || 'Unknown error occurred';
   throw new Error(`❌ All Gemini models failed after ${attemptCount} attempts. Last error: ${errorMsg}`);
 }
