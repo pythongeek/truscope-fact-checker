@@ -1,35 +1,7 @@
 // src/services/schemaGenerator.ts
 
-import { EvidenceItem } from '../types/factCheck';
-
-interface ClaimReviewSchema {
-  '@context': string;
-  '@type': string;
-  datePublished: string;
-  url: string; // URL to the page where this fact-check is published
-  claimReviewed: string;
-  author: {
-    '@type': string;
-    name: string;
-  };
-  reviewRating: {
-    '@type': string;
-    ratingValue: string;
-    bestRating: string;
-    worstRating: string;
-    alternateName: string; // A textual rating (e.g., "Mostly True")
-  };
-  itemReviewed: {
-    '@type': string;
-    author: {
-      '@type': string;
-      name: string;
-      sameAs?: string; // URL of the author, if available
-    };
-    datePublished: string | null;
-    name: string;
-  };
-}
+import { EvidenceItem, TieredFactCheckResult } from '../types/factCheck';
+import { ClaimReview } from 'schema-dts';
 
 // Helper to determine a textual rating from the score
 function getAlternateName(score: number): string {
@@ -41,25 +13,24 @@ function getAlternateName(score: number): string {
 }
 
 /**
- * Generates a ClaimReview JSON-LD schema.
- * @param claim The original claim text that was fact-checked.
- * @param score The final validation score (0-100).
- * @param evidence The list of evidence items used for the check.
- * @returns A fully formed ClaimReviewSchema object.
+ * Generates a ClaimReview JSON-LD schema based on the tiered fact-check result.
+ * @param factCheckResult The result from the TieredFactCheckService.
+ * @returns A fully formed ClaimReview object.
  */
-export function generateClaimReviewSchema(
-  claim: string,
-  score: number,
-  evidence: EvidenceItem[]
-): ClaimReviewSchema {
+function generate(factCheckResult: TieredFactCheckResult): ClaimReview {
+  const { originalText: claim, overallAuthenticityScore: score } = factCheckResult;
+
+  // Aggregate evidence from all claim verifications
+  const allEvidence = factCheckResult.claimVerifications.flatMap(v => v.evidence);
+
   // Use the most relevant piece of evidence for the 'itemReviewed' field
-  const primarySource = evidence.length > 0 ? evidence[0] : null;
+  const primarySource = allEvidence.length > 0 ? allEvidence[0] : null;
 
   return {
     '@context': 'https://schema.org',
     '@type': 'ClaimReview',
     datePublished: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-    url: 'https://your-app-domain.com/fact-check/12345', // Placeholder URL
+    url: `https://your-app-domain.com/fact-check/${factCheckResult.id}`, // Use the result ID for a unique URL
     claimReviewed: claim,
     author: {
       '@type': 'Organization',
@@ -84,3 +55,7 @@ export function generateClaimReviewSchema(
     },
   };
 }
+
+export const schemaGenerator = {
+  generate,
+};
