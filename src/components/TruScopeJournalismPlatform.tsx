@@ -14,7 +14,6 @@ import HistoryView from './HistoryView';
 import TrendingMisinformation from './TrendingMisinformation';
 import SettingsModal from './SettingsModal';
 
-// Import citation formatter
 const formatCitation = (source: any, style: string = 'ap', num?: number) => {
   const publisher = source.publisher || 'Unknown';
   const date = source.publishedDate || new Date().toISOString().split('T')[0];
@@ -43,7 +42,6 @@ export default function TruScopeJournalismPlatform() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'checker' | 'history' | 'trending'>('checker');
 
-  // State for settings modal
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [settings, setSettings] = useState<{ apiKeys: ApiKeys }>({ apiKeys: {} });
@@ -53,25 +51,41 @@ export default function TruScopeJournalismPlatform() {
   };
 
   useEffect(() => {
+    console.log('🚀 Initializing TruScope Professional...');
     const keys = getApiKeys();
     setSettings({ apiKeys: keys });
+
+    if (keys.gemini) {
+      console.log('✅ API keys configured and ready');
+    } else {
+      console.warn('⚠️ No Gemini API key found');
+    }
+
     checkAPIAvailability();
   }, []);
 
   const loadModels = useCallback(async () => {
     const geminiKey = settings.apiKeys.gemini;
-    if (geminiKey) {
-      setIsLoadingModels(true);
-      try {
-        const models = await fetchAvailableModels(geminiKey);
-        setAvailableModels(models);
-      } catch (e) {
-        setAvailableModels(['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    } else {
-      setAvailableModels([]);
+
+    if (!geminiKey || geminiKey.trim() === '') {
+      console.log('ℹ️ No Gemini API key - using fallback models');
+      setAvailableModels(['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest']);
+      return;
+    }
+
+    setIsLoadingModels(true);
+    console.log('🔄 Loading available Gemini models...');
+
+    try {
+      const models = await fetchAvailableModels(geminiKey);
+      setAvailableModels(models);
+      console.log(`✅ Loaded ${models.length} models`);
+    } catch (e: any) {
+      console.error('❌ Failed to load models:', e.message);
+      // Fallback to default models
+      setAvailableModels(['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest']);
+    } finally {
+      setIsLoadingModels(false);
     }
   }, [settings.apiKeys.gemini]);
 
@@ -80,22 +94,27 @@ export default function TruScopeJournalismPlatform() {
   }, [loadModels]);
 
   const handleSettingsSave = (newKeys: any) => {
+    console.log('💾 Saving API keys...');
     saveApiKeys(newKeys);
     setSettings({ apiKeys: newKeys });
     setIsSettingsModalOpen(false);
+
+    // Reload models with new key
+    if (newKeys.gemini !== settings.apiKeys.gemini) {
+      setTimeout(() => loadModels(), 500);
+    }
   };
 
   const checkAPIAvailability = async () => {
+    setApiStatus('checking');
+
     try {
       const response = await fetch('/api/health-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      if (response.ok) {
-        setApiStatus('available');
-      } else {
-        setApiStatus('unavailable');
-      }
+
+      setApiStatus(response.ok ? 'available' : 'unavailable');
     } catch {
       setApiStatus('unavailable');
     }
@@ -103,16 +122,20 @@ export default function TruScopeJournalismPlatform() {
 
   const handleAnalyze = async () => {
     if (!content.trim()) {
-      alert('Please enter content to analyze');
+      alert('⚠️ Please enter content to analyze');
       return;
     }
 
-    if (!hasApiKeys()) {
+    const apiKeys = getApiKeys();
+
+    if (!apiKeys.gemini || apiKeys.gemini.trim() === '') {
       const shouldOpenSettings = window.confirm(
         '⚠️ Gemini API Key Required\n\n' +
         'The Gemini API key is required for fact-checking analysis.\n\n' +
+        'Get your free API key from: https://aistudio.google.com/\n\n' +
         'Would you like to configure your API keys now?'
       );
+
       if (shouldOpenSettings) {
         setIsSettingsModalOpen(true);
       }
@@ -122,9 +145,13 @@ export default function TruScopeJournalismPlatform() {
     setIsAnalyzing(true);
     setActiveTab('analyze');
 
+    console.log('🚀 Starting fact-check analysis');
+    console.log('📝 Content length:', content.length, 'characters');
+    console.log('📋 Publishing context:', publishingContext);
+
     try {
-      const apiKeys = getApiKeys();
-      const modelToUse = apiKeys.geminiModel || 'gemini-1.5-flash';
+      const modelToUse = apiKeys.geminiModel || 'gemini-2.0-flash-exp';
+      console.log('🔑 Using Gemini model:', modelToUse);
 
       const response = await fetch('/api/fact-check', {
         method: 'POST',
@@ -132,19 +159,53 @@ export default function TruScopeJournalismPlatform() {
         body: JSON.stringify({
           text: content,
           publishingContext,
-          config: { ...apiKeys, geminiModel: modelToUse }
+          config: {
+            gemini: apiKeys.gemini,
+            geminiModel: modelToUse,
+            factCheck: apiKeys.factCheck,
+            search: apiKeys.search,
+            searchId: apiKeys.searchId
+          }
         })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Fact-check request failed');
+        const errorText = await response.text();
+        let errorData;
+
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 200)}`);
+        }
+
+        throw new Error(errorData.error || errorData.details || 'Fact-check request failed');
       }
 
       const result = await response.json();
+
+      console.log('✅ Fact-check completed successfully');
+      console.log('📊 Final Score:', result.final_score);
+      console.log('⚖️ Verdict:', result.final_verdict);
+      console.log('📋 Evidence Sources:', result.evidence?.length || 0);
+      console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
+
+      if (result.metadata?.tier_breakdown) {
+        console.log('🎯 Verification Tiers:');
+        result.metadata.tier_breakdown.forEach((tier: any) => {
+          console.log(`  - ${tier.tier}: ${tier.success ? '✓' : '→'} (${tier.confidence.toFixed(1)}%)`);
+        });
+      }
+
+      if (result.final_score < 50) {
+        console.warn('❌ Low confidence result:', result.final_score);
+      }
+
       setFactCheckResult(result);
       setActiveTab('report');
+
     } catch (error: any) {
+      console.error('❌ Analysis failed:', error);
       alert(`Analysis failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
@@ -153,7 +214,10 @@ export default function TruScopeJournalismPlatform() {
 
   const handleAutoCorrect = async (mode: string) => {
     if (!factCheckResult) return;
+
     setIsAnalyzing(true);
+    console.log('🔧 Starting auto-correction...');
+
     try {
       const response = await fetch('/api/auto-correct', {
         method: 'POST',
@@ -164,11 +228,16 @@ export default function TruScopeJournalismPlatform() {
           mode: mode,
         })
       });
+
       if (!response.ok) throw new Error('Auto-correction failed');
+
       const result = await response.json();
       setEditorResult(result);
       setActiveTab('edit');
+      console.log('✅ Auto-correction completed');
+
     } catch (error: any) {
+      console.error('❌ Auto-correction failed:', error);
       alert(`Auto-correction failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
@@ -179,17 +248,21 @@ export default function TruScopeJournalismPlatform() {
 
   const handleGenerateSchema = async (formData: any) => {
     if (!factCheckResult) return;
+
     try {
       const response = await fetch('/api/generate-schema', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
+
       if (!response.ok) throw new Error('Schema generation failed');
+
       const data = await response.json();
       setSchemaData(data);
       setShowSchemaInputModal(false);
       setShowSchemaModal(true);
+
     } catch (error: any) {
       alert(`Schema generation failed: ${error.message}`);
     }
@@ -211,6 +284,7 @@ export default function TruScopeJournalismPlatform() {
         onNavigate={handleNavigate}
         onSettingsClick={() => setIsSettingsModalOpen(true)}
       />
+
       <div className="flex-1 flex flex-col">
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 py-4">
@@ -325,6 +399,8 @@ export default function TruScopeJournalismPlatform() {
     </div>
   );
 }
+
+// ... (Rest of the component code - TabNavigation, AnalysisPanel, ReportPanel, etc. - remains the same as in your original file)
 
 function TabNavigation({ activeTab, onTabChange, hasResult, correctionCount }: any) {
   const tabs = [
@@ -550,11 +626,11 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
                   </div>
                   <div>
                     <p className="text-gray-600">Evidence</p>
-                    <p className="font-semibold text-gray-900">{tier.evidence_count} sources</p>
+                    <p className="font-semibold text-gray-900">{tier.evidence?.length || 0} sources</p>
                   </div>
                   <div>
                     <p className="text-gray-600">Time</p>
-                    <p className="font-semibold text-gray-900">{(tier.processing_time_ms / 1000).toFixed(2)}s</p>
+                    <p className="font-semibold text-gray-900">{(tier.processingTime / 1000).toFixed(2)}s</p>
                   </div>
                 </div>
               </div>
@@ -641,27 +717,81 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
   );
 }
 
-// ... (Rest of the components: EditorialPanel, SchemaPreviewModal, etc.)
-
-function EditorialPanel(props: any) {
+function EditorialPanel({ originalContent, result, editorResult, onContentUpdate }: any) {
   return (
-    <div>
-      <h2>Editorial Panel (Placeholder)</h2>
-      <p>Original Content: {props.originalContent}</p>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">Editorial Panel</h2>
+      <div className="space-y-4">
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="font-semibold text-blue-900 mb-2">Original Content</h3>
+          <p className="text-gray-700 whitespace-pre-wrap">{originalContent}</p>
+        </div>
+
+        {editorResult && (
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 className="font-semibold text-green-900 mb-2">Suggested Corrections</h3>
+            <p className="text-gray-700 whitespace-pre-wrap">{editorResult.correctedText || 'No corrections available'}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function SchemaPreviewModal(props: any) {
-  if (!props.schema) {
-    return null;
-  }
+function SchemaPreviewModal({ schema, htmlSnippet, validation, onClose }: any) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(htmlSnippet || JSON.stringify(schema, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full">
-        <div className="p-6">
-          <h3 className="text-xl font-bold">Schema Preview (Placeholder)</h3>
-          <button onClick={props.onClose}>Close</button>
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-gray-900">Schema Markup Preview</h3>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold text-gray-900">JSON-LD Schema</h4>
+              <button
+                onClick={handleCopy}
+                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 text-sm"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copied ? 'Copied!' : 'Copy'}</span>
+              </button>
+            </div>
+            <pre className="text-xs text-gray-700 overflow-x-auto">
+              {JSON.stringify(schema, null, 2)}
+            </pre>
+          </div>
+
+          {validation && (
+            <div className={`p-4 rounded-lg border ${
+              validation.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+            }`}>
+              <h4 className="font-semibold mb-2">
+                {validation.isValid ? '✅ Valid Schema' : '❌ Schema Issues'}
+              </h4>
+              {validation.errors && validation.errors.length > 0 && (
+                <ul className="text-sm space-y-1">
+                  {validation.errors.map((error: string, idx: number) => (
+                    <li key={idx} className="text-red-700">• {error}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
