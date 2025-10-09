@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { getApiKeys, hasApiKeys } from '../services/apiKeyService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
+import { fetchAvailableModels } from '../services/geminiService';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
@@ -41,13 +42,47 @@ export default function TruScopeJournalismPlatform() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'checker' | 'history' | 'trending'>('checker');
 
+  // State for settings modal
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [settings, setSettings] = useState({ apiKeys: { gemini: '', geminiModel: '', factCheck: '', search: '', searchId: '' } });
+
   const handleNavigate = (view: 'checker' | 'history' | 'trending') => {
     setCurrentView(view);
   };
 
   useEffect(() => {
+    const keys = getApiKeys();
+    setSettings({ apiKeys: keys });
     checkAPIAvailability();
   }, []);
+
+  const loadModels = useCallback(async () => {
+    const geminiKey = settings.apiKeys.gemini;
+    if (geminiKey) {
+      setIsLoadingModels(true);
+      try {
+        const models = await fetchAvailableModels(geminiKey);
+        setAvailableModels(models);
+      } catch (e) {
+        setAvailableModels(['gemini-1.5-pro-latest', 'gemini-1.5-flash-latest', 'gemini-pro']);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    } else {
+      setAvailableModels([]);
+    }
+  }, [settings.apiKeys.gemini]);
+
+  useEffect(() => {
+    loadModels();
+  }, [loadModels]);
+
+  const handleSettingsSave = (newKeys: any) => {
+    saveApiKeys(newKeys);
+    setSettings({ apiKeys: newKeys });
+    setIsSettingsModalOpen(false);
+  };
 
   const checkAPIAvailability = async () => {
     try {
@@ -71,14 +106,12 @@ export default function TruScopeJournalismPlatform() {
       return;
     }
 
-    // Check if Gemini API key is configured
     if (!hasApiKeys()) {
       const shouldOpenSettings = window.confirm(
         '⚠️ Gemini API Key Required\n\n' +
         'The Gemini API key is required for fact-checking analysis.\n\n' +
         'Would you like to configure your API keys now?'
       );
-
       if (shouldOpenSettings) {
         setIsSettingsModalOpen(true);
       }
@@ -89,132 +122,37 @@ export default function TruScopeJournalismPlatform() {
     setActiveTab('analyze');
 
     try {
-      // Get user's API keys
       const apiKeys = getApiKeys();
-      
-      // Use correct default model
       const modelToUse = apiKeys.geminiModel || 'gemini-1.5-flash';
-
-      console.log('🚀 Starting fact-check analysis');
-      console.log('📝 Content length:', content.length, 'characters');
-      console.log('📋 Publishing context:', publishingContext);
-      console.log('🔑 Using Gemini model:', modelToUse);
 
       const response = await fetch('/api/fact-check', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: content,
           publishingContext,
-          config: {
-            gemini: apiKeys.gemini,
-            geminiModel: modelToUse,
-            factCheck: apiKeys.factCheck,
-            search: apiKeys.search,
-            searchId: apiKeys.searchId
-          }
+          config: { ...apiKeys, geminiModel: modelToUse }
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Fact-check API error:', errorData);
-
-        // Provide helpful error messages
-        if (response.status === 400) {
-          throw new Error(errorData.error || 'Invalid request. Please check your input.');
-        } else if (response.status === 403) {
-          throw new Error('API key authentication failed. Please verify your Gemini API key in Settings.');
-        } else if (response.status === 404) {
-          throw new Error(
-            `Model not found: ${modelToUse}\n\n` +
-            'Please go to Settings and select a different Gemini model.\n' +
-            'Recommended: gemini-1.5-flash or gemini-1.5-pro'
-          );
-        } else if (response.status === 429) {
-          throw new Error('Rate limit exceeded. Please wait a few minutes and try again.');
-        } else {
-          throw new Error(errorData.error || errorData.details || 'Fact-check request failed');
-        }
+        throw new Error(errorData.error || 'Fact-check request failed');
       }
 
       const result = await response.json();
-
-      // Log success details
-      console.log('✅ Fact-check completed successfully');
-      console.log('📊 Final Score:', result.final_score);
-      console.log('⚖️ Verdict:', result.final_verdict);
-      console.log('📋 Evidence Sources:', result.evidence?.length || 0);
-      console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
-
-      // Show tier breakdown if available
-      if (result.metadata?.tier_breakdown) {
-        console.log('🎯 Verification Tiers:');
-        result.metadata.tier_breakdown.forEach((tier: any) => {
-          console.log(`  - ${tier.tier}: ${tier.success ? '✓' : '→'} (${tier.confidence.toFixed(1)}%)`);
-        });
-      }
-
       setFactCheckResult(result);
       setActiveTab('report');
-
-      // Show success notification
-      if (result.final_score >= 75) {
-        console.log('✅ High confidence result:', result.final_score);
-      } else if (result.final_score >= 50) {
-        console.log('⚠️ Medium confidence result:', result.final_score);
-      } else {
-        console.log('❌ Low confidence result:', result.final_score);
-      }
-
     } catch (error: any) {
-      console.error('❌ Analysis failed:', error);
-
-      // Provide detailed error information
-      let errorMessage = 'Analysis failed: ' + error.message;
-
-      if (error.message.includes('API key')) {
-        errorMessage += '\n\n💡 Please check your API keys in Settings.';
-        errorMessage += '\n   - Click the Settings icon (⚙️)';
-        errorMessage += '\n   - Verify your Gemini API key';
-        errorMessage += '\n   - Click "Test" to verify connection';
-      } else if (error.message.includes('Model not found') || error.message.includes('404')) {
-        errorMessage += '\n\n💡 To fix this:';
-        errorMessage += '\n   1. Click the Settings icon (⚙️)';
-        errorMessage += '\n   2. Select a different Gemini model';
-        errorMessage += '\n   3. Try: gemini-1.5-flash or gemini-1.5-pro';
-      } else if (error.message.includes('Rate limit')) {
-        errorMessage += '\n\n💡 Please wait 1-2 minutes before trying again.';
-      } else if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorMessage += '\n\n💡 Please check your internet connection.';
-      }
-
-      alert(errorMessage);
+      alert(`Analysis failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  useEffect(() => {
-    const checkConfiguration = () => {
-      if (!hasApiKeys()) {
-        console.warn('⚠️ Gemini API key not configured');
-        console.log('ℹ️ Please configure your API key in Settings to enable fact-checking');
-      } else {
-        console.log('✅ API keys configured and ready');
-      }
-    };
-
-    checkConfiguration();
-  }, []);
-
   const handleAutoCorrect = async (mode: string) => {
     if (!factCheckResult) return;
-
     setIsAnalyzing(true);
-
     try {
       const response = await fetch('/api/auto-correct', {
         method: 'POST',
@@ -225,46 +163,33 @@ export default function TruScopeJournalismPlatform() {
           mode: mode,
         })
       });
-
-      if (!response.ok) {
-        throw new Error('Auto-correction failed');
-      }
-
+      if (!response.ok) throw new Error('Auto-correction failed');
       const result = await response.json();
       setEditorResult(result);
       setActiveTab('edit');
     } catch (error: any) {
-      console.error('Auto-correction failed:', error);
       alert(`Auto-correction failed: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleShowSchemaInput = () => {
-    setShowSchemaInputModal(true);
-  };
+  const handleShowSchemaInput = () => setShowSchemaInputModal(true);
 
   const handleGenerateSchema = async (formData: any) => {
     if (!factCheckResult) return;
-
     try {
       const response = await fetch('/api/generate-schema', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-
-      if (!response.ok) {
-        throw new Error('Schema generation failed');
-      }
-
+      if (!response.ok) throw new Error('Schema generation failed');
       const data = await response.json();
       setSchemaData(data);
       setShowSchemaInputModal(false);
       setShowSchemaModal(true);
     } catch (error: any) {
-      console.error('Schema generation failed:', error);
       alert(`Schema generation failed: ${error.message}`);
     }
   };
@@ -391,6 +316,10 @@ export default function TruScopeJournalismPlatform() {
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        onSave={handleSettingsSave}
+        currentKeys={settings.apiKeys}
+        availableModels={availableModels}
+        isLoadingModels={isLoadingModels}
       />
     </div>
   );
@@ -584,7 +513,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
 
           <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
             <div className="flex items-center space-x-2 mb-2">
-              <Award className="w-5 h-5 text-purple-600" />
+              <Award className="w-6 h-6 text-purple-600" />
               <span className="text-sm font-semibold text-purple-900">Method</span>
             </div>
             <p className="text-lg font-bold text-purple-700">{result.metadata?.method_used || 'Tiered'}</p>
@@ -711,223 +640,4 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
   );
 }
 
-function EditorialPanel({ originalContent, result, editorResult, onContentUpdate }: any) {
-  const [editedContent, setEditedContent] = useState(editorResult?.editedText || originalContent);
-  const [showDiff, setShowDiff] = useState(true);
-  const [citationStyle, setCitationStyle] = useState('ap');
-
-  const corrections = (editorResult?.changesApplied || []);
-
-  const applyCorrection = (correction: any) => {
-    setEditedContent((prev: string) => prev + '\n\n' + correction.newPhrase);
-  };
-
-  const exportContent = () => {
-    const citations = (result.evidence || []).slice(0, 10).map((ev: any, idx: number) =>
-      formatCitation(ev, citationStyle, idx + 1)
-    ).join('\n\n');
-
-    const fullContent = `${editedContent}\n\n---\n\nREFERENCES\n\n${citations}\n\n---\n\nFACT-CHECK VERIFICATION\nScore: ${result.final_score}/100\nVerdict: ${result.final_verdict}\nDate: ${new Date().toLocaleDateString()}`;
-
-    const blob = new Blob([fullContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'verified-article.txt';
-    a.click();
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Editorial Panel</h2>
-        <p className="text-gray-600">Review and apply suggested corrections</p>
-      </div>
-
-      {corrections.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-5">
-          <h3 className="font-semibold text-yellow-900 mb-4">{corrections.length} Suggested Corrections</h3>
-          <div className="space-y-3 max-h-64 overflow-y-auto">
-            {corrections.map((correction: any, idx: number) => (
-              <div key={idx} className="bg-white border border-yellow-200 rounded-lg p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <span className="text-xs font-bold text-yellow-700 uppercase px-2 py-1 bg-yellow-100 rounded">
-                    {correction.type}
-                  </span>
-                  <button
-                    onClick={() => applyCorrection(correction)}
-                    className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-xs font-medium"
-                  >
-                    Apply
-                  </button>
-                </div>
-                <p className="text-sm text-gray-700">{correction.reason}</p>
-                <div className="mt-2 text-xs">
-                  <p className="text-green-600">{correction.newPhrase.substring(0, 100)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={showDiff}
-                onChange={(e) => setShowDiff(e.target.checked)}
-                className="rounded"
-              />
-              <span className="text-sm text-gray-700">Show comparison</span>
-            </label>
-
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">Citation:</span>
-              <select
-                value={citationStyle}
-                onChange={(e) => setCitationStyle(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
-              >
-                <option value="ap">AP Style</option>
-                <option value="apa">APA</option>
-                <option value="mla">MLA</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {showDiff ? (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
-            <div className="bg-gray-100 px-4 py-2">
-              <h4 className="font-semibold text-gray-700 text-sm">Original</h4>
-            </div>
-            <div className="p-4 bg-gray-50 h-96 overflow-y-auto">
-              <pre className="whitespace-pre-wrap text-sm text-gray-700">{originalContent}</pre>
-            </div>
-          </div>
-
-          <div className="border-2 border-blue-500 rounded-lg overflow-hidden">
-            <div className="bg-blue-50 px-4 py-2">
-              <h4 className="font-semibold text-blue-700 text-sm">Edited</h4>
-            </div>
-            <textarea
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              className="w-full h-96 p-4 border-0 resize-none text-sm"
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <textarea
-            value={editedContent}
-            onChange={(e) => setEditedContent(e.target.value)}
-            className="w-full h-96 p-4 border-2 border-gray-300 rounded-lg resize-none text-sm"
-          />
-        </div>
-      )}
-
-      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <button
-          onClick={() => setEditedContent(originalContent)}
-          className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-        >
-          Reset
-        </button>
-
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => {
-              onContentUpdate(editedContent);
-              alert('Content updated!');
-            }}
-            className="px-6 py-2 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium"
-          >
-            Save
-          </button>
-          <button
-            onClick={exportContent}
-            className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:shadow-lg font-medium flex items-center space-x-2"
-          >
-            <Download className="w-4 h-4" />
-            <span>Export</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SchemaPreviewModal({ schema, htmlSnippet, validation, onClose }: any) {
-  const [copied, setCopied] = useState(false);
-
-  const copySchema = () => {
-    navigator.clipboard.writeText(htmlSnippet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
-        <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-white">Schema.org Markup (ClaimReview)</h3>
-          <button onClick={onClose} className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-1">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-80px)]">
-          {validation && !validation.isValid && (
-            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h4 className="font-semibold text-yellow-900 mb-2">Validation Warnings</h4>
-              <ul className="text-sm text-yellow-700 space-y-1">
-                {validation.missingFields?.map((field: string) => (
-                  <li key={field}>• Missing: {field}</li>
-                ))}
-                {validation.warnings?.map((warning: string) => (
-                  <li key={warning}>• {warning}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-gray-600">Copy this markup to your page's &lt;head&gt;</p>
-            <button
-              onClick={copySchema}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? 'Copied!' : 'Copy'}</span>
-            </button>
-          </div>
-
-          <div className="bg-gray-900 rounded-lg p-4 overflow-x-auto">
-            <pre className="text-green-400 text-sm font-mono">
-              <code>{htmlSnippet}</code>
-            </pre>
-          </div>
-
-          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-900 mb-2 flex items-center">
-              <Info className="w-4 h-4 mr-2" />
-              Usage Instructions
-            </h4>
-            <ol className="text-sm text-blue-700 space-y-2">
-              <li>1. Copy the markup above</li>
-              <li>2. Paste it in your HTML &lt;head&gt; section</li>
-              <li>3. Validate at <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener noreferrer" className="underline">Google's Rich Results Test</a></li>
-              <li>4. Helps with SEO and fact-check visibility</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ... (Rest of the components: EditorialPanel, SchemaPreviewModal, etc.)
