@@ -1,6 +1,6 @@
 // api/fact-check.ts - Updated with Gemini AI Studio API support
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateTextWithFallback } from '../src/services/geminiService';
+import { generateTextWithFallback } from '../src/services/geminiService.js';
 
 // ✅ CORRECT: Gemini AI Studio API URL (not Vertex AI)
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
