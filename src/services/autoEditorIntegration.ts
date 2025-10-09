@@ -1,8 +1,9 @@
 // Enhanced autoEditorIntegration.ts using front-facing API
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport, TieredFactCheckResult } from '../types/factCheck';
 import { EditorMode, EditorResult, ContentChange, FactCheckSegment, FactCheckAnalysis } from '../types/advancedEditor';
 import { getApiKeys } from './apiKeyService';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
+import { CorrectionSuggestion } from '../types/corrections';
 
 export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;
@@ -652,4 +653,45 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
       console.warn('Failed to clear token usage stats:', error);
     }
   }
+
+  /**
+   * Generates editorial suggestions based on fact-checking results.
+   */
+  async generateSuggestions(
+    factCheckResult: TieredFactCheckResult
+  ): Promise<CorrectionSuggestion[]> {
+    const inaccurateClaims = factCheckResult.claimVerifications.filter(
+      (v) => v.status === 'Unverified' || v.status === 'Misleading'
+    );
+    if (inaccurateClaims.length === 0) {
+      return [];
+    }
+
+    const prompt = ` Analyze the original text and the following list of identified inaccurate claims. For each inaccurate claim, generate a correction suggestion.
+
+Original Text:
+"""
+${factCheckResult.originalText}
+"""
+
+Inaccurate Claims:
+${inaccurateClaims.map(c => `- Claim: "${c.claimText}" (Reason: ${c.explanation})`).join('\n')}
+
+Your task is to return a valid JSON array of objects, where each object represents a single correction and has the following keys: "id", "originalSegment", "suggestedCorrection", "explanation", "claimId", and "severity".
+- "originalSegment" MUST be an exact substring from the original text.
+- "explanation" should be concise and journalistic.
+- "severity" must be 'High' for factual errors, 'Medium' for misleading statements, or 'Low' for clarifications.
+`;
+
+    try {
+      const result = await this.callFrontFacingAPI(prompt, {});
+      const parsedSuggestions: CorrectionSuggestion[] = JSON.parse(result);
+      return parsedSuggestions;
+    } catch (error) {
+      console.error("Error generating suggestions:", error);
+      return [];
+    }
+  }
 }
+
+export const autoEditorIntegration = AutoEditorIntegrationService.getInstance();
