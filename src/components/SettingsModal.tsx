@@ -106,8 +106,53 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Other API Keys (Google Fact Check, Search, etc.) */}
-          {/* ... Add other input fields for your other keys here in the same pattern ... */}
+          {/* Google Fact Check API Key */}
+          <div>
+            <label htmlFor="factCheck" className="block text-sm font-medium text-gray-700 mb-1">
+              Google Fact Check API Key
+            </label>
+            <input
+              type="password"
+              id="factCheck"
+              name="factCheck"
+              value={apiKeys.factCheck || ''}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your Google Fact Check API Key"
+            />
+          </div>
+
+          {/* Google Search API Key */}
+          <div>
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+              Google Search API Key
+            </label>
+            <input
+              type="password"
+              id="search"
+              name="search"
+              value={apiKeys.search || ''}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your Google Search API Key"
+            />
+          </div>
+
+          {/* Google Search Engine ID */}
+          <div>
+            <label htmlFor="searchId" className="block text-sm font-medium text-gray-700 mb-1">
+              Google Search Engine ID
+            </label>
+            <input
+              type="text"
+              id="searchId"
+              name="searchId"
+              value={apiKeys.searchId || ''}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter your Google Search Engine ID"
+            />
+          </div>
 
         </div>
 
