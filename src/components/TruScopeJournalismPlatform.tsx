@@ -65,136 +65,150 @@ export default function TruScopeJournalismPlatform() {
     }
   };
 
-const handleAnalyze = async () => {
-  if (!content.trim()) {
-    alert('Please enter content to analyze');
-    return;
-  }
-
-  // Check if Gemini API key is configured
-  if (!hasApiKeys()) {
-    const shouldOpenSettings = window.confirm(
-      '⚠️ Gemini API Key Required\n\n' +
-      'The Gemini API key is required for fact-checking analysis.\n\n' +
-      'Would you like to configure your API keys now?'
-    );
-
-    if (shouldOpenSettings) {
-      setIsSettingsModalOpen(true);
-    }
-    return;
-  }
-
-  setIsAnalyzing(true);
-  setActiveTab('analyze');
-
-  try {
-    // Get user's API keys
-    const apiKeys = getApiKeys();
-
-    console.log('🚀 Starting fact-check analysis');
-    console.log('📝 Content length:', content.length, 'characters');
-    console.log('📋 Publishing context:', publishingContext);
-    console.log('🔑 Using Gemini model:', apiKeys.geminiModel || 'gemini-1.5-flash-latest');
-
-    const response = await fetch('/api/fact-check', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: content,
-        publishingContext,
-        config: {
-          gemini: apiKeys.gemini,
-          geminiModel: apiKeys.geminiModel || 'gemini-1.5-flash-latest',
-          factCheck: apiKeys.factCheck,
-          search: apiKeys.search,
-          searchId: apiKeys.searchId
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Fact-check API error:', errorData);
-
-      // Provide helpful error messages
-      if (response.status === 400) {
-        throw new Error(errorData.error || 'Invalid request. Please check your input.');
-      } else if (response.status === 403) {
-        throw new Error('API key authentication failed. Please verify your Gemini API key in Settings.');
-      } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please wait a few minutes and try again.');
-      } else {
-        throw new Error(errorData.error || errorData.details || 'Fact-check request failed');
-      }
+  const handleAnalyze = async () => {
+    if (!content.trim()) {
+      alert('Please enter content to analyze');
+      return;
     }
 
-    const result = await response.json();
-
-    // Log success details
-    console.log('✅ Fact-check completed successfully');
-    console.log('📊 Final Score:', result.final_score);
-    console.log('⚖️ Verdict:', result.final_verdict);
-    console.log('📋 Evidence Sources:', result.evidence?.length || 0);
-    console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
-
-    // Show tier breakdown if available
-    if (result.metadata?.tier_breakdown) {
-      console.log('🎯 Verification Tiers:');
-      result.metadata.tier_breakdown.forEach((tier: any) => {
-        console.log(`  - ${tier.tier}: ${tier.success ? '✓' : '→'} (${tier.confidence.toFixed(1)}%)`);
-      });
-    }
-
-    setFactCheckResult(result);
-    setActiveTab('report');
-
-    // Show success notification
-    if (result.final_score >= 75) {
-      console.log('✅ High confidence result:', result.final_score);
-    } else if (result.final_score >= 50) {
-      console.log('⚠️ Medium confidence result:', result.final_score);
-    } else {
-      console.log('❌ Low confidence result:', result.final_score);
-    }
-
-  } catch (error: any) {
-    console.error('❌ Analysis failed:', error);
-
-    // Provide detailed error information
-    let errorMessage = 'Analysis failed: ' + error.message;
-
-    if (error.message.includes('API key')) {
-      errorMessage += '\n\n💡 Please check your API keys in Settings.';
-      errorMessage += '\n   - Click the Settings icon (⚙️)';
-      errorMessage += '\n   - Verify your Gemini API key';
-      errorMessage += '\n   - Click "Test" to verify connection';
-    } else if (error.message.includes('Rate limit')) {
-      errorMessage += '\n\n💡 Please wait 1-2 minutes before trying again.';
-    } else if (error.message.includes('network') || error.message.includes('fetch')) {
-      errorMessage += '\n\n💡 Please check your internet connection.';
-    }
-
-    alert(errorMessage);
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
-
-useEffect(() => {
-  const checkConfiguration = () => {
+    // Check if Gemini API key is configured
     if (!hasApiKeys()) {
-      console.warn('⚠️ Gemini API key not configured');
-      console.log('ℹ️ Please configure your API key in Settings to enable fact-checking');
-    } else {
-      console.log('✅ API keys configured and ready');
+      const shouldOpenSettings = window.confirm(
+        '⚠️ Gemini API Key Required\n\n' +
+        'The Gemini API key is required for fact-checking analysis.\n\n' +
+        'Would you like to configure your API keys now?'
+      );
+
+      if (shouldOpenSettings) {
+        setIsSettingsModalOpen(true);
+      }
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setActiveTab('analyze');
+
+    try {
+      // Get user's API keys
+      const apiKeys = getApiKeys();
+      
+      // Use correct default model
+      const modelToUse = apiKeys.geminiModel || 'gemini-1.5-flash';
+
+      console.log('🚀 Starting fact-check analysis');
+      console.log('📝 Content length:', content.length, 'characters');
+      console.log('📋 Publishing context:', publishingContext);
+      console.log('🔑 Using Gemini model:', modelToUse);
+
+      const response = await fetch('/api/fact-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: content,
+          publishingContext,
+          config: {
+            gemini: apiKeys.gemini,
+            geminiModel: modelToUse,
+            factCheck: apiKeys.factCheck,
+            search: apiKeys.search,
+            searchId: apiKeys.searchId
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Fact-check API error:', errorData);
+
+        // Provide helpful error messages
+        if (response.status === 400) {
+          throw new Error(errorData.error || 'Invalid request. Please check your input.');
+        } else if (response.status === 403) {
+          throw new Error('API key authentication failed. Please verify your Gemini API key in Settings.');
+        } else if (response.status === 404) {
+          throw new Error(
+            `Model not found: ${modelToUse}\n\n` +
+            'Please go to Settings and select a different Gemini model.\n' +
+            'Recommended: gemini-1.5-flash or gemini-1.5-pro'
+          );
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please wait a few minutes and try again.');
+        } else {
+          throw new Error(errorData.error || errorData.details || 'Fact-check request failed');
+        }
+      }
+
+      const result = await response.json();
+
+      // Log success details
+      console.log('✅ Fact-check completed successfully');
+      console.log('📊 Final Score:', result.final_score);
+      console.log('⚖️ Verdict:', result.final_verdict);
+      console.log('📋 Evidence Sources:', result.evidence?.length || 0);
+      console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
+
+      // Show tier breakdown if available
+      if (result.metadata?.tier_breakdown) {
+        console.log('🎯 Verification Tiers:');
+        result.metadata.tier_breakdown.forEach((tier: any) => {
+          console.log(`  - ${tier.tier}: ${tier.success ? '✓' : '→'} (${tier.confidence.toFixed(1)}%)`);
+        });
+      }
+
+      setFactCheckResult(result);
+      setActiveTab('report');
+
+      // Show success notification
+      if (result.final_score >= 75) {
+        console.log('✅ High confidence result:', result.final_score);
+      } else if (result.final_score >= 50) {
+        console.log('⚠️ Medium confidence result:', result.final_score);
+      } else {
+        console.log('❌ Low confidence result:', result.final_score);
+      }
+
+    } catch (error: any) {
+      console.error('❌ Analysis failed:', error);
+
+      // Provide detailed error information
+      let errorMessage = 'Analysis failed: ' + error.message;
+
+      if (error.message.includes('API key')) {
+        errorMessage += '\n\n💡 Please check your API keys in Settings.';
+        errorMessage += '\n   - Click the Settings icon (⚙️)';
+        errorMessage += '\n   - Verify your Gemini API key';
+        errorMessage += '\n   - Click "Test" to verify connection';
+      } else if (error.message.includes('Model not found') || error.message.includes('404')) {
+        errorMessage += '\n\n💡 To fix this:';
+        errorMessage += '\n   1. Click the Settings icon (⚙️)';
+        errorMessage += '\n   2. Select a different Gemini model';
+        errorMessage += '\n   3. Try: gemini-1.5-flash or gemini-1.5-pro';
+      } else if (error.message.includes('Rate limit')) {
+        errorMessage += '\n\n💡 Please wait 1-2 minutes before trying again.';
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        errorMessage += '\n\n💡 Please check your internet connection.';
+      }
+
+      alert(errorMessage);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  checkConfiguration();
-}, []);
+  useEffect(() => {
+    const checkConfiguration = () => {
+      if (!hasApiKeys()) {
+        console.warn('⚠️ Gemini API key not configured');
+        console.log('ℹ️ Please configure your API key in Settings to enable fact-checking');
+      } else {
+        console.log('✅ API keys configured and ready');
+      }
+    };
+
+    checkConfiguration();
+  }, []);
 
   const handleAutoCorrect = async (mode: string) => {
     if (!factCheckResult) return;
@@ -275,43 +289,43 @@ useEffect(() => {
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                type="button"
-                className="md:hidden text-gray-500 hover:text-gray-700"
-                onClick={() => setIsSidebarOpen(true)}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-7 h-7 text-white" />
+              <div className="flex items-center space-x-4">
+                <button
+                  type="button"
+                  className="md:hidden text-gray-500 hover:text-gray-700"
+                  onClick={() => setIsSidebarOpen(true)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">TruScope Professional</h1>
+                  <p className="text-sm text-gray-600">Enterprise Fact-Checking & Editorial Suite</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">TruScope Professional</h1>
-                <p className="text-sm text-gray-600">Enterprise Fact-Checking & Editorial Suite</p>
+              <div className="flex items-center space-x-3">
+                <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  apiStatus === 'available'
+                    ? 'bg-green-100 text-green-700'
+                    : apiStatus === 'unavailable'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {apiStatus === 'checking' && '🔄 Checking...'}
+                  {apiStatus === 'available' && '✅ API Ready'}
+                  {apiStatus === 'unavailable' && '⚠️ API Offline'}
+                </div>
+                <span className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-semibold shadow-lg">
+                  Pro Edition
+                </span>
               </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                apiStatus === 'available'
-                  ? 'bg-green-100 text-green-700'
-                  : apiStatus === 'unavailable'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-yellow-100 text-yellow-700'
-              }`}>
-                {apiStatus === 'checking' && '🔄 Checking...'}
-                {apiStatus === 'available' && '✅ API Ready'}
-                {apiStatus === 'unavailable' && '⚠️ API Offline'}
-              </div>
-              <span className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-semibold shadow-lg">
-                Pro Edition
-              </span>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
         <main className="flex-1 overflow-y-auto p-8">
           {currentView === 'checker' && (
