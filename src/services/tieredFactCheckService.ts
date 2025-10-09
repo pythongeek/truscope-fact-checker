@@ -1,7 +1,7 @@
-// src/services/tieredFactCheckService.ts - FIXED VERSION
-// Resolves synthesis issues and news API problems + TypeScript build errors
+// src/services/tieredFactCheckService.ts - REFACTORED CORRECTLY
+// Integrates synthesizer to drive search phases and implements the new data model.
 
-import { FactCheckReport, EvidenceItem, PublishingContext } from '../types/factCheck';
+import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult } from '../types/factCheck';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { WebzNewsService } from './webzNewsService';
@@ -11,8 +11,9 @@ import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { generateTextWithFallback } from './geminiService';
+import { simpleIntelligentQuerySynthesizer } from './analysis/SimpleIntelligentQuerySynthesizer';
 
-export type FactCheckTier = 'direct-verification' | 'pipeline-search' | 'specialized-analysis' | 'synthesis';
+export type FactCheckTier = 'direct-verification' | 'pipeline-search' | 'specialized-web-search' | 'news-search' | 'synthesis';
 
 export interface TierResult {
   tier: FactCheckTier;
@@ -28,6 +29,8 @@ export interface TierResult {
     queriesExecuted?: number;
     pipelineUsed?: boolean;
   };
+  searchPhaseResult?: SearchPhaseResult<any>;
+  report?: FactCheckReport;
 }
 
 const THRESHOLDS = {
@@ -59,301 +62,225 @@ export class TieredFactCheckService {
     return TieredFactCheckService.instance;
   }
 
-  async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<FactCheckReport> {
+  async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<TieredFactCheckResult> {
     const startTime = Date.now();
-    const reportId = await generateSHA256(`tiered_${claimText}_${startTime}`);
+    const operationId = await generateSHA256(`tiered_${claimText}_${startTime}`);
+    console.log('🎯 Starting Refactored Tiered Fact Check with Synthesized Queries');
 
-    console.log('🎯 Starting Enhanced Tiered Fact Check with Pipeline Integration');
-    console.log('📝 Text length:', claimText.length);
+    // Generate queries to be used by all phases
+    const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claimText);
 
     const tierResults: TierResult[] = [];
-    let finalReport: FactCheckReport | null = null;
+    let allEvidence: EvidenceItem[] = [];
+    let finalSynthesizedReport: FactCheckReport | null = null;
 
     try {
-      // PHASE 1: Direct Fact-Check Verification
-      console.log('\n📋 Phase 1: Direct Fact-Check Verification');
-      const phase1Result = await this.runPhase1DirectVerification(claimText);
+      // Phase 1: Direct Fact-Check using keywordQuery
+      const phase1Result = await this.runPhase1DirectVerification(keywordQuery);
       tierResults.push(phase1Result);
+      allEvidence.push(...phase1Result.evidence);
 
-      if (!this.shouldEscalate(1, phase1Result)) {
-        console.log('✅ Phase 1 COMPLETE - High confidence match found');
-        finalReport = this.buildReportFromPhase1(claimText, reportId, phase1Result, tierResults, startTime);
-      } else {
-        console.log('⏭️  Phase 1 → Phase 2: Using Advanced Pipeline');
-
-        // PHASE 2: Advanced Query Pipeline
-        const phase2Result = await this.runPhase2AdvancedPipeline(claimText);
+      let phase2Result: TierResult | null = null;
+      if (this.shouldEscalate(1, phase1Result)) {
+        // Phase 2: Advanced Pipeline (uses its own internal query logic but could be enhanced)
+        phase2Result = await this.runPhase2AdvancedPipeline(claimText);
         tierResults.push(phase2Result);
+        allEvidence.push(...phase2Result.evidence);
 
-        // ⚠️ FIX: Check if we actually got evidence before deciding
         const hasGoodEvidence = phase2Result.evidence.length >= 3 && phase2Result.confidence >= 60;
+        if ((!hasGoodEvidence || this.shouldEscalate(2, phase2Result)) && phase2Result.report) {
+          // Phase 3a: News Search
+          const phase3aResult = await this.runPhase3aNewsSearch(keywordQuery, claimText);
+          tierResults.push(phase3aResult);
+          allEvidence.push(...phase3aResult.evidence);
 
-        if (hasGoodEvidence && !this.shouldEscalate(2, phase2Result)) {
-          console.log('✅ Phase 2 COMPLETE - Sufficient evidence found');
-          finalReport = phase2Result.report!;
-        } else {
-          console.log('⏭️  Phase 2 → Phase 3: Specialized Analysis');
-
-          // PHASE 3: Specialized Analysis
-          const phase3Result = await this.runPhase3SpecializedAnalysis(claimText, phase2Result.report!);
-          tierResults.push(phase3Result);
-
-          // Combine evidence from phase 2 and 3
-          const combinedEvidence = [
-            ...phase2Result.evidence,
-            ...phase3Result.evidence
-          ];
-
-          console.log('⏭️  Phase 3 → Phase 4: Final Synthesis');
-
-          // PHASE 4: AI Synthesis
-          const phase4Result = await this.runPhase4Synthesis(
-            claimText,
-            phase2Result.report!,
-            combinedEvidence,
-            publishingContext
-          );
-          tierResults.push(phase4Result);
-
-          finalReport = phase4Result.report || phase2Result.report!;
+          // Phase 3b: Specialized Web Search
+          const phase3bResult = await this.runPhase3bSpecializedWebSearch(contextualQuery, claimText);
+          tierResults.push(phase3bResult);
+          allEvidence.push(...phase3bResult.evidence);
         }
       }
 
-      const enrichedReport = this.enrichReportWithTierData(finalReport!, tierResults, startTime);
-      
-      // ⚠️ FIX: Only upload if we have actual evidence
-      if (enrichedReport.evidence.length > 0) {
-        await this.uploadReportToBlob(enrichedReport);
-        console.log('✅ Report uploaded to blob storage');
+      // Phase 4: Final Synthesis (always run if there's evidence)
+      if (allEvidence.length > 0) {
+        // Use the report from phase 2 if available, otherwise create a base report
+        const baseReportForSynthesis = phase2Result?.report || this.createBaseReport(operationId, claimText, allEvidence);
+        const phase4Result = await this.runPhase4Synthesis(claimText, baseReportForSynthesis, allEvidence, publishingContext);
+        tierResults.push(phase4Result);
+        finalSynthesizedReport = phase4Result.report || baseReportForSynthesis;
       } else {
-        console.warn('⚠️ Skipping blob upload - no evidence collected');
+        finalSynthesizedReport = this.createBaseReport(operationId, claimText, []);
+        finalSynthesizedReport.final_verdict = "UNVERIFIED - No Evidence";
       }
 
-      this.performanceMonitor.recordMetric({
-        operation: 'tiered-fact-check',
-        duration: Date.now() - startTime,
-        timestamp: startTime,
-        success: true
-      });
+      // Construct the final TieredFactCheckResult
+      const finalScore = finalSynthesizedReport?.final_score ?? 0;
+      const finalVerdict = finalSynthesizedReport?.final_verdict ?? "Inconclusive";
+      const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
-      return enrichedReport;
+      const claimVerifications: ClaimVerificationResult[] = [{
+        id: `claim-${operationId}`,
+        claimText: claimText,
+        status: this.mapVerdictToStatus(finalVerdict),
+        confidenceScore: finalScore / 100,
+        explanation: finalReasoning,
+        evidence: allEvidence,
+      }];
+
+      const result: TieredFactCheckResult = {
+        id: operationId,
+        timestamp: new Date().toISOString(),
+        originalText: claimText,
+        overallAuthenticityScore: finalScore,
+        summary: finalReasoning,
+        claimVerifications,
+        searchPhases: {
+          googleFactChecks: tierResults.find(t => t.tier === 'direct-verification')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
+          webSearches: tierResults.find(t => t.tier === 'specialized-web-search')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
+          newsSearches: tierResults.find(t => t.tier === 'news-search')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
+        },
+      };
+
+      if (finalSynthesizedReport && finalSynthesizedReport.evidence.length > 0) {
+        await this.uploadReportToBlob(finalSynthesizedReport);
+      }
+
+      return result;
 
     } catch (error) {
       console.error('❌ Tiered fact check failed:', error);
-
-      this.performanceMonitor.recordMetric({
-        operation: 'tiered-fact-check',
-        duration: Date.now() - startTime,
-        timestamp: startTime,
-        success: false
-      });
-
-      return this.createErrorReport(claimText, reportId, error, Date.now() - startTime);
+      // Return an error structure for TieredFactCheckResult
+      return {
+        id: operationId,
+        timestamp: new Date().toISOString(),
+        originalText: claimText,
+        overallAuthenticityScore: 0,
+        summary: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        claimVerifications: [],
+        searchPhases: { googleFactChecks: { queryUsed: '', count: 0, rawResults: [] }, webSearches: { queryUsed: '', count: 0, rawResults: [] }, newsSearches: { queryUsed: '', count: 0, rawResults: [] } },
+      };
     }
   }
 
-  // ✅ FIXED: Line 178 - Proper type handling for publisher field
-  private async runPhase1DirectVerification(text: string): Promise<TierResult> {
+  private createBaseReport(id: string, text: string, evidence: EvidenceItem[]): FactCheckReport {
+    const score = evidence.length > 0 ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length) : 0;
+    return {
+      id,
+      originalText: text,
+      final_verdict: this.generateVerdict(score),
+      final_score: score,
+      reasoning: `Report based on ${evidence.length} sources.`,
+      evidence,
+      enhanced_claim_text: text,
+      score_breakdown: { final_score_formula: 'Initial score', metrics: [] },
+      metadata: { method_used: 'tiered-verification', processing_time_ms: 0, apis_used: [], sources_consulted: { total: evidence.length, high_credibility: 0, conflicting: 0 }, warnings: [] },
+      source_credibility_report: { overallScore: score, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [], credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 } },
+      temporal_verification: { hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: [] }
+    };
+  }
+
+  private mapVerdictToStatus(verdict: string): ClaimVerificationResult['status'] {
+    const lowerVerdict = verdict.toLowerCase();
+    if (lowerVerdict.includes('true')) return 'Accurate';
+    if (lowerVerdict.includes('false')) return 'Misleading';
+    if (lowerVerdict.includes('mixed')) return 'Needs Context';
+    if (lowerVerdict.includes('unverified')) return 'Unverified';
+    return 'Unverified';
+  }
+
+  private async runPhase1DirectVerification(keywordQuery: string): Promise<TierResult> {
     const startTime = Date.now();
+    console.log('🔍 Phase 1: Direct Fact-Check Query:', keywordQuery);
 
     try {
-      const query = this.extractSmartQuery(text, 100);
-      console.log('🔍 Fact-check query:', query);
-
-      const report = await this.googleFactCheck.searchClaims(query, 5);
-
+      const report = await this.googleFactCheck.searchClaims(keywordQuery, 5);
       if (!report || report.evidence.length === 0) {
-        console.log('ℹ️ No direct fact-check matches found');
         return {
-          tier: 'direct-verification',
-          success: false,
-          confidence: 0,
-          evidence: [],
-          shouldEscalate: true,
-          processingTime: Date.now() - startTime,
+          tier: 'direct-verification', success: false, confidence: 0, evidence: [], shouldEscalate: true, processingTime: Date.now() - startTime, searchPhaseResult: { queryUsed: keywordQuery, count: 0, rawResults: [] }
         };
       }
-
-      const evidence: EvidenceItem[] = report.evidence;
-      const avgScore = report.final_score;
-      console.log(`✅ Found ${evidence.length} fact-check results (avg: ${avgScore.toFixed(1)}%)`);
-
       return {
-        tier: 'direct-verification',
-        success: true,
-        confidence: avgScore,
-        evidence,
-        shouldEscalate: avgScore < THRESHOLDS.phase1ToPhase2.minConfidence,
-        processingTime: Date.now() - startTime
+        tier: 'direct-verification', success: true, confidence: report.final_score, evidence: report.evidence, shouldEscalate: report.final_score < THRESHOLDS.phase1ToPhase2.minConfidence, processingTime: Date.now() - startTime, searchPhaseResult: { queryUsed: keywordQuery, count: report.evidence.length, rawResults: report.evidence }
       };
-
     } catch (error) {
-      console.warn('⚠️  Phase 1 failed:', error);
       return {
-        tier: 'direct-verification',
-        success: false,
-        confidence: 0,
-        evidence: [],
-        shouldEscalate: true,
-        processingTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        tier: 'direct-verification', success: false, confidence: 0, evidence: [], shouldEscalate: true, processingTime: Date.now() - startTime, error: error instanceof Error ? error.message : 'Unknown error', searchPhaseResult: { queryUsed: keywordQuery, count: 0, rawResults: [] }
       };
     }
   }
 
-  private async runPhase2AdvancedPipeline(text: string): Promise<TierResult & { report?: FactCheckReport }> {
+  private async runPhase2AdvancedPipeline(text: string): Promise<TierResult> {
     const startTime = Date.now();
     console.log('🚀 Phase 2: Advanced Query Pipeline Analysis');
-
     try {
       const report = await this.enhancedService.orchestrateFactCheck(text, 'comprehensive');
-
       const evidenceCount = report.evidence.length;
-      const avgScore = evidenceCount > 0
-        ? report.evidence.reduce((sum, e) => sum + e.score, 0) / evidenceCount
-        : 0;
-
-      console.log(`✅ Pipeline analysis complete:`);
-      console.log(`   - Evidence: ${evidenceCount} sources`);
-      console.log(`   - Avg score: ${avgScore.toFixed(1)}%`);
-      console.log(`   - Entities: ${report.extractedEntities?.length || 0}`);
-      console.log(`   - Claims: ${report.claimBreakdown?.length || 0}`);
-
-      // ⚠️ FIX: Better escalation logic
-      const shouldEscalate = evidenceCount < THRESHOLDS.phase2ToPhase3.minEvidence ||
-                            avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore ||
-                            report.final_score < THRESHOLDS.phase2ToPhase3.minConfidence;
+      const avgScore = evidenceCount > 0 ? report.evidence.reduce((sum, e) => sum + e.score, 0) / evidenceCount : 0;
+      const shouldEscalate = evidenceCount < THRESHOLDS.phase2ToPhase3.minEvidence || avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore || report.final_score < THRESHOLDS.phase2ToPhase3.minConfidence;
 
       return {
-        tier: 'pipeline-search',
-        success: evidenceCount > 0,
-        confidence: report.final_score,
-        evidence: report.evidence,
-        shouldEscalate,
-        processingTime: Date.now() - startTime,
-        report,
-        metadata: {
-          entitiesExtracted: report.extractedEntities?.length || 0,
-          claimsIdentified: report.claimBreakdown?.length || 0,
-          queriesExecuted: (report.metadata as any).pipelineMetadata?.queriesExecuted || 0,
-          pipelineUsed: true
-        }
+        tier: 'pipeline-search', success: evidenceCount > 0, confidence: report.final_score, evidence: report.evidence, shouldEscalate, processingTime: Date.now() - startTime, report, metadata: { queriesExecuted: (report.metadata as any).pipelineMetadata?.queriesExecuted || 0, pipelineUsed: true }, searchPhaseResult: { queryUsed: 'Advanced Pipeline', count: evidenceCount, rawResults: report.evidence }
       };
-
     } catch (error) {
-      console.error('❌ Phase 2 pipeline failed:', error);
-      console.warn('⚠️  Falling back to basic SERP search...');
-      
       const fallbackResult = await this.fallbackBasicSearch(text);
-
       return {
-        tier: 'pipeline-search',
-        success: fallbackResult.evidence.length > 0,
-        confidence: fallbackResult.final_score,
-        evidence: fallbackResult.evidence,
-        shouldEscalate: true,
-        processingTime: Date.now() - startTime,
-        report: fallbackResult,
-        error: `Pipeline failed, used fallback: ${error instanceof Error ? error.message : 'Unknown'}`
+        tier: 'pipeline-search', success: fallbackResult.evidence.length > 0, confidence: fallbackResult.final_score, evidence: fallbackResult.evidence, shouldEscalate: true, processingTime: Date.now() - startTime, report: fallbackResult, error: `Pipeline failed, used fallback: ${error instanceof Error ? error.message : 'Unknown'}`
       };
     }
   }
 
-  private async runPhase3SpecializedAnalysis(
-    text: string,
-    phase2Report: FactCheckReport
-  ): Promise<TierResult> {
+  private async runPhase3aNewsSearch(keywordQuery: string, text: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🎯 Phase 3: Specialized Analysis with Pipeline Insights');
-
+    console.log('🎯 Phase 3a: News Search with Keyword Query');
     const evidence: EvidenceItem[] = [];
-    const pipelineMetadata = (phase2Report.metadata as any).pipelineMetadata;
-    const extractedEntities = phase2Report.extractedEntities || [];
-
-    console.log(`   - Using ${extractedEntities.length} extracted entities`);
-    console.log(`   - Claim complexity: ${pipelineMetadata?.complexity || 'unknown'}`);
+    let queryUsed = '';
 
     try {
-      // ⚠️ FIX: Better News API usage with fallback
-      if (phase2Report.temporal_verification?.hasTemporalClaims || extractedEntities.length > 0) {
-        console.log('📅 Searching for related news articles');
-
-        const entityNames = extractedEntities
-          .filter(e => ['PERSON', 'ORGANIZATION', 'EVENT', 'LOCATION'].includes(e.type))
-          .slice(0, 3)
-          .map(e => e.name);
-
-        if (entityNames.length > 0) {
-          const newsQuery = entityNames.join(' ');
-          console.log(`🔍 News query: "${newsQuery}"`);
-
-          try {
-            const newsResults = await this.newsService.searchNews({
-              query: newsQuery,
-              fromDate: this.extractRecentDate(text)
-            });
-
-            if (newsResults?.posts?.length > 0) {
-              const newsEvidence = newsResults.posts.slice(0, 5).map((article, i) => ({
-                id: `news_${i}`,
-                publisher: article.author || 'News Source',
-                url: article.url,
-                quote: article.text.substring(0, 300) + '...',
-                score: 70,
-                type: 'news' as const,
-                publishedDate: article.published
-              }));
-              evidence.push(...newsEvidence);
-              console.log(`✅ Found ${newsEvidence.length} news articles`);
-            } else {
-              console.log('ℹ️  No news results from Webz API, trying SERP fallback...');
-              
-              // ⚠️ FIX: Fallback to SERP for news
-              const newsFromSerp = await this.getNewsFromSerp(newsQuery);
-              evidence.push(...newsFromSerp);
-            }
-          } catch (newsError) {
-            console.warn('⚠️  News API failed, using SERP fallback:', newsError);
-            const newsFromSerp = await this.getNewsFromSerp(newsQuery);
-            evidence.push(...newsFromSerp);
-          }
+      if (keywordQuery) {
+        queryUsed = keywordQuery;
+        const newsResults = await this.newsService.searchNews({ query: keywordQuery, fromDate: this.extractRecentDate(text) });
+        if (newsResults?.posts?.length > 0) {
+          evidence.push(...newsResults.posts.slice(0, 5).map((article, i) => ({
+            id: `news_${i}`, publisher: article.author || 'News Source', url: article.url, quote: article.text.substring(0, 300) + '...', score: 70, type: 'news' as const, publishedDate: article.published
+          })));
+        } else {
+          const newsFromSerp = await this.getNewsFromSerp(keywordQuery);
+          evidence.push(...newsFromSerp);
         }
       }
 
-      // Domain-Specific Search
+      const avgScore = evidence.length > 0 ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length : 50;
+      return {
+        tier: 'news-search', success: evidence.length > 0, confidence: avgScore, evidence, shouldEscalate: false, processingTime: Date.now() - startTime, searchPhaseResult: { queryUsed, count: evidence.length, rawResults: evidence }
+      };
+    } catch (error) {
+      return {
+        tier: 'news-search', success: false, confidence: 0, evidence: [], shouldEscalate: true, processingTime: Date.now() - startTime, error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async runPhase3bSpecializedWebSearch(contextualQuery: string, text: string): Promise<TierResult> {
+    const startTime = Date.now();
+    console.log('🎯 Phase 3b: Specialized Web Search with Contextual Query');
+    const evidence: EvidenceItem[] = [];
+    let queryUsed = '';
+
+    try {
       const claimType = this.detectClaimType(text);
-      if (claimType !== 'general') {
-        console.log(`🔬 Domain-specific search for ${claimType} claim`);
-        const specializedResults = await this.performSpecializedSearch(text, claimType);
-        evidence.push(...specializedResults);
-        console.log(`✅ Found ${specializedResults.length} specialized sources`);
+      if (claimType !== 'general' && contextualQuery) {
+        const specializedResults = await this.performSpecializedSearch(contextualQuery, claimType);
+        evidence.push(...specializedResults.evidence);
+        queryUsed = specializedResults.query;
       }
 
-      const avgScore = evidence.length > 0
-        ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
-        : 50;
-
-      console.log(`✅ Phase 3 complete: ${evidence.length} additional sources (avg: ${avgScore.toFixed(1)}%)`);
-
+      const avgScore = evidence.length > 0 ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length : 50;
       return {
-        tier: 'specialized-analysis',
-        success: evidence.length > 0,
-        confidence: avgScore,
-        evidence,
-        shouldEscalate: true,
-        processingTime: Date.now() - startTime
+        tier: 'specialized-web-search', success: evidence.length > 0, confidence: avgScore, evidence, shouldEscalate: false, processingTime: Date.now() - startTime, searchPhaseResult: { queryUsed, count: evidence.length, rawResults: evidence }
       };
-
     } catch (error) {
-      console.warn('⚠️  Phase 3 failed:', error);
       return {
-        tier: 'specialized-analysis',
-        success: false,
-        confidence: 50,
-        evidence: [],
-        shouldEscalate: true,
-        processingTime: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        tier: 'specialized-web-search', success: false, confidence: 0, evidence: [], shouldEscalate: true, processingTime: Date.now() - startTime, error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -444,7 +371,7 @@ export class TieredFactCheckService {
         metadata: {
           ...baseReport.metadata,
           warnings: [
-            ...baseReport.metadata.warnings,
+            ...(baseReport.metadata.warnings ?? []),
             ...(synthesisReport.metadata?.warnings || [])
           ]
         }
@@ -655,7 +582,7 @@ Output MUST be valid JSON in this exact format:
     return 'general';
   }
 
-  private async performSpecializedSearch(text: string, claimType: string): Promise<EvidenceItem[]> {
+  private async performSpecializedSearch(text: string, claimType: string): Promise<{ evidence: EvidenceItem[], query: string }> {
     const query = this.extractSmartQuery(text, 80);
     
     const siteOperators = {
@@ -666,11 +593,12 @@ Output MUST be valid JSON in this exact format:
       general: ''
     };
 
+    const searchQuery = `${query} ${siteOperators[claimType as keyof typeof siteOperators] || ''}`.trim();
+
     try {
-      const searchQuery = `${query} ${siteOperators[claimType as keyof typeof siteOperators] || ''}`;
       const results = await this.serpApi.search(searchQuery, 5);
 
-      return results.results.map((r, i) => ({
+      const evidence = results.results.map((r, i) => ({
         id: `specialized_${i}`,
         publisher: r.source || 'Unknown',
         url: r.link,
@@ -678,9 +606,10 @@ Output MUST be valid JSON in this exact format:
         score: this.calculateSourceScore(r.source) + 10,
         type: 'search_result' as const
       }));
+      return { evidence, query: searchQuery };
     } catch (error) {
       console.error('Specialized search failed:', error);
-      return [];
+      return { evidence: [], query: searchQuery };
     }
   }
 
