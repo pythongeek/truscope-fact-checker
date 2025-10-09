@@ -2,15 +2,16 @@
 import { FactCheckReport } from '../types/factCheck';
 import { EditorMode, EditorResult, ContentChange, FactCheckSegment, FactCheckAnalysis } from '../types/advancedEditor';
 import { getApiKeys } from './apiKeyService';
-import { runFactCheckOrchestrator } from './geminiService';
+import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 
 export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;
+  private factCheckService: EnhancedFactCheckService;
   private maxRetries = 3;
   private baseDelay = 1000; // 1 second
 
   constructor() {
-    // No direct API key needed - using front-facing API
+    this.factCheckService = new EnhancedFactCheckService();
   }
 
   static getInstance(): AutoEditorIntegrationService {
@@ -377,7 +378,7 @@ export class AutoEditorIntegrationService {
     console.log('🔍 Starting comprehensive fact-check analysis...');
 
     try {
-      const factCheckReport = await runFactCheckOrchestrator(text, 'comprehensive');
+      const factCheckReport = await this.factCheckService.orchestrateFactCheck(text, 'comprehensive');
       const segments = this.convertToColorCodedSegments(text, factCheckReport);
       const corrections = this.extractCorrections(factCheckReport);
 

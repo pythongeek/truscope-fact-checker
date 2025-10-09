@@ -1,6 +1,6 @@
-import { runFactCheckOrchestrator } from './geminiService';
 import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
 import { TieredFactCheckService } from './tieredFactCheckService';
+import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 
 // --- Types for Batch Processing ---
 
@@ -41,10 +41,12 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export class BatchFactChecker {
     private chunkSize: number;
     private delayBetweenChunksMs: number;
+    private factCheckService: EnhancedFactCheckService;
 
     constructor(config?: { chunkSize?: number; delayBetweenChunksMs?: number }) {
         this.chunkSize = config?.chunkSize ?? 5; // Process 5 requests at a time
         this.delayBetweenChunksMs = config?.delayBetweenChunksMs ?? 1000; // 1-second delay between chunks
+        this.factCheckService = new EnhancedFactCheckService();
     }
 
     /**
@@ -68,7 +70,7 @@ export class BatchFactChecker {
                         const tieredService = TieredFactCheckService.getInstance();
                         report = await tieredService.performTieredCheck(request.claimText, 'journalism');
                     } else {
-                        report = await runFactCheckOrchestrator(request.claimText, request.method);
+                        report = await this.factCheckService.orchestrateFactCheck(request.claimText, request.method);
                     }
                     return {
                         id: request.id,

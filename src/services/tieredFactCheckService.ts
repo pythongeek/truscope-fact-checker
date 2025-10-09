@@ -10,7 +10,7 @@ import { BlobStorageService } from './blobStorage';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
-import { synthesizeEvidenceWithGemini } from './geminiService';
+import { generateTextWithFallback } from './geminiService';
 
 export type FactCheckTier = 'direct-verification' | 'pipeline-search' | 'specialized-analysis' | 'synthesis';
 
@@ -427,7 +427,7 @@ export class TieredFactCheckService {
       let synthesisReport: FactCheckReport;
       
       try {
-        synthesisReport = await synthesizeEvidenceWithGemini(text, allEvidence, publishingContext);
+        synthesisReport = await this._synthesizeEvidenceWithGemini(text, allEvidence, publishingContext);
         console.log(`✅ Synthesis complete: ${synthesisReport.final_score}% confidence`);
       } catch (geminiError) {
         console.warn('⚠️  Gemini synthesis failed, using statistical fallback:', geminiError);
@@ -525,6 +525,65 @@ export class TieredFactCheckService {
         ]
       }
     };
+  }
+
+  private async _synthesizeEvidenceWithGemini(
+    originalClaim: string,
+    evidence: any[],
+    publishingContext: PublishingContext
+  ): Promise<FactCheckReport> {
+    const evidenceSummary = evidence
+      .slice(0, 15)
+      .map((e, i) => `[Source ${i + 1} - ${e.publisher} - Credibility: ${e.score}%]: "${e.quote}"`)
+      .join('\n');
+
+    const prompt = `
+As an expert fact-checker, analyze the following claim based on the provided evidence.
+Your analysis must be objective, impartial, and strictly based on the sources.
+
+**Claim:** "${originalClaim}"
+
+**Publishing Context:** ${publishingContext}
+
+**Evidence:**
+${evidenceSummary}
+
+**Your Task:**
+Provide a final verdict and a numerical score (0-100).
+Explain your reasoning clearly and concisely.
+Output MUST be valid JSON in this exact format:
+
+{
+  "final_verdict": "...",
+  "final_score": ...,
+  "reasoning": "...",
+  "score_breakdown": {
+    "final_score_formula": "Weighted analysis of source credibility and corroboration.",
+    "metrics": [
+      {
+        "name": "Source Reliability",
+        "score": ...,
+        "description": "Average credibility of provided sources."
+      },
+      {
+        "name": "Corroboration",
+        "score": ...,
+        "description": "Degree to which sources confirm each other."
+      }
+    ]
+  }
+}
+`;
+
+    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500 });
+    const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(cleanedJson);
+
+    if (!result.final_verdict || typeof result.final_score !== 'number') {
+      throw new Error('Invalid JSON structure from Gemini');
+    }
+
+    return result as Partial<FactCheckReport> as FactCheckReport;
   }
 
   // ⚠️ NEW: Evidence deduplication
