@@ -425,3 +425,15 @@ export class EnhancedFactCheckService {
     };
   }
 }
+
+const enhancedFactCheckService = new EnhancedFactCheckService();
+
+export const enhancedFactCheck = (
+  text: string,
+  method: FactCheckMethod = 'comprehensive',
+  geminiModel?: string
+): Promise<FactCheckReport> => {
+  // Although geminiModel is passed, the service doesn't use it directly yet.
+  // This is a placeholder for future integration if needed.
+  return enhancedFactCheckService.orchestrateFactCheck(text, method);
+};

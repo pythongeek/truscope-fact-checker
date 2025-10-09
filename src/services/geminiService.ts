@@ -1,9 +1,17 @@
-// src/services/geminiService.ts - Updated with correct Gemini models
-import { getApiKeys } from './apiKeyService';
-import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
+// src/services/geminiService.ts
 
-// ✅ CORRECT: Gemini AI Studio API URL
+import { getApiKeys } from './apiKeyService';
+
+// The correct base URL for the Google AI Studio (Generative Language) API
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+// A prioritized list of models to try. This adds stability.
+// If the user's selected model fails, the system will try these in order.
+const GEMINI_MODEL_FALLBACK_ORDER = [
+  'gemini-1.5-pro-latest',
+  'gemini-1.5-flash-latest',
+  'gemini-pro',
+];
 
 interface GeminiConfig {
   apiKey?: string;
@@ -13,413 +21,108 @@ interface GeminiConfig {
 }
 
 /**
- * Generate text using Gemini AI Studio API
- * @param prompt The prompt to send to Gemini
- * @param config Configuration including optional user API key
+ * Fetches the list of available Gemini models from the API.
+ * This will be used to populate the settings dropdown.
+ * @param apiKey The user's Gemini API key.
+ * @returns A promise that resolves to an array of model names.
  */
-export async function generateText(
+export async function fetchAvailableModels(apiKey: string): Promise<string[]> {
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('A valid Gemini API key is required to fetch models.');
+  }
+
+  const url = `${GEMINI_API_URL}?key=${apiKey}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to fetch models: ${errorData.error?.message || response.statusText}`);
+    }
+    const data = await response.json();
+    // Filter for models that can actually generate content and return their names
+    return data.models
+      .filter((model: any) => model.supportedGenerationMethods.includes('generateContent'))
+      .map((model: any) => model.name.replace('models/', ''));
+  } catch (error) {
+    console.error("Error fetching Gemini models:", error);
+    // Return the fallback list if the API call fails for any reason
+    return GEMINI_MODEL_FALLBACK_ORDER;
+  }
+}
+
+
+/**
+ * Generates text using the Gemini API with a robust fallback mechanism.
+ * If the primary model fails, it iterates through the fallback list.
+ * @param prompt The prompt to send to Gemini.
+ * @param config Configuration including optional user API key and preferred model.
+ * @returns A promise that resolves to the generated text as a string.
+ */
+export async function generateTextWithFallback(
   prompt: string,
   config: GeminiConfig = {}
 ): Promise<string> {
   const apiKeys = getApiKeys();
   const apiKey = config.apiKey || apiKeys.gemini;
-  
-  // ✅ FIX: Use correct default model (without -latest suffix)
-  const model = config.model || apiKeys.geminiModel || 'gemini-1.5-flash';
 
   if (!apiKey || apiKey.trim() === '') {
-    throw new Error(
-      'Gemini API key is required. Please configure your API key in Settings.'
-    );
+    throw new Error('Gemini API key is required. Please configure it in Settings.');
   }
 
-  // ✅ CORRECT: AI Studio API endpoint format
-  const fullApiUrl = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
-
-  console.log(`🤖 Calling Gemini API (model: ${model})`);
-
-  try {
-    const response = await fetch(fullApiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt,
-          }],
-        }],
-        generationConfig: {
-          temperature: config.temperature || 0.3,
-          maxOutputTokens: config.maxOutputTokens || 2000,
-        }
-      }),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json();
-      console.error('[Gemini Error] API response:', errorBody);
-
-      if (response.status === 400) {
-        throw new Error(
-          `Invalid API request: ${errorBody.error?.message || 'Bad request'}. ` +
-          'Please check your API key and model selection.'
-        );
-      } else if (response.status === 403) {
-        throw new Error(
-          'API key invalid or access denied. Please check your Gemini API key in Settings.'
-        );
-      } else if (response.status === 404) {
-        throw new Error(
-          `Model not found: ${model}. Please go to Settings and select a different model (e.g., gemini-1.5-flash or gemini-1.5-pro).`
-        );
-      } else if (response.status === 429) {
-        throw new Error(
-          'Rate limit exceeded. Please try again in a few moments.'
-        );
-      }
-
-      throw new Error(
-        `Gemini API request failed (${response.status}): ${errorBody.error?.message || 'Unknown error'}`
-      );
-    }
-
-    const data = await response.json();
-
-    if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-      console.warn('[Gemini Warning] No content in response:', data);
-      throw new Error('No content received from Gemini API. The model may have blocked the response.');
-    }
-
-    const text = data.candidates[0].content.parts[0].text;
-    console.log('✅ Gemini API call successful');
-
-    return text;
-
-  } catch (error) {
-    console.error('[Gemini Fatal Error] Failed to call Gemini API:', error);
-
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Gemini API call failed: ${String(error)}`);
-  }
-}
-
-/**
- * Main orchestrator for fact-checking that routes to API endpoint
- */
-export async function runFactCheckOrchestrator(
-  claimText: string,
-  method: FactCheckMethod = 'comprehensive'
-): Promise<FactCheckReport> {
-  const apiKeys = getApiKeys();
-
-  // ✅ FIX: Use correct default model
-  const modelToUse = apiKeys.geminiModel || 'gemini-1.5-flash';
-
-  // Call the main fact-check API endpoint with user API keys
-  const response = await fetch('/api/fact-check', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text: claimText,
-      publishingContext: 'journalism',
-      config: {
-        gemini: apiKeys.gemini,
-        geminiModel: modelToUse,
-        factCheck: apiKeys.factCheck,
-        search: apiKeys.search,
-        searchId: apiKeys.searchId,
-      },
-      method: method
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || errorData.details || 'Fact-check failed');
-  }
-
-  const result = await response.json();
-  return result as FactCheckReport;
-}
-
-/**
- * List available Gemini models from AI Studio
- */
-export async function listGeminiModels(): Promise<string[]> {
-  const apiKeys = getApiKeys();
-
-  if (!apiKeys.gemini) {
-    console.warn('No Gemini API key configured');
-    return getDefaultGeminiModels();
-  }
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKeys.gemini}`
-    );
-
-    if (!response.ok) {
-      console.warn('Failed to fetch models, using defaults');
-      return getDefaultGeminiModels();
-    }
-
-    const data = await response.json();
-
-    if (data.models && Array.isArray(data.models)) {
-      const availableModels = data.models
-        .filter((model: any) => {
-          const name = model.name?.replace('models/', '') || '';
-          return name.includes('gemini') && model.supportedGenerationMethods?.includes('generateContent');
-        })
-        .map((model: any) => model.name.replace('models/', ''))
-        .sort();
-      
-      console.log('✅ Available Gemini models:', availableModels);
-      return availableModels.length > 0 ? availableModels : getDefaultGeminiModels();
-    }
-
-    return getDefaultGeminiModels();
-  } catch (error) {
-    console.error('Error fetching Gemini models:', error);
-    return getDefaultGeminiModels();
-  }
-}
-
-/**
- * Default Gemini models available in AI Studio (updated to current models)
- * ✅ FIX: Removed -latest suffix as it's not supported in v1beta API
- */
-function getDefaultGeminiModels(): string[] {
-  return [
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
-    'gemini-1.0-pro',
-    'gemini-2.0-flash-exp',
-    'gemini-exp-1206'
-  ];
-}
-
-/**
- * Test Gemini API connection
- */
-export async function testGeminiConnection(apiKey?: string): Promise<boolean> {
-  const key = apiKey || getApiKeys().gemini;
-
-  if (!key) {
-    return false;
-  }
-
-  try {
-    // ✅ FIX: Use correct model name
-    const response = await fetch(
-      `${GEMINI_API_URL}/gemini-1.5-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: 'Test connection' }]
-          }],
-          generationConfig: {
-            maxOutputTokens: 10
-          }
-        })
-      }
-    );
-
-    return response.ok;
-  } catch (error) {
-    console.error('Gemini connection test failed:', error);
-    return false;
-  }
-}
-
-/**
- * Generate content using Gemini
- */
-export async function generateGeminiContent(
-  prompt: string,
-  options?: {
-    model?: string;
-    temperature?: number;
-    maxTokens?: number;
-  }
-): Promise<string> {
-  const apiKeys = getApiKeys();
-
-  if (!apiKeys.gemini) {
-    throw new Error('Gemini API key not configured');
-  }
-
-  // ✅ FIX: Use correct default model
-  const model = options?.model || apiKeys.geminiModel || 'gemini-1.5-flash';
-  const temperature = options?.temperature ?? 0.7;
-  const maxTokens = options?.maxTokens ?? 2048;
-
-  try {
-    const response = await fetch(
-      `${GEMINI_API_URL}/${model}:generateContent?key=${apiKeys.gemini}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-          }
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Gemini API request failed');
-    }
-
-    const data = await response.json();
-
-    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
-    }
-
-    throw new Error('Invalid response format from Gemini API');
-  } catch (error) {
-    console.error('Gemini content generation failed:', error);
-    throw error;
-  }
-}
-
-/**
- * Synthesizes evidence using the Gemini API to generate a fact-check report.
- */
-export async function synthesizeEvidenceWithGemini(
-  originalClaim: string,
-  evidence: any[],
-  publishingContext: string
-): Promise<FactCheckReport> {
-  const evidenceSummary = evidence
-    .slice(0, 15)
-    .map((e, i) => `[Source ${i + 1} - ${e.publisher} - Credibility: ${e.score}%]: "${e.quote}"`)
-    .join('\n');
-
-  const prompt = `
-As an expert fact-checker, analyze the following claim based on the provided evidence.
-Your analysis must be objective, impartial, and strictly based on the sources.
-
-**Claim:** "${originalClaim}"
-
-**Publishing Context:** ${publishingContext}
-
-**Evidence:**
-${evidenceSummary}
-
-**Your Task:**
-Provide a final verdict and a numerical score (0-100).
-Explain your reasoning clearly and concisely.
-Output MUST be valid JSON in this exact format:
-
-{
-  "final_verdict": "...",
-  "final_score": ...,
-  "reasoning": "...",
-  "score_breakdown": {
-    "final_score_formula": "Weighted analysis of source credibility and corroboration.",
-    "metrics": [
-      {
-        "name": "Source Reliability",
-        "score": ...,
-        "description": "Average credibility of provided sources."
-      },
-      {
-        "name": "Corroboration",
-        "score": ...,
-        "description": "Degree to which sources confirm each other."
-      }
-    ]
-  }
-}
-`;
-
-  try {
-    const jsonString = await generateText(prompt, { maxOutputTokens: 1500 });
-    const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
-    const result = JSON.parse(cleanedJson);
-
-    if (!result.final_verdict || typeof result.final_score !== 'number') {
-      throw new Error('Invalid JSON structure from Gemini');
-    }
-
-    return result as Partial<FactCheckReport> as FactCheckReport;
-  } catch (error) {
-    console.error('Error during Gemini synthesis:', error);
-    throw new Error(`Failed to synthesize evidence with Gemini: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-/**
- * ✅ FIX: Updated fallback order with correct model names
- */
-const GEMINI_MODEL_FALLBACK_ORDER = [
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
-  'gemini-1.5-flash-8b',
-  'gemini-1.0-pro',
-];
-
-export const generateContentWithFallback = async (prompt: string) => {
-  const { gemini, geminiModel } = getApiKeys();
-
-  if (!gemini) {
-    throw new Error('Gemini API key not configured');
-  }
-
-  // ✅ FIX: Start with user's selected model, fall back to defaults
+  // Create a unique, ordered list of models to try, starting with the user's preference.
+  const preferredModel = config.model || apiKeys.geminiModel || 'gemini-1.5-flash-latest';
   const modelsToTry = [
-    geminiModel, 
-    ...GEMINI_MODEL_FALLBACK_ORDER.filter(m => m !== geminiModel)
-  ].filter(Boolean);
+    preferredModel,
+    ...GEMINI_MODEL_FALLBACK_ORDER.filter(m => m !== preferredModel)
+  ];
 
-  console.log('🔄 Trying models in order:', modelsToTry);
+  let lastError: Error | null = null;
+
+  console.log('🔄 Attempting to generate text with models in order:', modelsToTry);
 
   for (const model of modelsToTry) {
     try {
-      console.log(`🤖 Attempting model: ${model}`);
-      const url = `${GEMINI_API_URL}/${model}:generateContent?key=${gemini}`;
-      const response = await fetch(url, {
+      console.log(`🤖 Trying model: ${model}`);
+      const fullApiUrl = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
+
+      const response = await fetch(fullApiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048
-          }
+            temperature: config.temperature ?? 0.7,
+            maxOutputTokens: config.maxOutputTokens ?? 4096,
+            // Add safety settings if needed
+          },
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          throw new Error('Received an empty response from the API.');
+        }
         console.log(`✅ Success with model: ${model}`);
-        return data;
+        // Return the first successful response
+        return text;
       } else {
-        const error = await response.json();
-        console.warn(`⚠️ Model ${model} failed:`, error.error?.message);
+        const errorData = await response.json();
+        const errorMessage = `Model ${model} failed with status ${response.status}: ${errorData.error?.message || 'Unknown error'}`;
+        console.warn(`⚠️ ${errorMessage}`);
+        lastError = new Error(errorMessage);
+        // If it's a 404, the model likely doesn't exist, so we continue to the next
+        if (response.status === 404) continue;
+        // For other errors (like auth or billing), we can optionally break early
+        // but for now we will continue to try other models.
       }
     } catch (error) {
-      console.error(`❌ Model ${model} error:`, error);
-      // Continue to the next model
+      console.error(`🚨 An unexpected error occurred with model ${model}:`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
 
-  throw new Error('All Gemini models failed to generate content. Please check your API key and try again.');
-};
+  // If the loop completes without a successful response, throw the last known error.
+  throw new Error(`All Gemini models failed. Last error: ${lastError?.message || 'An unknown error occurred'}`);
+}

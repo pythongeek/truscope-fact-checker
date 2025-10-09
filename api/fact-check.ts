@@ -1,5 +1,6 @@
 // api/fact-check.ts - Updated with Gemini AI Studio API support
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { generateTextWithFallback } from '../src/services/geminiService';
 
 // ✅ CORRECT: Gemini AI Studio API URL (not Vertex AI)
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -382,40 +383,25 @@ async function runPhase4Synthesis(
   config: any
 ) {
   try {
-    const apiKey = config.gemini || process.env.GEMINI_API_KEY;
-    const modelName = config.geminiModel || 'gemini-pro';
+    const geminiApiKey = config.gemini || process.env.GEMINI_API_KEY;
+    const preferredModel = config.geminiModel;
 
-    if (!apiKey || evidence.length === 0) {
+    if (!geminiApiKey || evidence.length === 0) {
       console.warn('⚠️ Using statistical fallback');
       return createStatisticalReport(text, evidence, tierResults, startTime);
     }
 
     const prompt = buildSynthesisPrompt(text, evidence, context);
 
-    console.log(`🤖 Calling Gemini API (model: ${modelName})`);
+    console.log(`🤖 Synthesizing with Gemini (preferred model: ${preferredModel || 'default'})`);
 
-    const response = await fetch(`${GEMINI_API_URL}/${modelName}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2000
-        }
-      })
+    const geminiText = await generateTextWithFallback(prompt, {
+      apiKey: geminiApiKey,
+      model: preferredModel,
+      temperature: 0.3,
+      maxOutputTokens: 2000,
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('Gemini API error:', errorData);
-      throw new Error(`Gemini API failed: ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    const geminiText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!geminiText) {
       throw new Error('Empty response from Gemini');
@@ -435,7 +421,7 @@ async function runPhase4Synthesis(
       metadata: {
         method_used: 'tiered-verification',
         processing_time_ms: Date.now() - startTime,
-        apis_used: ['google-fact-check', 'serp-api', 'webz-news', 'gemini-ai'],
+        apis_used: ['google-fact-check', 'serp-api', 'webz-news', 'gemini-ai-fallback'],
         sources_consulted: {
           total: evidence.length,
           high_credibility: evidence.filter(e => e.score >= 75).length,
@@ -451,6 +437,7 @@ async function runPhase4Synthesis(
     return createStatisticalReport(text, evidence, tierResults, startTime);
   }
 }
+
 
 function buildSynthesisPrompt(text: string, evidence: EvidenceItem[], context: string) {
   const evidenceSummary = evidence.slice(0, 15).map((e, i) =>
