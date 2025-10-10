@@ -1,4 +1,4 @@
-import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, TimelineEvent, TemporalValidation, CategoryRating } from '../types/factCheck';
+import { FactCheckReport, FactCheckMethod, SourceCredibilityReport, MediaVerificationReport, EvidenceItem, TimelineEvent, TemporalValidation, CategoryRating } from '../types';
 import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
 import { SourceCredibilityService } from './core/SourceCredibilityService';

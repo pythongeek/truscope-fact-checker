@@ -1,5 +1,5 @@
 import React from 'react';
-import { PublishingContext } from '../types/factCheck';
+import { PublishingContext } from '../types';
 
 interface MethodSelectorProps {
   publishingContext: PublishingContext;

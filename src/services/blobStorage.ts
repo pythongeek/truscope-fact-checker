@@ -10,8 +10,7 @@ export interface StoredReport {
 }
 
 // Remove EditorResult interface from here since it's defined in types
-import { EditorResult } from '../types/advancedEditor';
-import { FactDatabase } from '../types/factDatabase';
+import { EditorResult, FactDatabase } from '../types';
 
 export class BlobStorageService {
   private static instance: BlobStorageService;

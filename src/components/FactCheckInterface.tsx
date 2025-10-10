@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckReport, PublishingContext } from '../types/factCheck';
+import { FactCheckReport, PublishingContext } from '../types';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';

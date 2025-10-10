@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
-import { ApiKeys } from '../types/apiKeys';
+import { ApiKeys } from '../types';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {

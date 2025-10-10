@@ -1,7 +1,7 @@
 // src/components/EvidenceList.tsx
 
 import React from 'react';
-import { EvidenceItem } from '../types/factCheck';
+import { EvidenceItem } from '../types';
 import { ExternalLink, CheckCircle, Newspaper, Search } from 'lucide-react';
 
 const SOURCE_ICONS = {

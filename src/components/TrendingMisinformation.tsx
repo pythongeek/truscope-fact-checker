@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FactDatabase } from '../types/factDatabase';
+import { FactDatabase } from '../types';
 import { RealTimeFactDBService } from '../services/realTimeFactDB';
 
 interface TrendingMisinformationProps {

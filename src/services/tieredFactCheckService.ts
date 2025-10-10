@@ -1,7 +1,7 @@
 // src/services/tieredFactCheckService.ts - REFACTORED CORRECTLY
 // Integrates synthesizer to drive search phases and implements the new data model.
 
-import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult } from '../types/factCheck';
+import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult } from '../types';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { WebzNewsService } from './webzNewsService';

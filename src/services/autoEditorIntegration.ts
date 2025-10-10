@@ -1,9 +1,16 @@
 // Enhanced autoEditorIntegration.ts using front-facing API
-import { FactCheckReport, TieredFactCheckResult } from '../types/factCheck';
-import { EditorMode, EditorResult, ContentChange, FactCheckSegment, FactCheckAnalysis } from '../types/advancedEditor';
+import {
+  FactCheckReport,
+  TieredFactCheckResult,
+  EditorMode,
+  EditorResult,
+  ContentChange,
+  FactCheckSegment,
+  FactCheckAnalysis,
+  CorrectionSuggestion
+} from '../types';
 import { getApiKeys } from './apiKeyService';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
-import { CorrectionSuggestion } from '../types/corrections';
 
 export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;

@@ -1,7 +1,7 @@
 // src/components/SettingsModal.tsx
 
 import React, { useState, useEffect } from 'react';
-import { ApiKeys } from '../types/apiKeys'; // Make sure this path is correct
+import { ApiKeys } from '../types'; // Make sure this path is correct
 import { Info, Loader, Save, X } from 'lucide-react';
 
 // Define the props for the component

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TieredFactCheckService } from '../services/tieredFactCheckService';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '../types';
 
 export const TieredFactCheckTester: React.FC = () => {
   const [testClaim, setTestClaim] = useState('');

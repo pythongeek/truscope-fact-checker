@@ -1,6 +1,5 @@
 import { BlobStorageService, StoredReport } from './blobStorage';
-import { FactCheckReport, HistoryEntry } from '@/types/factCheck';
-import { SmartCorrection } from '../types/corrections';
+import { FactCheckReport, HistoryEntry, SmartCorrection } from '../types';
 
 export class EnhancedHistoryService {
   private blobStorage: BlobStorageService;

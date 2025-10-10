@@ -1,7 +1,7 @@
 // src/components/AutoEditorTab.tsx
 
 import React, { useState } from 'react';
-import { CorrectionSuggestion } from '../types/corrections';
+import { CorrectionSuggestion } from '../types';
 import { editorialOrchestrator, EditorialPackage } from '../services/EditorialOrchestrationService';
 
 interface Props {

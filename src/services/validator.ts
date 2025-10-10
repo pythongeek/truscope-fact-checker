@@ -1,5 +1,5 @@
 import { AdvancedEvidenceScorer } from './advancedScoring';
-import { EvidenceItem } from '../types/factCheck';
+import { EvidenceItem } from '../types';
 
 interface ScoredEvidenceResponse {
   finalScore: number;

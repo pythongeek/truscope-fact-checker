@@ -3,7 +3,7 @@
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
-import { FactCheckReport, EvidenceItem } from '../types/factCheck';
+import { FactCheckReport, EvidenceItem } from '../types';
 
 export interface GoogleFactCheckResult {
   text: string;
