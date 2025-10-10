@@ -13,6 +13,7 @@ import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
 import { generateTextWithFallback } from './geminiService';
 import { simpleIntelligentQuerySynthesizer } from './analysis/SimpleIntelligentQuerySynthesizer';
+import { logger } from '../utils/logger';
 
 export type FactCheckTier = 'direct-verification' | 'pipeline-search' | 'specialized-web-search' | 'news-search' | 'synthesis';
 
@@ -63,10 +64,10 @@ export class TieredFactCheckService {
     return TieredFactCheckService.instance;
   }
 
-  async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<TieredFactCheckResult> {
+  async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<FactCheckReport> {
     const startTime = Date.now();
     const operationId = await generateSHA256(`tiered_${claimText}_${startTime}`);
-    console.log('🎯 Starting Refactored Tiered Fact Check with Synthesized Queries');
+    logger.info('🎯 Starting Refactored Tiered Fact Check with Synthesized Queries', { claimText, publishingContext });
 
     // Generate queries to be used by all phases
     const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claimText);
@@ -226,19 +227,30 @@ export class TieredFactCheckService {
         await this.uploadReportToBlob(finalSynthesizedReport);
       }
 
-      return result;
-
-    } catch (error) {
-      console.error('❌ Tiered fact check failed:', error);
-      // Return an error structure for TieredFactCheckResult
+      logger.info('Tiered fact-check completed successfully.');
       return {
         id: operationId,
-        timestamp: new Date().toISOString(),
         originalText: claimText,
-        overallAuthenticityScore: 0,
+        summary: finalReasoning,
+        overallAuthenticityScore: finalScore,
+        claimVerifications,
+        metadata: {
+          url: "http://example.com"
+        }
+      };
+
+    } catch (error) {
+      logger.error('❌ Tiered fact check failed:', error);
+      // Return an error structure for FactCheckReport
+      return {
+        id: operationId,
+        originalText: claimText,
         summary: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        overallAuthenticityScore: 0,
         claimVerifications: [],
-        searchPhases: { googleFactChecks: { queryUsed: '', count: 0, rawResults: [] }, webSearches: { queryUsed: '', count: 0, rawResults: [] }, newsSearches: { queryUsed: '', count: 0, rawResults: [] } },
+        metadata: {
+          url: "http://example.com/error"
+        }
       };
     }
   }
