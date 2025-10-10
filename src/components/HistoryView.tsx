@@ -75,7 +75,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectReport }) => {
                             <p className="text-xs text-slate-300">{new Date(entry.timestamp).toLocaleString()}</p>
                             <p className="font-medium text-slate-200 mt-1 line-clamp-2">"{entry.claimText}"</p>
                             <div className="mt-2">
-                                <ScoreBadge score={entry.report.final_score} verdict={entry.report.final_verdict} />
+                                <ScoreBadge score={entry.report.overallAuthenticityScore} verdict={entry.report.claimVerifications?.[0]?.status || 'N/A'} />
                             </div>
                         </div>
                         <button

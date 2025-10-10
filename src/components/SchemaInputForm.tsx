@@ -1,9 +1,10 @@
 // src/components/SchemaInputForm.tsx
 import React, { useState } from 'react';
 import { Link, FileText, Globe, CheckCircle, AlertCircle, Plus, X } from 'lucide-react';
+import { FactCheckReport } from '../types';
 
 interface SchemaInputFormProps {
-  factCheckResult?: any;
+  factCheckResult?: FactCheckReport | null;
   onGenerate: (data: any) => void;
   onClose: () => void;
 }
@@ -51,8 +52,8 @@ export default function SchemaInputForm({ factCheckResult, onGenerate, onClose }
 
     if (schemaType === 'ClaimReview') {
       schemaData.claimReviewed = formData.claimReviewed;
-      schemaData.factCheckScore = factCheckResult?.final_score || 0;
-      schemaData.verdict = factCheckResult?.final_verdict || 'UNVERIFIED';
+      schemaData.factCheckScore = factCheckResult?.overallAuthenticityScore || 0;
+      schemaData.verdict = factCheckResult?.claimVerifications?.[0]?.status || 'UNVERIFIED';
       schemaData.evidence = factCheckResult?.evidence || [];
     } else {
       schemaData.articleData = {
@@ -258,11 +259,11 @@ export default function SchemaInputForm({ factCheckResult, onGenerate, onClose }
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-blue-600">Score:</span>
-                        <span className="font-bold ml-2">{factCheckResult.final_score}/100</span>
+                        <span className="font-bold ml-2">{factCheckResult.overallAuthenticityScore}/100</span>
                       </div>
                       <div>
                         <span className="text-blue-600">Verdict:</span>
-                        <span className="font-bold ml-2">{factCheckResult.final_verdict}</span>
+                        <span className="font-bold ml-2">{factCheckResult.claimVerifications?.[0]?.status || 'N/A'}</span>
                       </div>
                       <div>
                         <span className="text-blue-600">Sources:</span>

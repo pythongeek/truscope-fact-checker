@@ -87,8 +87,8 @@ export const TieredFactCheckTester: React.FC = () => {
         <div className="mt-6 space-y-4">
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
             <h3 className="text-lg font-semibold text-green-800">Result</h3>
-            <p><strong>Verdict:</strong> {result.final_verdict}</p>
-            <p><strong>Score:</strong> {result.final_score}%</p>
+            <p><strong>Verdict:</strong> {result.claimVerifications?.[0]?.status || 'N/A'}</p>
+            <p><strong>Score:</strong> {result.overallAuthenticityScore}%</p>
             <p><strong>Processing Time:</strong> {result.metadata.processing_time_ms}ms</p>
             <p><strong>Evidence Count:</strong> {result.evidence.length}</p>
           </div>

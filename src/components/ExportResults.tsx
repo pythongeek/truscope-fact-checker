@@ -65,7 +65,7 @@ const exportToCSV = (results: FactCheckReport[]): void => {
     
     // As the original claim is not in the report, we summarize the report's findings.
     const headers = [
-        'final_verdict', 'final_score', 'method_used',
+        'overall_authenticity_score', 'verdict', 'method_used',
         'processing_time_ms', 'total_sources', 'high_credibility_sources', 'conflicting_sources',
         'evidence_count', 'warnings'
     ];
@@ -74,8 +74,8 @@ const exportToCSV = (results: FactCheckReport[]): void => {
 
     const dataRows = results.map(report => {
         const row = [
-            escapeCsvField(report.final_verdict),
-            escapeCsvField(report.final_score),
+            escapeCsvField(report.overallAuthenticityScore),
+            escapeCsvField(report.claimVerifications?.[0]?.status || 'N/A'),
             escapeCsvField(report.metadata.method_used),
             escapeCsvField(report.metadata.processing_time_ms),
             escapeCsvField(report.metadata.sources_consulted.total),
@@ -105,7 +105,7 @@ const generateReport = (results: FactCheckReport[]): void => {
     markdownContent += `**Total Reports:** ${results.length}\n\n---\n\n`;
 
     results.forEach((report, index) => {
-        markdownContent += `## Report ${index + 1}: Verdict "${report.final_verdict}" (Score: ${report.final_score}/100)\n\n`;
+        markdownContent += `## Report ${index + 1}: Verdict "${report.claimVerifications?.[0]?.status || 'N/A'}" (Score: ${report.overallAuthenticityScore}/100)\n\n`;
         markdownContent += `*This is a summary of an automated analysis. The original claim text is not included in this export format.*\n\n`;
         
         markdownContent += `### Analysis Details\n`;
