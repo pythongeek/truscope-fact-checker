@@ -1,7 +1,8 @@
 // src/services/tieredFactCheckService.ts - REFACTORED CORRECTLY
 // Integrates synthesizer to drive search phases and implements the new data model.
 
-import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult } from '../types';
+import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult, Evidence } from '../types';
+import { getSourceReliability } from '../data/sourceReliability';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { WebzNewsService } from './webzNewsService';
@@ -118,14 +119,94 @@ export class TieredFactCheckService {
       const finalVerdict = finalSynthesizedReport?.final_verdict ?? "Inconclusive";
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
-      const claimVerifications: ClaimVerificationResult[] = [{
-        id: `claim-${operationId}`,
-        claimText: claimText,
-        status: this.mapVerdictToStatus(finalVerdict),
-        confidenceScore: finalScore / 100,
-        explanation: finalReasoning,
-        evidence: allEvidence,
-      }];
+      // 1. Process Evidence with Credibility Scores
+      const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
+        const reliability = getSourceReliability(e.publisher);
+        const url = new URL(e.url || 'http://example.com');
+        return {
+          id: e.id,
+          url: e.url || '',
+          title: e.quote.substring(0, 50), // Placeholder for title
+          snippet: e.quote,
+          publisher: e.publisher,
+          publicationDate: e.publishedDate,
+          credibilityScore: reliability ? reliability.reliabilityScore : 50, // Default score
+          relevanceScore: 0, // Placeholder, AI will fill this in
+        };
+      });
+
+      // 2. Construct the AI Analysis Prompt
+      const analysisPrompt = `
+        You are a meticulous fact-checking analyst. Your task is to analyze a claim based on the provided evidence and return a single, minified JSON object. Do not include any text outside of the JSON object.
+
+        Claim: "${claimText}"
+
+        Evidence:
+        ${JSON.stringify(processedEvidence.map(e => ({ publisher: e.publisher, credibility: e.credibilityScore, snippet: e.snippet })), null, 2)}
+
+        Based *only* on the evidence, determine the final verification status. Your response MUST be a single, valid, minified JSON object with the following structure:
+        {
+          "status": "...", // Choose one: "Verified", "Unverified", "Misleading", "Accurate", "Needs Context"
+          "confidenceScore": 0.0, // A float between 0.0 and 1.0
+          "explanation": "...", // A 1-2 sentence neutral explanation for your verdict.
+          "reasoning": {
+            "supportingSources": 0, // Count of sources that directly support the claim.
+            "conflictingSources": 0, // Count of sources that directly conflict with the claim.
+            "conclusion": "..." // Brief summary of the reasoning process. Example: 'Verdict is based on multiple high-credibility sources that corroborate the claim, with no significant conflicting evidence found.'
+          },
+          "evidenceWithRelevance": [
+            { "url": "...", "relevanceScore": 0 } // For each piece of evidence, provide its original URL and a relevanceScore (0-100) to the claim.
+          ]
+        }
+      `;
+
+      // 3. Call Gemini and Parse the Structured JSON
+      let claimVerifications: ClaimVerificationResult[];
+      try {
+        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { maxOutputTokens: 2048 });
+        // Robustly parse the JSON, cleaning up potential markdown formatting
+        const cleanedJson = analysisResultJson.replace(/```json|```/g, '').trim();
+        const analysisResult = JSON.parse(cleanedJson);
+
+        // 4. Map the AI's response back to your data model
+        const evidenceWithRelevance = new Map(analysisResult.evidenceWithRelevance.map((item: { url: string; relevanceScore: number; }) => [item.url, item.relevanceScore]));
+
+        const finalEvidence: Evidence[] = processedEvidence.map(e => ({
+          ...e,
+          relevanceScore: evidenceWithRelevance.get(e.url) || 0,
+        }));
+
+        claimVerifications = [{
+          id: `claim-${operationId}`,
+          claimText: claimText,
+          evidence: finalEvidence,
+          status: analysisResult.status,
+          confidenceScore: analysisResult.confidenceScore,
+          explanation: analysisResult.explanation,
+          reasoning: {
+              ...analysisResult.reasoning,
+              totalSources: finalEvidence.length,
+          },
+        }];
+
+      } catch (error) {
+        console.error("Failed to parse AI analysis response:", error);
+        claimVerifications = [{
+            id: `claim-${operationId}`,
+            claimText: claimText,
+            status: 'Error',
+            confidenceScore: 0,
+            explanation: "Failed to get a valid analysis from the AI model.",
+            reasoning: {
+                totalSources: processedEvidence.length,
+                supportingSources: 0,
+                conflictingSources: 0,
+                conclusion: "The AI analysis step failed. This could be due to a model error or invalid response format."
+            },
+            evidence: processedEvidence,
+        }];
+      }
+
 
       const result: TieredFactCheckResult = {
         id: operationId,

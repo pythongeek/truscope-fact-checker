@@ -1,64 +1,68 @@
 import React from 'react';
+import { ClaimVerificationResult } from '../types';
 
 interface EnhancedClaimAnalysisProps {
-  text: string;
+  claim: ClaimVerificationResult;
 }
 
-const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ text }) => {
-  // Add null/undefined check and provide fallback
-  if (!text || typeof text !== 'string') {
+const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ claim }) => {
+  if (!claim) {
     return (
       <div className="bg-slate-800/50 p-6 rounded-lg text-center">
-        <div className="text-slate-400">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <h3 className="text-lg font-semibold text-slate-300">Enhanced Analysis Unavailable</h3>
-        <p className="text-slate-400 max-w-md mx-auto">
-          Enhanced claim analysis with highlighted text is not available for this analysis method.
-        </p>
+        <h3 className="text-lg font-semibold text-slate-300">No analysis available.</h3>
       </div>
     );
   }
 
-  const parts = text.split(/(\[.*?\])/g);
-
-  const renderPart = (part: string, index: number) => {
-    // Check for our custom markdown
-    if (part.startsWith('[') && part.endsWith(']')) {
-      const content = part.slice(1, -1);
-      const colonIndex = content.indexOf(':');
-      
-      if (colonIndex === -1) {
-        // No colon found, render as plain text
-        return <span key={index}>{part}</span>;
-      }
-      
-      const type = content.substring(0, colonIndex);
-      const value = content.substring(colonIndex + 1);
-
-      switch (type) {
-        case 'claim':
-          return <span key={index} className="text-purple-400 font-bold">{value}</span>;
-        case 'source':
-          return <span key={index} className="text-blue-400 font-bold">{value}</span>;
-        case 'discrepancy':
-          return <span key={index} className="text-yellow-400 font-bold">{value}</span>;
-        case 'unverified':
-          return <span key={index} className="text-red-400 font-bold">{value}</span>;
-        default:
-          return <span key={index}>{part}</span>;
-      }
-    }
-    return <span key={index}>{part}</span>;
-  };
-
   return (
-    <div className="bg-slate-900/50 p-4 rounded-lg">
-      <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">
-        {parts.map(renderPart)}
-      </p>
+    <div className="p-4 border rounded-lg bg-white shadow-md mb-4">
+      <p className="font-semibold text-gray-800">Claim: "{claim.claimText}"</p>
+
+      {/* Data-Driven Verdict Section */}
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-center p-3 bg-slate-50 rounded-lg">
+        <div>
+          <p className="text-sm font-medium text-gray-500">Verdict</p>
+          <p className="font-bold text-xl">{claim.status}</p>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-500">Confidence</p>
+          <p className="font-bold text-xl">{Math.round(claim.confidenceScore * 100)}%</p>
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-500">Source Balance</p>
+          <div className="flex justify-center items-center space-x-3 text-lg">
+            <span title="Supporting Sources">✅ {claim.reasoning.supportingSources}</span>
+            <span title="Conflicting Sources">❌ {claim.reasoning.conflictingSources}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Explanation */}
+      <div className="mt-4 prose prose-sm max-w-none">
+        <p><strong>Explanation:</strong> {claim.explanation}</p>
+        <p className="text-gray-600"><strong>Reasoning:</strong> {claim.reasoning.conclusion}</p>
+      </div>
+
+      {/* Enhanced Evidence Display */}
+      <div className="mt-4">
+        <h4 className="font-semibold mb-2">Evidence ({claim.evidence.length} sources)</h4>
+        <div className="space-y-3">
+          {claim.evidence.map((evidenceItem, index) => (
+            <div key={index} className="p-3 border rounded-md bg-white hover:bg-gray-50 transition-colors">
+                <div className="flex justify-between items-center">
+                    <a href={evidenceItem.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-semibold hover:underline">
+                      {evidenceItem.publisher}
+                    </a>
+                    <div className="flex space-x-3 text-xs">
+                        <span className="font-medium">Credibility: {evidenceItem.credibilityScore}%</span>
+                        <span className="font-medium">Relevance: {evidenceItem.relevanceScore}%</span>
+                    </div>
+                </div>
+              <p className="text-sm text-gray-700 mt-1 italic">"{evidenceItem.snippet}"</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

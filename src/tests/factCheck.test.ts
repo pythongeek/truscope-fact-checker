@@ -21,10 +21,18 @@ vi.mock('../services/geminiService', () => ({
   },
   generateTextWithFallback: vi.fn().mockResolvedValue(
     JSON.stringify({
-        "final_verdict": "Mock Synthesis Verdict",
-        "final_score": 90,
-        "reasoning": "This is a mocked synthesis result.",
-        "score_breakdown": { "metrics": [] }
+      "status": "Verified",
+      "confidenceScore": 0.9,
+      "explanation": "The claim is well-supported by high-credibility sources.",
+      "reasoning": {
+        "supportingSources": 2,
+        "conflictingSources": 0,
+        "conclusion": "The verdict is based on corroboration from multiple reliable sources."
+      },
+      "evidenceWithRelevance": [
+        { "url": "http://gfc.com/1", "relevanceScore": 95 },
+        { "url": "http://example.com/enhanced", "relevanceScore": 85 }
+      ]
     })
   )
 }));
@@ -33,7 +41,7 @@ vi.mock('../services/googleFactCheckService', () => ({
   GoogleFactCheckService: {
     getInstance: vi.fn().mockReturnValue({
       searchClaims: vi.fn().mockResolvedValue({
-        evidence: [{ id: 'gfc1', publisher: 'gfc', quote: 'gfc quote', score: 85, type: 'claim' }],
+        evidence: [{ id: 'gfc1', publisher: 'gfc', url: 'http://gfc.com/1', quote: 'gfc quote', score: 85, type: 'claim' }],
         final_score: 85,
       }),
     }),
