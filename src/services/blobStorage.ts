@@ -46,6 +46,26 @@ export class BlobStorageService {
     }
   }
 
+  async upload(filePath: string, data: any): Promise<string> {
+    try {
+      const response = await fetch('/api/blob-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath, data }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const { url } = await response.json();
+      return url;
+    } catch (error) {
+      console.error('Failed to upload to blob storage:', error);
+      throw new Error('Failed to upload file');
+    }
+  }
+
   // REMOVED: saveEditorResult method - no longer needed
   // Editor results will be handled in-memory only to save blob storage space
 
@@ -61,6 +81,19 @@ export class BlobStorageService {
       return await response.json();
     } catch (error) {
       console.error('Failed to retrieve report from blob storage:', error);
+      return null;
+    }
+  }
+
+  async getFile(filePath: string): Promise<any | null> {
+    try {
+      const response = await fetch(`https://blob.vercel-storage.com/${filePath}`);
+      if (!response.ok) {
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error(`Failed to retrieve file from blob storage: ${filePath}`, error);
       return null;
     }
   }
@@ -94,6 +127,26 @@ export class BlobStorageService {
       );
     } catch (error) {
       console.error('Failed to list reports from blob storage:', error);
+      return [];
+    }
+  }
+
+  async listFiles(prefix: string): Promise<string[]> {
+    try {
+      const response = await fetch('/api/blob-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prefix }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to list files');
+      }
+
+      const { paths } = await response.json();
+      return paths;
+    } catch (error) {
+      console.error('Failed to list files from blob storage:', error);
       return [];
     }
   }
