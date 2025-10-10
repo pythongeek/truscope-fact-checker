@@ -70,3 +70,19 @@ export type SearchParams = {
   language?: string;
   country?: string;
 };
+
+export interface TieredFactCheckResult {
+  overallAuthenticityScore: number;
+  summary: string;
+  claimVerifications: {
+    claimText: string;
+    status: string;
+    confidenceScore: number;
+    explanation: string;
+  }[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}
