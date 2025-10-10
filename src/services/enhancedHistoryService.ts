@@ -102,4 +102,19 @@ export class EnhancedHistoryService {
   private generateReportId(): string {
     return `report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
+
+  async saveFactCheckRecord(record: TieredFactCheckResult): Promise<void> {
+    const filePath = `audit-trails/${record.id}.json`;
+    await this.blobStorage.upload(filePath, record);
+  }
+
+  async getAuditTrailList(): Promise<string[]> {
+    const files = await this.blobStorage.listFiles('audit-trails/');
+    return files.map(file => file.replace('audit-trails/', '').replace('.json', ''));
+  }
+
+  async getAuditTrailRecord(recordId: string): Promise<TieredFactCheckResult | null> {
+    const filePath = `audit-trails/${recordId}.json`;
+    return await this.blobStorage.getFile(filePath);
+  }
 }
