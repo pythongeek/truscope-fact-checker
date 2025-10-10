@@ -3,12 +3,14 @@
 
 import React, { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
-import { EvidenceItem } from '../types';
+import { EvidenceItem, TieredFactCheckResult } from '../types';
 import { fetchAllEvidence } from '../services/evidenceService';
 import { computeValidatedScore } from '../services/validator';
 import { generateClaimReviewSchema } from '../services/schemaGenerator';
 import { EvidenceList } from './EvidenceList';
 import { SchemaModal } from './SchemaModal';
+import { FactCheckAssistant } from './FactCheckAssistant';
+import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 
 export const EnhancedDashboard: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -19,6 +21,7 @@ export const EnhancedDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
   const [generatedSchema, setGeneratedSchema] = useState<object | null>(null);
+  const [factCheckResult, setFactCheckResult] = useState<TieredFactCheckResult | null>(null);
 
   const handleSearch = async () => {
     if (!query.trim()) {
@@ -27,10 +30,24 @@ export const EnhancedDashboard: React.FC = () => {
     }
     setIsLoading(true);
     setError(null);
+    setFactCheckResult(null);
     const allEvidence = await fetchAllEvidence(query);
     const { finalScore, scoredEvidence } = computeValidatedScore(allEvidence);
     setEvidence(scoredEvidence);
     setValidationScore(finalScore);
+
+    // Create a mock TieredFactCheckResult
+    const result: TieredFactCheckResult = {
+      overallAuthenticityScore: finalScore,
+      summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
+      claimVerifications: scoredEvidence.map((item) => ({
+        claimText: query,
+        status: item.score > 70 ? 'Verified' : 'Unverified',
+        confidenceScore: item.score / 100,
+        explanation: item.explanation,
+      })),
+    };
+    setFactCheckResult(result);
     setIsLoading(false);
   };
 
@@ -105,6 +122,14 @@ export const EnhancedDashboard: React.FC = () => {
 
       {showSchema && generatedSchema && (
         <SchemaModal schema={generatedSchema} onClose={() => setShowSchema(false)} />
+      )}
+
+      {/* Conditionally render the assistant */}
+      {factCheckResult && (
+        <>
+          <EnhancedFactCheckReport result={factCheckResult} />
+          <FactCheckAssistant report={factCheckResult} />
+        </>
       )}
     </div>
   );
