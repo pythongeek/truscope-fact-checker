@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
-import { ApiKeys } from '../types';
+import { ApiKeys, FactCheckReport } from '../types';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
@@ -32,7 +32,7 @@ export default function TruScopeJournalismPlatform() {
   const [content, setContent] = useState('');
   const [publishingContext, setPublishingContext] = useState('journalism');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [factCheckResult, setFactCheckResult] = useState<any>(null);
+  const [factCheckResult, setFactCheckResult] = useState<FactCheckReport | null>(null);
   const [editorResult, setEditorResult] = useState<any>(null);
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [showSchemaInputModal, setShowSchemaInputModal] = useState(false);
@@ -185,8 +185,8 @@ export default function TruScopeJournalismPlatform() {
       const result = await response.json();
 
       console.log('✅ Fact-check completed successfully');
-      console.log('📊 Final Score:', result.final_score);
-      console.log('⚖️ Verdict:', result.final_verdict);
+      console.log('📊 Final Score:', result.overallAuthenticityScore);
+      console.log('⚖️ Verdict:', result.claimVerifications?.[0]?.status);
       console.log('📋 Evidence Sources:', result.evidence?.length || 0);
       console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
 
@@ -268,7 +268,7 @@ export default function TruScopeJournalismPlatform() {
     }
   };
 
-  const handleSelectReport = (report: any, claimText: string) => {
+  const handleSelectReport = (report: FactCheckReport, claimText: string) => {
     setFactCheckResult(report);
     setContent(claimText);
     setActiveTab('report');
@@ -566,8 +566,8 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
             <h2 className="text-2xl font-bold text-gray-900">Fact-Check Report</h2>
             <p className="text-gray-600 mt-1">Tiered verification analysis</p>
           </div>
-          <div className={`px-6 py-3 rounded-xl border-2 font-bold text-2xl ${getScoreColor(result.final_score)}`}>
-            {result.final_score}/100
+          <div className={`px-6 py-3 rounded-xl border-2 font-bold text-2xl ${getScoreColor(result.overallAuthenticityScore)}`}>
+            {result.overallAuthenticityScore}/100
           </div>
         </div>
 
@@ -577,7 +577,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
               <Shield className="w-5 h-5 text-blue-600" />
               <span className="text-sm font-semibold text-blue-900">Verdict</span>
             </div>
-            <p className="text-lg font-bold text-blue-700">{result.final_verdict}</p>
+            <p className="text-lg font-bold text-blue-700">{result.claimVerifications?.[0]?.status || 'N/A'}</p>
           </div>
 
           <div className="p-4 bg-green-50 rounded-lg border border-green-200">
