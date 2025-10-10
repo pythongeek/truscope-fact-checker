@@ -1,7 +1,8 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckReport, PublishingContext } from '../types';
+import { FactCheckReport, PublishingContext, FactCheckMethod } from '../types';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
+import { logger } from '../utils/logger';
 import { EnhancedFactCheckReport } from './EnhancedFactCheckReport';
 import { getMethodCapabilities } from '../services/methodCapabilities';
 import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator';
@@ -44,6 +45,10 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       const tieredService = TieredFactCheckService.getInstance();
       const result = await tieredService.performTieredCheck(text, context);
 
+      // This part of the original component is now out of sync with the
+      // simplified FactCheckReport. We can remove it or adapt it later.
+      // For now, we'll just set the report.
+      /*
       if (result.metadata.tier_breakdown) {
         const updatedProgress = result.metadata.tier_breakdown.map(tier => ({
           tier: tier.tier,
@@ -53,10 +58,12 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
         }));
         setTieredProgress(updatedProgress);
       }
+      */
 
       setReport(result);
       saveReportToHistory(text, result);
     } catch (error) {
+      logger.error('Error running fact check from interface', error);
       setError(error instanceof Error ? error.message : 'Analysis failed');
     } finally {
       setIsAnalyzing(false);
