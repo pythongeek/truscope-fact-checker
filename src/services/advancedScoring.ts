@@ -1,6 +1,5 @@
-import { AdvancedEvidence } from '../types/enhancedFactCheck';
+import { AdvancedEvidence, EvidenceItem } from '../types';
 import { getSourceReliability } from '../data/sourceReliability';
-import { EvidenceItem } from '@/types/factCheck';
 import { calculateRecency } from '../utils/time';
 
 export class AdvancedEvidenceScorer {

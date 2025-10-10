@@ -1,6 +1,6 @@
 import { SerpApiService, SerpApiResponse } from './serpApiService';
 import { GoogleFactCheckService } from './googleFactCheckService';
-import { FactCheckReport } from '../types/factCheck';
+import { FactCheckReport } from '../types';
 
 export interface WebSearchResult {
   serp: SerpApiResponse;

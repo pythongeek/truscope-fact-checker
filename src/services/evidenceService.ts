@@ -1,5 +1,5 @@
 import { MultiSourceVerifier } from './multiSourceVerifier';
-import { EvidenceItem } from '../types/factCheck';
+import { EvidenceItem } from '../types';
 
 export async function fetchAllEvidence(query: string): Promise<EvidenceItem[]> {
   const verifier = new MultiSourceVerifier();

@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
-import { EvidenceItem } from '../types/factCheck';
+import { EvidenceItem } from '../types';
 import { fetchAllEvidence } from '../services/evidenceService';
 import { computeValidatedScore } from '../services/validator';
 import { generateClaimReviewSchema } from '../services/schemaGenerator';

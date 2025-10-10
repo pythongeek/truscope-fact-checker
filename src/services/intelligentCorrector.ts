@@ -1,5 +1,4 @@
-import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '../types/corrections';
-import { AdvancedEvidence } from '../types/enhancedFactCheck';
+import { SmartCorrection, DetectedIssue, CorrectionAnalysis, AdvancedEvidence } from '../types';
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
 import { GoogleGenAI } from "@google/genai";
 import { parseAIJsonResponse } from '../utils/jsonParser';

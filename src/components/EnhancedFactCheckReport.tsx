@@ -1,7 +1,7 @@
 // src/components/EnhancedFactCheckReport.tsx
 
 import React from 'react';
-import { TieredFactCheckResult } from '../types/factCheck';
+import { TieredFactCheckResult } from '../types';
 // Import icons for each search type (e.g., from lucide-react)
 import { Globe, Newspaper, CheckCircle } from 'lucide-react';
 
