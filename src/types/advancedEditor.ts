@@ -49,3 +49,11 @@ export interface EditorResult {
   processingTime: number;
   confidence: number;
 }
+
+// Ensure CorrectionSuggestion is defined and exported
+export interface CorrectionSuggestion {
+  originalText: string;
+  correctedText: string;
+  explanation: string;
+  confidence: number;
+}
