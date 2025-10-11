@@ -1,3 +1,4 @@
+// src/components/TruScopeJournalismPlatform.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
@@ -69,7 +70,13 @@ export default function TruScopeJournalismPlatform() {
 
     if (!geminiKey || geminiKey.trim() === '') {
       console.log('ℹ️ No Gemini API key - using fallback models');
-      setAvailableModels(['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest']);
+      setAvailableModels([
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-flash',
+        'gemini-pro'
+      ]);
       return;
     }
 
@@ -82,8 +89,13 @@ export default function TruScopeJournalismPlatform() {
       console.log(`✅ Loaded ${models.length} models`);
     } catch (e: any) {
       console.error('❌ Failed to load models:', e.message);
-      // Fallback to default models
-      setAvailableModels(['gemini-2.0-flash-exp', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest']);
+      setAvailableModels([
+        'gemini-2.0-flash-exp',
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-flash',
+        'gemini-pro'
+      ]);
     } finally {
       setIsLoadingModels(false);
     }
@@ -99,7 +111,6 @@ export default function TruScopeJournalismPlatform() {
     setSettings({ apiKeys: newKeys });
     setIsSettingsModalOpen(false);
 
-    // Reload models with new key
     if (newKeys.gemini !== settings.apiKeys.gemini) {
       setTimeout(() => loadModels(), 500);
     }
@@ -129,11 +140,8 @@ export default function TruScopeJournalismPlatform() {
     const apiKeys = getApiKeys();
 
     if (!apiKeys.gemini || apiKeys.gemini.trim() === '') {
-      // Use mock API if Gemini key is not available
-      const response = await fetch('/api/mock-fact-check');
-      const result = await response.json();
-      setFactCheckResult(result);
-      setActiveTab('report');
+      alert('⚠️ Gemini API key is required. Please configure it in Settings.');
+      setIsSettingsModalOpen(true);
       return;
     }
 
@@ -180,8 +188,8 @@ export default function TruScopeJournalismPlatform() {
       const result = await response.json();
 
       console.log('✅ Fact-check completed successfully');
-      console.log('📊 Final Score:', result.overallAuthenticityScore);
-      console.log('⚖️ Verdict:', result.claimVerifications?.[0]?.status);
+      console.log('📊 Final Score:', result.final_score);
+      console.log('⚖️ Verdict:', result.final_verdict);
       console.log('📋 Evidence Sources:', result.evidence?.length || 0);
       console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
 
@@ -395,8 +403,6 @@ export default function TruScopeJournalismPlatform() {
   );
 }
 
-// ... (Rest of the component code - TabNavigation, AnalysisPanel, ReportPanel, etc. - remains the same as in your original file)
-
 function TabNavigation({ activeTab, onTabChange, hasResult, correctionCount }: any) {
   const tabs = [
     { id: 'analyze', label: 'Analyze Content', icon: Search, disabled: false },
@@ -553,6 +559,9 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
     return 'text-red-700 bg-red-100 border-red-300';
   };
 
+  const displayScore = result.final_score || result.overallAuthenticityScore || 0;
+  const displayVerdict = result.final_verdict || result.claimVerifications?.[0]?.status || 'UNVERIFIED';
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8">
@@ -561,8 +570,8 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
             <h2 className="text-2xl font-bold text-gray-900">Fact-Check Report</h2>
             <p className="text-gray-600 mt-1">Tiered verification analysis</p>
           </div>
-          <div className={`px-6 py-3 rounded-xl border-2 font-bold text-2xl ${getScoreColor(result.overallAuthenticityScore)}`}>
-            {result.overallAuthenticityScore}/100
+          <div className={`px-6 py-3 rounded-xl border-2 font-bold text-2xl ${getScoreColor(displayScore)}`}>
+            {displayScore}/100
           </div>
         </div>
 
@@ -572,7 +581,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
               <Shield className="w-5 h-5 text-blue-600" />
               <span className="text-sm font-semibold text-blue-900">Verdict</span>
             </div>
-            <p className="text-lg font-bold text-blue-700">{result.claimVerifications?.[0]?.status || 'N/A'}</p>
+            <p className="text-lg font-bold text-blue-700">{displayVerdict}</p>
           </div>
 
           <div className="p-4 bg-green-50 rounded-lg border border-green-200">
@@ -675,7 +684,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
           <button
             onClick={() => onAutoCorrect('enhanced')}
             disabled={isProcessing}
-            className="p-4 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 transition-all disabled:opacity-50"
+            className="p-4 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Edit3 className="w-6 h-6 mx-auto mb-2" />
             <p className="font-semibold">Auto-Correct</p>
@@ -697,8 +706,9 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = 'fact-check-report.json';
+              a.download = `fact-check-report-${Date.now()}.json`;
               a.click();
+              URL.revokeObjectURL(url);
             }}
             className="p-4 border-2 border-purple-500 text-purple-600 rounded-lg hover:bg-purple-50 transition-all"
           >
@@ -714,20 +724,43 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
 
 function EditorialPanel({ originalContent, result, editorResult, onContentUpdate }: any) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">Editorial Panel</h2>
-      <div className="space-y-4">
-        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="font-semibold text-blue-900 mb-2">Original Content</h3>
-          <p className="text-gray-700 whitespace-pre-wrap">{originalContent}</p>
-        </div>
-
-        {editorResult && (
-          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-            <h3 className="font-semibold text-green-900 mb-2">Suggested Corrections</h3>
-            <p className="text-gray-700 whitespace-pre-wrap">{editorResult.correctedText || 'No corrections available'}</p>
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Editorial Panel</h2>
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-blue-900 mb-2">Original Content</h3>
+            <p className="text-gray-700 whitespace-pre-wrap">{originalContent}</p>
           </div>
-        )}
+
+          {editorResult && (
+            <>
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="font-semibold text-green-900 mb-2">Corrected Content</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{editorResult.correctedText || 'No corrections available'}</p>
+              </div>
+
+              {editorResult.changesApplied && editorResult.changesApplied.length > 0 && (
+                <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <h3 className="font-semibold text-yellow-900 mb-2">Changes Applied ({editorResult.changesApplied.length})</h3>
+                  <ul className="space-y-2">
+                    {editorResult.changesApplied.map((change: any, idx: number) => (
+                      <li key={idx} className="text-sm text-gray-700">
+                        <span className="font-semibold">{idx + 1}.</span> {change.description || change}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+
+          {!editorResult && (
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
+              <p className="text-gray-600">Click "Auto-Correct" in the Report tab to generate corrections</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -748,7 +781,7 @@ function SchemaPreviewModal({ schema, htmlSnippet, validation, onClose }: any) {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-gray-900">Schema Markup Preview</h3>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 transition-colors">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -760,13 +793,13 @@ function SchemaPreviewModal({ schema, htmlSnippet, validation, onClose }: any) {
               <h4 className="font-semibold text-gray-900">JSON-LD Schema</h4>
               <button
                 onClick={handleCopy}
-                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 text-sm"
+                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 text-sm transition-colors"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Copied!' : 'Copy'}</span>
               </button>
             </div>
-            <pre className="text-xs text-gray-700 overflow-x-auto">
+            <pre className="text-xs text-gray-700 overflow-x-auto bg-white p-3 rounded border border-gray-300">
               {JSON.stringify(schema, null, 2)}
             </pre>
           </div>
@@ -785,8 +818,39 @@ function SchemaPreviewModal({ schema, htmlSnippet, validation, onClose }: any) {
                   ))}
                 </ul>
               )}
+              {validation.isValid && (
+                <p className="text-sm text-green-700">
+                  Schema is valid and ready for implementation. Add this to your page's &lt;head&gt; section.
+                </p>
+              )}
             </div>
           )}
+
+          {htmlSnippet && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-2">HTML Implementation</h4>
+              <pre className="text-xs text-gray-700 overflow-x-auto bg-white p-3 rounded border border-gray-300">
+                {htmlSnippet}
+              </pre>
+              <p className="text-xs text-gray-600 mt-2">
+                Copy this snippet and paste it into your HTML &lt;head&gt; section.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Test your schema at <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Rich Results Test</a>
+            </p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
