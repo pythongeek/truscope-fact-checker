@@ -3,10 +3,10 @@
 
 import React, { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
-import { EvidenceItem, TieredFactCheckResult } from '../types';
+import { EvidenceItem, TieredFactCheckResult } from '@/types';
 import { fetchAllEvidence } from '../services/evidenceService';
 import { computeValidatedScore } from '../services/validator';
-import { generateClaimReviewSchema } from '../services/schemaGenerator';
+import { schemaGenerator } from '../services/schemaGenerator';
 import { EvidenceList } from './EvidenceList';
 import { SchemaModal } from './SchemaModal';
 import { FactCheckAssistant } from './FactCheckAssistant';
@@ -38,25 +38,35 @@ export const EnhancedDashboard: React.FC = () => {
 
     // Create a mock TieredFactCheckResult
     const result: TieredFactCheckResult = {
-      overallAuthenticityScore: finalScore,
-      summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
-      claimVerifications: scoredEvidence.map((item) => ({
-        claimText: query,
-        status: item.score > 70 ? 'Verified' : 'Unverified',
-        confidenceScore: item.score / 100,
-        explanation: item.explanation,
-      })),
+      report: {
+        id: '1',
+        originalText: query,
+        summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
+        overallAuthenticityScore: finalScore,
+        claimVerifications: scoredEvidence.map((item) => ({
+          claimText: query,
+          status: item.score > 70 ? 'Verified' : 'Unverified',
+          confidenceScore: item.score / 100,
+          explanation: item.snippet,
+        })),
+        evidence: scoredEvidence,
+        final_score: finalScore,
+        final_verdict: 'Uncertain',
+        reasoning: '',
+        score_breakdown: {}
+      },
+      metadata: {}
     };
     setFactCheckResult(result);
     setIsLoading(false);
   };
 
   const handleGenerateSchema = () => {
-    if (evidence.length === 0) {
+    if (!factCheckResult) {
         alert("Please run an analysis first to generate evidence.");
         return;
     }
-    const schema = generateClaimReviewSchema(query, validationScore, evidence);
+    const schema = schemaGenerator.generate(factCheckResult);
     setGeneratedSchema(schema);
     setShowSchema(true);
   };

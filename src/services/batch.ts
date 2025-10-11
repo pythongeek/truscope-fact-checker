@@ -1,4 +1,4 @@
-import { FactCheckReport, FactCheckMethod } from '@/types/factCheck';
+import { FactCheckReport, FactCheckMethod } from '@/types';
 import { TieredFactCheckService } from './tieredFactCheckService';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 

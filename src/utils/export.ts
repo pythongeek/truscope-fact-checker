@@ -1,4 +1,4 @@
-import { FactCheckReport, EvidenceItem } from '@/types/factCheck';
+import { FactCheckReport, EvidenceItem } from '@/types';
 
 /**
  * Generates a standardized filename for exports.

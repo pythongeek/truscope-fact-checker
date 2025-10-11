@@ -1,4 +1,4 @@
-import { GoogleSearchResult } from '../types';
+import { GoogleSearchResult } from '@/types/factCheck';
 import { getSearchApiKey, getSearchId } from './apiKeyService';
 
 // --- Source Credibility Assessment ---

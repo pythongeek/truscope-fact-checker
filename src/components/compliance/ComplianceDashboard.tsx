@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EnhancedHistoryService } from '../../services/enhancedHistoryService';
-import { TieredFactCheckResult } from '../../types/factCheck';
-import EnhancedFactCheckReport from '../EnhancedFactCheckReport';
+import { TieredFactCheckResult } from '@/types';
+import { EnhancedFactCheckReport } from '../EnhancedFactCheckReport';
 import { FileText, Loader, ServerCrash } from 'lucide-react';
 
 const ComplianceDashboard: React.FC = () => {

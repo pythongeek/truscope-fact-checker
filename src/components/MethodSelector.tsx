@@ -1,5 +1,5 @@
 import React from 'react';
-import { PublishingContext } from '../types';
+import { PublishingContext } from '@/types';
 
 interface MethodSelectorProps {
   publishingContext: PublishingContext;

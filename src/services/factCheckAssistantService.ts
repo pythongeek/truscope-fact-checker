@@ -1,6 +1,7 @@
 // src/services/factCheckAssistantService.ts
 import { geminiService } from './geminiService'; // Your existing Gemini service
-import { TieredFactCheckResult, ChatMessage } from '../types';
+import { TieredFactCheckResult } from '@/types';
+import { ChatMessage } from '@/types';
 
 export const factCheckAssistantService = {
   async getAssistantResponse(

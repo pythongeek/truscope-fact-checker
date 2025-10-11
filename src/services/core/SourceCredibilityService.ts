@@ -1,4 +1,4 @@
-import { SourceCredibilityData } from '../../types/factCheck';
+import { SourceCredibilityData } from '@/types/enhancedFactCheck';
 
 export class SourceCredibilityService {
   private static instance: SourceCredibilityService;

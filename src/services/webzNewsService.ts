@@ -1,5 +1,5 @@
 import { RobustHttpClient } from './httpClient';
-import { NewsSource, SearchParams } from '../types';
+import { NewsSource, SearchParams } from '@/types/factCheck';
 
 export class WebzNewsService implements NewsSource {
   private httpClient: RobustHttpClient;

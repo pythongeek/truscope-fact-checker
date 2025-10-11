@@ -1,4 +1,4 @@
-import { AdvancedEvidence, MultiSourceResult } from '../types';
+import { AdvancedEvidence, MultiSourceResult } from '@/types/enhancedFactCheck';
 import { getSourceReliability } from '../data/sourceReliability';
 import { calculateRecency } from '../utils/time';
 

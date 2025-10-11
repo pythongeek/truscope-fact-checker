@@ -1,5 +1,5 @@
 
-import type { EvidenceItem } from '@/types/factCheck';
+import type { EvidenceItem } from '@/types';
 
 interface ValidatedEvidenceItem extends EvidenceItem {
   isValid: boolean;

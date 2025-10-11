@@ -1,9 +1,9 @@
-// api/fact-check.ts - Updated with Gemini AI Studio API support
+// api/fact-check.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateTextWithFallback } from '../src/services/geminiService.js';
+import { generateTextWithFallback } from '../src/services/geminiService';
+import { logger } from '../src/utils/logger';
+import { EvidenceItem, FactVerdict } from '../src/types';
 
-// ✅ CORRECT: Gemini AI Studio API URL (not Vertex AI)
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
 interface FactCheckRequest {
@@ -18,20 +18,6 @@ interface FactCheckRequest {
   };
 }
 
-interface EvidenceItem {
-  id: string;
-  publisher: string;
-  url: string | null;
-  quote: string;
-  score: number;
-  type: 'claim' | 'search_result' | 'news';
-  publishedDate?: string;
-  isValid?: boolean;
-  accessibility?: 'accessible' | 'inaccessible' | 'error';
-  credibilityScore?: number;
-  warnings?: string[];
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -43,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method !== 'POST') {
+    logger.warn('Method not allowed', { method: req.method });
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -50,16 +37,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { text, publishingContext = 'journalism', config = {} }: FactCheckRequest = req.body;
 
   if (!text || text.trim().length === 0) {
+    logger.warn('Text is required for fact-checking');
     return res.status(400).json({ error: 'Text is required for fact-checking' });
   }
 
-  console.log('🎯 Starting Tiered Fact-Check');
-  console.log('📝 Text length:', text.length);
-  console.log('📋 Context:', publishingContext);
-  console.log('🔑 User API keys provided:', Object.keys(config).filter(k => config[k as keyof typeof config]));
+  logger.info('Starting Tiered Fact-Check', { textLength: text.length, context: publishingContext });
+  console.log('Vercel log: Starting Tiered Fact-Check');
 
   try {
-    console.log('\n🚀 Executing phases in parallel...');
+    logger.info('Executing phases in parallel...');
+    console.log('Vercel log: Executing phases in parallel...');
     const [phase1Result, phase2Result, phase3Result] = await Promise.all([
       runPhase1(text, config),
       runPhase2(text, req, config),
@@ -67,7 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ]);
 
     const tierResults = [phase1Result, phase2Result, phase3Result];
-    console.log('✅ Parallel gathering complete.');
+    logger.info('Parallel gathering complete.');
+    console.log('Vercel log: Parallel gathering complete.');
 
     const allEvidence = deduplicateEvidence([
       ...phase1Result.evidence,
@@ -75,7 +63,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...phase3Result.evidence
     ]);
 
-    console.log(`📊 Total evidence collected: ${allEvidence.length}`);
+    logger.info(`Total evidence collected: ${allEvidence.length}`);
+    console.log(`Vercel log: Total evidence collected: ${allEvidence.length}`);
 
     const validatedEvidence = await validateCitations(allEvidence);
 
@@ -88,17 +77,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       config
     );
 
-    console.log('✅ Fact-Check Complete:', finalReport.final_score);
+    logger.info('Fact-Check Complete', { final_score: finalReport.final_score });
+    console.log(`Vercel log: Fact-Check Complete: ${finalReport.final_score}`);
     return res.status(200).json(finalReport);
 
   } catch (error: any) {
-    console.error('❌ Fact-check failed:', error);
+    logger.error('Fact-check failed', error);
+    console.error('Vercel log: Fact-check failed', error);
     return res.status(500).json({
       error: 'Fact-check failed',
       details: error.message,
       id: `error_${Date.now()}`,
       originalText: text,
-      final_verdict: 'ERROR',
+      final_verdict: 'Uncertain',
       final_score: 0,
       evidence: [],
       processingTime: Date.now() - startTime
@@ -115,7 +106,7 @@ async function runPhase1(text: string, config: any) {
     const apiKey = config.factCheck || process.env.GOOGLE_FACT_CHECK_API_KEY;
 
     if (!apiKey) {
-      console.warn('⚠️ Google Fact Check API key not configured');
+      logger.warn('Google Fact Check API key not configured');
       return {
         tier: 'direct-verification',
         success: false,
@@ -147,10 +138,13 @@ async function runPhase1(text: string, config: any) {
         evidence.push({
           id: `factcheck_${i}`,
           publisher,
-          url: review.url || null,
+          url: review.url || '',
           quote: `${claim.text} - ${review.textualRating || 'Unknown'}`,
           score: convertRatingToScore(review.textualRating),
-          type: 'claim'
+          type: 'claim',
+          title: '',
+          snippet: '',
+          source: ''
         });
       }
     }
@@ -159,7 +153,7 @@ async function runPhase1(text: string, config: any) {
       ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
       : 0;
 
-    console.log(`✅ Phase 1: Found ${evidence.length} fact-checks (avg: ${avgScore.toFixed(1)}%)`);
+    logger.info(`Phase 1: Found ${evidence.length} fact-checks`, { avgScore: avgScore.toFixed(1) });
 
     return {
       tier: 'direct-verification',
@@ -170,7 +164,7 @@ async function runPhase1(text: string, config: any) {
     };
 
   } catch (error: any) {
-    console.warn('⚠️ Phase 1 failed:', error.message);
+    logger.warn('Phase 1 failed', { error: error.message });
     return {
       tier: 'direct-verification',
       success: false,
@@ -193,7 +187,7 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
-    console.log(`🔍 Calling SERP API: ${baseUrl}/api/serp-search`);
+    logger.info('Calling SERP API', { url: `${baseUrl}/api/serp-search` });
 
     const response = await fetch(`${baseUrl}/api/serp-search`, {
       method: 'POST',
@@ -216,7 +210,10 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
         url: result.link,
         quote: result.snippet || '',
         score: calculateSourceScore(result.domain || result.source),
-        type: 'search_result'
+        type: 'search_result',
+        title: '',
+        snippet: '',
+        source: ''
       });
     }
 
@@ -224,7 +221,7 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
       ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length
       : 0;
 
-    console.log(`✅ Phase 2: Found ${evidence.length} results (avg: ${avgScore.toFixed(1)}%)`);
+    logger.info(`Phase 2: Found ${evidence.length} results`, { avgScore: avgScore.toFixed(1) });
 
     return {
       tier: 'pipeline-search',
@@ -235,7 +232,7 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
     };
 
   } catch (error: any) {
-    console.warn('⚠️ Phase 2 failed:', error.message);
+    logger.warn('Phase 2 failed', { error: error.message });
     return {
       tier: 'pipeline-search',
       success: false,
@@ -255,7 +252,7 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
     const entities = extractKeyEntities(text);
 
     if (entities.length === 0) {
-      console.log('ℹ️ No entities for news search');
+      logger.info('No entities for news search');
       return {
         tier: 'specialized-analysis',
         success: false,
@@ -281,7 +278,7 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
     });
 
     if (!response.ok) {
-      console.warn('⚠️ News API failed, using SERP fallback');
+      logger.warn('News API failed, using SERP fallback');
       return await fallbackNewsSearch(newsQuery, startTime, req, config);
     }
 
@@ -297,11 +294,14 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
         quote: post.text?.substring(0, 300) || '',
         score: 70,
         type: 'news',
-        publishedDate: post.published
+        publishedDate: post.published,
+        title: '',
+        snippet: '',
+        source: ''
       });
     }
 
-    console.log(`✅ Phase 3: Found ${evidence.length} news articles`);
+    logger.info(`Phase 3: Found ${evidence.length} news articles`);
 
     return {
       tier: 'specialized-analysis',
@@ -312,7 +312,7 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
     };
 
   } catch (error: any) {
-    console.warn('⚠️ Phase 3 failed:', error.message);
+    logger.warn('Phase 3 failed', { error: error.message });
     return {
       tier: 'specialized-analysis',
       success: false,
@@ -353,7 +353,10 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
       url: r.link,
       quote: r.snippet || '',
       score: 65,
-      type: 'news' as const
+      type: 'news' as const,
+      title: '',
+      snippet: '',
+      source: ''
     }));
 
     return {
@@ -387,13 +390,13 @@ async function runPhase4Synthesis(
     const preferredModel = config.geminiModel;
 
     if (!geminiApiKey || evidence.length === 0) {
-      console.warn('⚠️ Using statistical fallback');
+      logger.warn('Using statistical fallback');
       return createStatisticalReport(text, evidence, tierResults, startTime);
     }
 
     const prompt = buildSynthesisPrompt(text, evidence, context);
 
-    console.log(`🤖 Synthesizing with Gemini (preferred model: ${preferredModel || 'default'})`);
+    logger.info('Synthesizing with Gemini', { model: preferredModel || 'default' });
 
     const geminiText = await generateTextWithFallback(prompt, {
       apiKey: geminiApiKey,
@@ -407,7 +410,7 @@ async function runPhase4Synthesis(
       throw new Error('Empty response from Gemini');
     }
 
-    console.log('✅ Gemini synthesis successful');
+    logger.info('Gemini synthesis successful');
 
     const synthesis = parseGeminiResponse(geminiText, evidence);
 
@@ -433,7 +436,7 @@ async function runPhase4Synthesis(
     };
 
   } catch (error: any) {
-    console.error('❌ Synthesis failed:', error.message);
+    logger.error('Synthesis failed', { error: error.message });
     return createStatisticalReport(text, evidence, tierResults, startTime);
   }
 }
@@ -475,7 +478,7 @@ function parseGeminiResponse(text: string, evidence: EvidenceItem[]) {
                 evidence.length > 0 ? Math.round(evidence.reduce((s, e) => s + e.score, 0) / evidence.length) : 0;
 
   return {
-    verdict: verdictMatch?.[1]?.trim() || generateVerdict(score),
+    verdict: (verdictMatch?.[1]?.trim() || generateVerdict(score)) as FactVerdict,
     score,
     reasoning: reasoningMatch?.[1]?.trim() || `Based on ${evidence.length} sources with ${score}% avg credibility.`,
     warnings: warningsMatch?.[1]?.trim() !== 'None' ? [warningsMatch?.[1]?.trim()].filter(Boolean) : []
@@ -514,7 +517,7 @@ function createStatisticalReport(text: string, evidence: EvidenceItem[], tierRes
 async function validateCitations(evidence: EvidenceItem[]) {
   if (evidence.length === 0) return [];
 
-  console.log('🔬 Validating citations...');
+  logger.info('Validating citations...');
   
   const validationPromises = evidence.map(async (item) => {
     const { url } = item;
@@ -553,7 +556,7 @@ async function validateCitations(evidence: EvidenceItem[]) {
   return Promise.all(validationPromises);
 }
 
-function calculateCredibilityInternal(url: string): { score: number; warnings: string[] } {
+function calculateCredibilityInternal(url: string | null): { score: number; warnings: string[] } {
   const warnings: string[] = [];
   let score = 75;
 
@@ -621,7 +624,7 @@ function convertRatingToScore(rating: string): number {
   return 50;
 }
 
-function generateVerdict(score: number): string {
+function generateVerdict(score: number): FactVerdict {
   if (score >= 85) return 'TRUE';
   if (score >= 70) return 'MOSTLY TRUE';
   if (score >= 50) return 'MIXED';

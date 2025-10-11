@@ -3,12 +3,14 @@ import {
   FactCheckReport,
   TieredFactCheckResult,
   EditorMode,
+} from '@/types';
+import {
   EditorResult,
   ContentChange,
   FactCheckSegment,
   FactCheckAnalysis,
   CorrectionSuggestion
-} from '../types';
+} from '@/types/advancedEditor';
 import { getApiKeys } from './apiKeyService';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 

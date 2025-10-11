@@ -1,7 +1,7 @@
 // src/components/SchemaInputForm.tsx
 import React, { useState } from 'react';
 import { Link, FileText, Globe, CheckCircle, AlertCircle, Plus, X } from 'lucide-react';
-import { FactCheckReport } from '../types';
+import { FactCheckReport } from '@/types';
 
 interface SchemaInputFormProps {
   factCheckResult?: FactCheckReport | null;

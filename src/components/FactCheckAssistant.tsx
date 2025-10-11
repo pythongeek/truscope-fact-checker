@@ -1,6 +1,7 @@
 // src/components/FactCheckAssistant.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { TieredFactCheckResult, ChatMessage } from '../types';
+import { TieredFactCheckResult } from '@/types';
+import { ChatMessage } from '@/types';
 import { factCheckAssistantService } from '../services/factCheckAssistantService';
 
 interface Props {

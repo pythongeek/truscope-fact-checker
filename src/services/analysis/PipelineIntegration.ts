@@ -5,7 +5,7 @@ import { AdvancedQueryPipeline, PipelineResult, RankedQuery } from '@/services/a
 import { SerpApiService } from '@/services/serpApiService';
 import { GoogleFactCheckService } from '@/services/googleFactCheckService';
 import { WebSearchService } from '@/services/webSearchService';
-import { EvidenceItem } from '@/types/factCheck';
+import { EvidenceItem } from '@/types';
 
 export interface EnhancedSearchResult {
     pipelineResult: PipelineResult;

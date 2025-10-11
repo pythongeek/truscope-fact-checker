@@ -1,6 +1,6 @@
 // src/services/schemaGenerator.ts
 
-import { EvidenceItem, TieredFactCheckResult } from '../types';
+import { EvidenceItem, TieredFactCheckResult } from '@/types';
 import { ClaimReview } from 'schema-dts';
 
 // Helper to determine a textual rating from the score

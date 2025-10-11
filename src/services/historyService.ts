@@ -1,4 +1,4 @@
-import { FactCheckReport, HistoryEntry } from '@/types/factCheck';
+import { FactCheckReport, HistoryEntry } from '@/types';
 
 const HISTORY_STORAGE_KEY = 'truescope_history';
 const MAX_HISTORY_ITEMS = 20;
