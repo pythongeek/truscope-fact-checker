@@ -44,16 +44,41 @@ export const EnhancedDashboard: React.FC = () => {
         summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
         overallAuthenticityScore: finalScore,
         claimVerifications: scoredEvidence.map((item) => ({
+          id: item.id,
           claimText: query,
           status: item.score > 70 ? 'Verified' : 'Unverified',
           confidenceScore: item.score / 100,
           explanation: item.snippet,
+          reasoning: {
+            totalSources: 0,
+            supportingSources: 0,
+            conflictingSources: 0,
+            conclusion: '',
+          },
+          evidence: [],
         })),
         evidence: scoredEvidence,
         final_score: finalScore,
         final_verdict: 'Uncertain',
         reasoning: '',
-        score_breakdown: {}
+        score_breakdown: {
+          final_score_formula: '',
+          metrics: [],
+          confidence_intervals: {
+            lower_bound: 0,
+            upper_bound: 0,
+          },
+        },
+        metadata: {
+          method_used: 'mock',
+          processing_time_ms: 100,
+          sources_consulted: {
+            total: 0,
+            high_credibility: 0,
+            conflicting: 0,
+          },
+          warnings: [],
+        },
       },
       metadata: {}
     };

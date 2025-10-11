@@ -58,14 +58,14 @@ const SearchResults: React.FC<SearchResultsProps> = ({ searchEvidence }) => {
             {results.map((result, index) => (
                 <div key={index} className="bg-slate-900/50 p-4 rounded-lg">
                     <a 
-                        href={result.link} 
+                        href={result.url}
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="text-base font-semibold text-indigo-400 hover:underline"
                     >
                         <Highlight text={result.title} query={query} />
                     </a>
-                    <p className="text-xs text-green-400 mt-1 truncate">{result.link}</p>
+                    <p className="text-xs text-green-400 mt-1 truncate">{result.url}</p>
                     <p className="text-slate-300 mt-2 text-sm">
                         <Highlight text={result.snippet} query={query} />
                     </p>

@@ -170,7 +170,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       {report && (
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>
-          <EnhancedFactCheckReport result={{ report }} />
+          <EnhancedFactCheckReport report={report} />
         </div>
       )}
 

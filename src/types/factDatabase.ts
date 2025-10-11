@@ -1,4 +1,6 @@
-interface FactDatabase {
+import { FactVerdict } from '.';
+
+export interface FactDatabase {
   id: string;
   statement: string;
   normalizedStatement: string; // For fuzzy matching
@@ -10,15 +12,7 @@ interface FactDatabase {
   trends: TrendingInfo;
 }
 
-type FactVerdict =
-  | 'true'
-  | 'mostly-true'
-  | 'mixed'
-  | 'mostly-false'
-  | 'false'
-  | 'unverified';
-
-interface VerifiedSource {
+export interface VerifiedSource {
   url: string;
   publisher: string;
   credibilityScore: number;
@@ -29,7 +23,7 @@ interface VerifiedSource {
   sourceType: 'academic' | 'news' | 'government' | 'organization' | 'expert';
 }
 
-interface FactMetadata {
+export interface FactMetadata {
   topic: string;
   category: string[];
   geography?: string;
@@ -37,7 +31,7 @@ interface FactMetadata {
   complexity: 'simple' | 'complex' | 'expert-level';
 }
 
-interface VerificationInfo {
+export interface VerificationInfo {
   lastVerified: Date;
   verificationCount: number;
   automaticReverification: boolean;
@@ -45,7 +39,7 @@ interface VerificationInfo {
   verificationHistory: VerificationEvent[];
 }
 
-interface TrendingInfo {
+export interface TrendingInfo {
   trendingScore: number;
   mentionCount: number;
   platforms: PlatformMention[];
@@ -53,7 +47,7 @@ interface TrendingInfo {
   declineRate: number;
 }
 
-interface VerificationEvent {
+export interface VerificationEvent {
   date: Date;
   method: string;
   confidence: number;
@@ -63,7 +57,7 @@ interface VerificationEvent {
   newVerdict?: FactVerdict;
 }
 
-interface PlatformMention {
+export interface PlatformMention {
   platform: 'twitter' | 'facebook' | 'instagram' | 'tiktok' | 'youtube' | 'reddit' | 'news' | 'blog' | 'forum';
   mentionCount: number;
   sentiment: 'positive' | 'negative' | 'neutral' | 'mixed';

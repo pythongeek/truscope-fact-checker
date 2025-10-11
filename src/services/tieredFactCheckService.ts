@@ -1,7 +1,8 @@
 // src/services/tieredFactCheckService.ts - REFACTORED CORRECTLY
 // Integrates synthesizer to drive search phases and implements the new data model.
 
-import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult, Evidence } from '@/types';
+import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult, Evidence, FactVerdict } from '@/types';
+import { completeFactCheckReport, createErrorReport as createErrorHelper } from '@/types/helpers';
 import { getSourceReliability } from '../data/sourceReliability';
 import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
@@ -31,7 +32,7 @@ export interface TierResult {
     queriesExecuted?: number;
     pipelineUsed?: boolean;
   };
-  searchPhaseResult?: SearchPhaseResult<any>;
+  searchPhaseResult?: any;
   report?: FactCheckReport;
 }
 
@@ -164,7 +165,7 @@ export class TieredFactCheckService {
       // 3. Call Gemini and Parse the Structured JSON
       let claimVerifications: ClaimVerificationResult[];
       try {
-        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { maxOutputTokens: 2048 });
+        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey: process.env.GEMINI_API_KEY, maxOutputTokens: 2048 });
         // Robustly parse the JSON, cleaning up potential markdown formatting
         const cleanedJson = analysisResultJson.replace(/```json|```/g, '').trim();
         const analysisResult = JSON.parse(cleanedJson);
@@ -174,7 +175,7 @@ export class TieredFactCheckService {
 
         const finalEvidence: Evidence[] = processedEvidence.map(e => ({
           ...e,
-          relevanceScore: evidenceWithRelevance.get(e.url) || 0,
+          relevanceScore: Number(evidenceWithRelevance.get(e.url)) || 0,
         }));
 
         claimVerifications = [{
@@ -210,50 +211,67 @@ export class TieredFactCheckService {
 
 
       const result: TieredFactCheckResult = {
-        id: operationId,
-        timestamp: new Date().toISOString(),
-        originalText: claimText,
-        overallAuthenticityScore: finalScore,
-        summary: finalReasoning,
-        claimVerifications,
-        searchPhases: {
-          googleFactChecks: tierResults.find(t => t.tier === 'direct-verification')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
-          webSearches: tierResults.find(t => t.tier === 'specialized-web-search')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
-          newsSearches: tierResults.find(t => t.tier === 'news-search')?.searchPhaseResult ?? { queryUsed: '', count: 0, rawResults: [] },
+        report: {
+            id: operationId,
+            originalText: claimText,
+            summary: finalReasoning,
+            overallAuthenticityScore: finalScore,
+            claimVerifications,
+            final_score: finalScore,
+            final_verdict: finalVerdict,
+            reasoning: finalReasoning,
+            evidence: allEvidence,
+            score_breakdown: finalSynthesizedReport?.score_breakdown || {
+                final_score_formula: 'Default scoring',
+                metrics: [],
+                confidence_intervals: {
+                    lower_bound: 0,
+                    upper_bound: 0,
+                },
+            },
+            metadata: finalSynthesizedReport?.metadata || {
+                method_used: 'unknown',
+                processing_time_ms: 0,
+                apis_used: [],
+                sources_consulted: {
+                    total: 0,
+                    high_credibility: 0,
+                    conflicting: 0,
+                },
+                warnings: [],
+            },
+        },
+        metadata: {
+            tier_breakdown: tierResults.map(t => ({
+                tier: t.tier,
+                success: t.success,
+                confidence: t.confidence,
+                processing_time_ms: t.processingTime,
+                evidence_count: t.evidence.length,
+            })),
         },
       };
+      if (finalSynthesizedReport && finalSynthesizedReport.evidence.length > 0) {
+        await this.uploadReportToBlob(finalSynthesizedReport);
+      }
 
       if (finalSynthesizedReport && finalSynthesizedReport.evidence.length > 0) {
         await this.uploadReportToBlob(finalSynthesizedReport);
       }
 
       logger.info('Tiered fact-check completed successfully.');
-      return {
-        id: operationId,
-        originalText: claimText,
-        summary: finalReasoning,
-        overallAuthenticityScore: finalScore,
-        claimVerifications,
-        metadata: {}
-      };
+      return result.report;
 
     } catch (error) {
       logger.error('❌ Tiered fact check failed:', error);
       // Return an error structure for FactCheckReport
-      return {
-        id: operationId,
-        originalText: claimText,
-        summary: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        overallAuthenticityScore: 0,
-        claimVerifications: [],
-        metadata: {}
-      };
+      return createErrorHelper(claimText, error as Error, 'tiered-fact-check');
     }
   }
 
   private createBaseReport(id: string, text: string, evidence: EvidenceItem[]): FactCheckReport {
     const score = evidence.length > 0 ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length) : 0;
-    return {
+    return completeFactCheckReport({
       id,
       originalText: text,
       final_verdict: this.generateVerdict(score) as any,
@@ -261,11 +279,7 @@ export class TieredFactCheckService {
       reasoning: `Report based on ${evidence.length} sources.`,
       evidence,
       enhanced_claim_text: text,
-      score_breakdown: { 'Initial score': { score: 0, reasoning: ''} },
-      metadata: { method_used: 'tiered-verification', processing_time_ms: 0, apis_used: [], sources_consulted: { total: evidence.length, high_credibility: 0, conflicting: 0 }, warnings: [] },
-      source_credibility_report: { overallScore: score, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [], credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 } },
-      temporal_verification: { hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: [] }
-    };
+    });
   }
 
   private mapVerdictToStatus(verdict: string): ClaimVerificationResult['status'] {
@@ -900,46 +914,4 @@ Output MUST be valid JSON in this exact format:
     }
   }
 
-  private createErrorReport(
-    text: string,
-    reportId: string,
-    error: any,
-    processingTime: number
-  ): FactCheckReport {
-    return {
-      id: reportId,
-      originalText: text,
-      final_verdict: 'ANALYSIS ERROR' as any,
-      final_score: 0,
-      evidence: [],
-      reasoning: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      enhanced_claim_text: text,
-      score_breakdown: {
-        'Error': {
-            score: 0,
-            reasoning: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-        }
-      },
-      metadata: {
-        method_used: 'tiered-verification-error',
-        processing_time_ms: processingTime,
-        apis_used: ['error-handler'],
-        sources_consulted: { total: 0, high_credibility: 0, conflicting: 0 },
-        warnings: [`Critical error: ${error instanceof Error ? error.message : 'Unknown'}`]
-      },
-      source_credibility_report: {
-        overallScore: 0,
-        highCredibilitySources: 0,
-        flaggedSources: 0,
-        biasWarnings: [],
-        credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
-      },
-      temporal_verification: {
-        hasTemporalClaims: false,
-        validations: [],
-        overallTemporalScore: 0,
-        temporalWarnings: []
-      }
-    };
-  }
 }

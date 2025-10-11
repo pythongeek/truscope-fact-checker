@@ -21,28 +21,28 @@ const MethodologyView: React.FC<{ metadata: FactCheckMetadata }> = ({ metadata }
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                 <InfoCard title="Analysis Method">
-                    <p className="text-slate-100 font-medium">{metadata.method}</p>
+                    <p className="text-slate-100 font-medium">{metadata.method_used}</p>
                 </InfoCard>
                 <InfoCard title="Processing Time">
-                     <p className="text-slate-100 font-medium">{metadata.processingTime} ms</p>
+                     <p className="text-slate-100 font-medium">{metadata.processing_time_ms} ms</p>
                 </InfoCard>
                 <InfoCard title="APIs Used">
-                     <p className="text-slate-100 font-medium">{metadata.apisUsed.join(', ')}</p>
+                     <p className="text-slate-100 font-medium">{metadata.apisUsed?.join(', ')}</p>
                 </InfoCard>
             </div>
             
             <InfoCard title="Sources Consulted">
                  <div className="flex justify-around">
                     <div className="text-center">
-                        <p className="text-2xl font-bold text-slate-100">{metadata.sourcesConsulted.total}</p>
+                        <p className="text-2xl font-bold text-slate-100">{metadata.sources_consulted.total}</p>
                         <p className="text-xs text-slate-300">Total Sources</p>
                     </div>
                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-400">{metadata.sourcesConsulted.high_credibility}</p>
+                        <p className="text-2xl font-bold text-green-400">{metadata.sources_consulted.high_credibility}</p>
                         <p className="text-xs text-slate-300">High-Credibility</p>
                     </div>
                      <div className="text-center">
-                        <p className="text-2xl font-bold text-red-400">{metadata.sourcesConsulted.conflicting}</p>
+                        <p className="text-2xl font-bold text-red-400">{metadata.sources_consulted.conflicting}</p>
                         <p className="text-xs text-slate-300">Conflicting</p>
                     </div>
                 </div>
