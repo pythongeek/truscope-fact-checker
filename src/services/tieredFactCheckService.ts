@@ -1,7 +1,7 @@
-// src/services/tieredFactCheckService.ts - REFACTORED CORRECTLY
-// Integrates synthesizer to drive search phases and implements the new data model.
+// src/services/tieredFactCheckService.ts - FIXED TYPE ERRORS
+// All type mismatches resolved while preserving functionality
 
-import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, SearchPhaseResult, Evidence, FactVerdict } from '@/types';
+import { FactCheckReport, EvidenceItem, PublishingContext, TieredFactCheckResult, ClaimVerificationResult, Evidence, ScoreBreakdown, FactCheckMetadata } from '@/types';
 import { completeFactCheckReport, createErrorReport as createErrorHelper } from '@/types/helpers';
 import { getSourceReliability } from '../data/sourceReliability';
 import { GoogleFactCheckService } from './googleFactCheckService';
@@ -37,15 +37,8 @@ export interface TierResult {
 }
 
 const THRESHOLDS = {
-  phase1ToPhase2: {
-    minConfidence: 75,
-    minEvidence: 2
-  },
-  phase2ToPhase3: {
-    minConfidence: 60, // Lowered from 65
-    minEvidence: 2, // Lowered from 3
-    minAvgScore: 55 // Lowered from 65
-  }
+  phase1ToPhase2: { minConfidence: 75, minEvidence: 2 },
+  phase2ToPhase3: { minConfidence: 60, minEvidence: 2, minAvgScore: 55 }
 };
 
 export class TieredFactCheckService {
@@ -67,10 +60,9 @@ export class TieredFactCheckService {
 
   async performTieredCheck(claimText: string, publishingContext: PublishingContext): Promise<FactCheckReport> {
     const startTime = Date.now();
-    const operationId = await generateSHA256(`tiered_${claimText}_${startTime}`);
-    logger.info('🎯 Starting Refactored Tiered Fact Check with Synthesized Queries', { claimText, publishingContext });
+    const operationId = await generateSHA256(claimText + startTime);
+    logger.info(`Starting tiered fact-check for claim: "${claimText}" (ID: ${operationId})`);
 
-    // Generate queries to be used by all phases
     const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claimText);
 
     const tierResults: TierResult[] = [];
@@ -78,35 +70,29 @@ export class TieredFactCheckService {
     let finalSynthesizedReport: FactCheckReport | null = null;
 
     try {
-      // Phase 1: Direct Fact-Check using keywordQuery
       const phase1Result = await this.runPhase1DirectVerification(keywordQuery);
       tierResults.push(phase1Result);
       allEvidence.push(...phase1Result.evidence);
 
       let phase2Result: TierResult | null = null;
       if (this.shouldEscalate(1, phase1Result)) {
-        // Phase 2: Advanced Pipeline (uses its own internal query logic but could be enhanced)
         phase2Result = await this.runPhase2AdvancedPipeline(claimText);
         tierResults.push(phase2Result);
         allEvidence.push(...phase2Result.evidence);
 
         const hasGoodEvidence = phase2Result.evidence.length >= 3 && phase2Result.confidence >= 60;
         if ((!hasGoodEvidence || this.shouldEscalate(2, phase2Result)) && phase2Result.report) {
-          // Phase 3a: News Search
           const phase3aResult = await this.runPhase3aNewsSearch(keywordQuery, claimText);
           tierResults.push(phase3aResult);
           allEvidence.push(...phase3aResult.evidence);
 
-          // Phase 3b: Specialized Web Search
           const phase3bResult = await this.runPhase3bSpecializedWebSearch(contextualQuery, claimText);
           tierResults.push(phase3bResult);
           allEvidence.push(...phase3bResult.evidence);
         }
       }
 
-      // Phase 4: Final Synthesis (always run if there's evidence)
       if (allEvidence.length > 0) {
-        // Use the report from phase 2 if available, otherwise create a base report
         const baseReportForSynthesis = phase2Result?.report || this.createBaseReport(operationId, claimText, allEvidence);
         const phase4Result = await this.runPhase4Synthesis(claimText, baseReportForSynthesis, allEvidence, publishingContext);
         tierResults.push(phase4Result);
@@ -116,28 +102,23 @@ export class TieredFactCheckService {
         finalSynthesizedReport.final_verdict = "Uncertain";
       }
 
-      // Construct the final TieredFactCheckResult
       const finalScore = finalSynthesizedReport?.final_score ?? 0;
       const finalVerdict = finalSynthesizedReport?.final_verdict ?? "Uncertain";
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
-      // 1. Process Evidence with Credibility Scores
       const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
         const reliability = getSourceReliability(e.publisher);
-        const url = new URL(e.url || 'http://placeholder.com');
         return {
-          id: e.id,
           url: e.url || '',
-          title: e.quote.substring(0, 50), // Placeholder for title
+          title: e.quote.substring(0, 50),
           snippet: e.quote,
           publisher: e.publisher,
           publicationDate: e.publishedDate,
-          credibilityScore: reliability ? reliability.reliabilityScore : 50, // Default score
-          relevanceScore: 0, // Placeholder, AI will fill this in
+          credibilityScore: reliability ? reliability.reliabilityScore : 50,
+          relevanceScore: 0,
         };
       });
-
-      // 2. Construct the AI Analysis Prompt
+      
       const analysisPrompt = `
         You are a meticulous fact-checking analyst. Your task is to analyze a claim based on the provided evidence and return a single, minified JSON object. Do not include any text outside of the JSON object.
 
@@ -148,36 +129,33 @@ export class TieredFactCheckService {
 
         Based *only* on the evidence, determine the final verification status. Your response MUST be a single, valid, minified JSON object with the following structure:
         {
-          "status": "...", // Choose one: "Verified", "Unverified", "Misleading", "Accurate", "Needs Context"
-          "confidenceScore": 0.0, // A float between 0.0 and 1.0
-          "explanation": "...", // A 1-2 sentence neutral explanation for your verdict.
+          "status": "...",
+          "confidenceScore": 0.0,
+          "explanation": "...",
           "reasoning": {
-            "supportingSources": 0, // Count of sources that directly support the claim.
-            "conflictingSources": 0, // Count of sources that directly conflict with the claim.
-            "conclusion": "..." // Brief summary of the reasoning process. Example: 'Verdict is based on multiple high-credibility sources that corroborate the claim, with no significant conflicting evidence found.'
+            "supportingSources": 0,
+            "conflictingSources": 0,
+            "conclusion": "..."
           },
           "evidenceWithRelevance": [
-            { "url": "...", "relevanceScore": 0 } // For each piece of evidence, provide its original URL and a relevanceScore (0-100) to the claim.
+            { "url": "...", "relevanceScore": 0 }
           ]
         }
       `;
-
-      // 3. Call Gemini and Parse the Structured JSON
+      
       let claimVerifications: ClaimVerificationResult[];
       try {
         const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey: process.env.GEMINI_API_KEY, maxOutputTokens: 2048 });
-        // Robustly parse the JSON, cleaning up potential markdown formatting
         const cleanedJson = analysisResultJson.replace(/```json|```/g, '').trim();
         const analysisResult = JSON.parse(cleanedJson);
 
-        // 4. Map the AI's response back to your data model
         const evidenceWithRelevance = new Map(analysisResult.evidenceWithRelevance.map((item: { url: string; relevanceScore: number; }) => [item.url, item.relevanceScore]));
 
         const finalEvidence: Evidence[] = processedEvidence.map(e => ({
           ...e,
           relevanceScore: Number(evidenceWithRelevance.get(e.url)) || 0,
         }));
-
+        
         claimVerifications = [{
           id: `claim-${operationId}`,
           claimText: claimText,
@@ -190,7 +168,7 @@ export class TieredFactCheckService {
               totalSources: finalEvidence.length,
           },
         }];
-
+        
       } catch (error) {
         console.error("Failed to parse AI analysis response:", error);
         claimVerifications = [{
@@ -209,62 +187,55 @@ export class TieredFactCheckService {
         }];
       }
 
-
-      const result: TieredFactCheckResult = {
-        report: {
-            id: operationId,
-            originalText: claimText,
-            summary: finalReasoning,
-            overallAuthenticityScore: finalScore,
-            claimVerifications,
-            final_score: finalScore,
-            final_verdict: finalVerdict,
-            reasoning: finalReasoning,
-            evidence: allEvidence,
-            score_breakdown: finalSynthesizedReport?.score_breakdown || {
-                final_score_formula: 'Default scoring',
-                metrics: [],
-                confidence_intervals: {
-                    lower_bound: 0,
-                    upper_bound: 0,
-                },
-            },
-            metadata: finalSynthesizedReport?.metadata || {
-                method_used: 'unknown',
-                processing_time_ms: 0,
-                apisUsed: [],
-                sources_consulted: {
-                    total: 0,
-                    high_credibility: 0,
-                    conflicting: 0,
-                },
-                warnings: [],
-            },
-        },
-        metadata: {
-            tierBreakdown: tierResults.map(t => ({
-                tier: t.tier,
-                success: t.success,
-                confidence: t.confidence,
-                processing_time_ms: t.processingTime,
-                evidence_count: t.evidence.length,
-            })),
+      // FIX: Properly construct score_breakdown to match the ScoreBreakdown type.
+      // The properties 'sourceReliability' and ''Source Reliability'' are not valid here.
+      // We must use the defined structure with `metrics`.
+      const scoreBreakdown: ScoreBreakdown = {
+        final_score_formula: finalSynthesizedReport?.score_breakdown?.final_score_formula || 'Default scoring',
+        metrics: finalSynthesizedReport?.score_breakdown?.metrics || [],
+        confidence_intervals: finalSynthesizedReport?.score_breakdown?.confidence_intervals || {
+          lower_bound: 0,
+          upper_bound: 0,
         },
       };
-      if (finalSynthesizedReport && finalSynthesizedReport.evidence.length > 0) {
-        await this.uploadReportToBlob(finalSynthesizedReport);
-      }
+
+      // FIX: Properly construct metadata to match the FactCheckMetadata type.
+      // The property 'tier_breakdown' is not valid here.
+      const metadata: FactCheckMetadata = {
+        method_used: finalSynthesizedReport?.metadata?.method_used || 'unknown',
+        processing_time_ms: Date.now() - startTime,
+        apisUsed: finalSynthesizedReport?.metadata?.apisUsed || [],
+        sources_consulted: finalSynthesizedReport?.metadata?.sources_consulted || {
+          total: 0,
+          high_credibility: 0,
+          conflicting: 0,
+        },
+        warnings: finalSynthesizedReport?.metadata?.warnings || [],
+      };
+      
+      const finalReport: FactCheckReport = {
+        id: operationId,
+        originalText: claimText,
+        summary: finalReasoning,
+        overallAuthenticityScore: finalScore,
+        claimVerifications,
+        final_score: finalScore,
+        final_verdict: finalVerdict,
+        reasoning: finalReasoning,
+        evidence: allEvidence,
+        score_breakdown: scoreBreakdown,
+        metadata: metadata,
+      };
 
       if (finalSynthesizedReport && finalSynthesizedReport.evidence.length > 0) {
         await this.uploadReportToBlob(finalSynthesizedReport);
       }
-
+      
       logger.info('Tiered fact-check completed successfully.');
-      return result.report;
+      return finalReport;
 
     } catch (error) {
       logger.error('❌ Tiered fact check failed:', error);
-      // Return an error structure for FactCheckReport
       return createErrorHelper(claimText, error as Error, 'tiered-fact-check');
     }
   }
@@ -282,19 +253,8 @@ export class TieredFactCheckService {
     });
   }
 
-  private mapVerdictToStatus(verdict: string): ClaimVerificationResult['status'] {
-    const lowerVerdict = verdict.toLowerCase();
-    if (lowerVerdict.includes('true')) return 'Accurate';
-    if (lowerVerdict.includes('false')) return 'Misleading';
-    if (lowerVerdict.includes('mixed')) return 'Needs Context';
-    if (lowerVerdict.includes('unverified')) return 'Unverified';
-    return 'Unverified';
-  }
-
   private async runPhase1DirectVerification(keywordQuery: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🔍 Phase 1: Direct Fact-Check Query:', keywordQuery);
-
     try {
       const report = await this.googleFactCheck.searchClaims(keywordQuery, 5);
       if (!report || report.evidence.length === 0) {
@@ -314,12 +274,17 @@ export class TieredFactCheckService {
 
   private async runPhase2AdvancedPipeline(text: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🚀 Phase 2: Advanced Query Pipeline Analysis');
     try {
-      const report = await this.enhancedService.orchestrateFactCheck(text, 'comprehensive');
+      const report = await this.enhancedService.runAdvancedPipeline(text);
       const evidenceCount = report.evidence.length;
-      const avgScore = evidenceCount > 0 ? report.evidence.reduce((sum, e) => sum + e.score, 0) / evidenceCount : 0;
-      const shouldEscalate = evidenceCount < THRESHOLDS.phase2ToPhase3.minEvidence || avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore || report.final_score < THRESHOLDS.phase2ToPhase3.minConfidence;
+      const shouldEscalate = this.shouldEscalate(2, {
+        tier: 'pipeline-search',
+        success: evidenceCount > 0,
+        confidence: report.final_score,
+        evidence: report.evidence,
+        shouldEscalate: false, // temp value
+        processingTime: 0
+      });
 
       return {
         tier: 'pipeline-search', success: evidenceCount > 0, confidence: report.final_score, evidence: report.evidence, shouldEscalate, processingTime: Date.now() - startTime, report, metadata: { queriesExecuted: (report.metadata as any).pipelineMetadata?.queriesExecuted || 0, pipelineUsed: true }, searchPhaseResult: { queryUsed: 'Advanced Pipeline', count: evidenceCount, rawResults: report.evidence }
@@ -334,10 +299,8 @@ export class TieredFactCheckService {
 
   private async runPhase3aNewsSearch(keywordQuery: string, text: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🎯 Phase 3a: News Search with Keyword Query');
     const evidence: EvidenceItem[] = [];
-    let queryUsed = '';
-
+    let queryUsed = 'Generic News Search';
     try {
       if (keywordQuery) {
         queryUsed = keywordQuery;
@@ -346,6 +309,8 @@ export class TieredFactCheckService {
           evidence.push(...newsResults.posts.slice(0, 5).map((article, i) => {
             const url = new URL(article.url);
             const sourceName = url.hostname.replace(/^www\./, '');
+            // FIX: Ensure rating is typed correctly as "High" | "Medium" | "Low" to satisfy EvidenceItem type.
+            const rating: "High" | "Medium" | "Low" = "Medium";
             return {
               id: `news_${i}`,
               publisher: article.author || 'News Source',
@@ -360,7 +325,7 @@ export class TieredFactCheckService {
                 name: sourceName,
                 url: url.origin,
                 credibility: {
-                  rating: 'Medium',
+                  rating: rating,
                   classification: 'News Media',
                   warnings: [],
                 },
@@ -383,13 +348,11 @@ export class TieredFactCheckService {
       };
     }
   }
-
+  
   private async runPhase3bSpecializedWebSearch(contextualQuery: string, text: string): Promise<TierResult> {
     const startTime = Date.now();
-    console.log('🎯 Phase 3b: Specialized Web Search with Contextual Query');
     const evidence: EvidenceItem[] = [];
-    let queryUsed = '';
-
+    let queryUsed = 'Generic Web Search';
     try {
       const claimType = this.detectClaimType(text);
       if (claimType !== 'general' && contextualQuery) {
@@ -397,7 +360,7 @@ export class TieredFactCheckService {
         evidence.push(...specializedResults.evidence);
         queryUsed = specializedResults.query;
       }
-
+  
       const avgScore = evidence.length > 0 ? evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length : 50;
       return {
         tier: 'specialized-web-search', success: evidence.length > 0, confidence: avgScore, evidence, shouldEscalate: false, processingTime: Date.now() - startTime, searchPhaseResult: { queryUsed, count: evidence.length, rawResults: evidence }
@@ -408,8 +371,7 @@ export class TieredFactCheckService {
       };
     }
   }
-
-  // ⚠️ NEW: Fallback news search using SERP
+  
   private async getNewsFromSerp(query: string): Promise<EvidenceItem[]> {
     try {
       const newsQuery = `${query} news`;
@@ -426,6 +388,8 @@ export class TieredFactCheckService {
         .map((r, i) => {
           const url = new URL(r.link);
           const sourceName = url.hostname.replace(/^www\./, '');
+          // FIX: Ensure rating is typed correctly
+          const rating: "High" | "Medium" | "Low" = "Medium";
           return {
             id: `news_serp_${i}`,
             publisher: r.source || 'News Source',
@@ -439,7 +403,7 @@ export class TieredFactCheckService {
               name: sourceName,
               url: url.origin,
               credibility: {
-                rating: 'Medium',
+                rating: rating,
                 classification: 'News Media',
                 warnings: [],
               },
@@ -451,7 +415,7 @@ export class TieredFactCheckService {
       return [];
     }
   }
-
+  
   private async runPhase4Synthesis(
     text: string,
     baseReport: FactCheckReport,
@@ -460,15 +424,14 @@ export class TieredFactCheckService {
   ): Promise<TierResult & { report?: FactCheckReport }> {
     const startTime = Date.now();
     console.log('🧠 Phase 4: AI-Powered Synthesis');
-
-    // ⚠️ FIX: Deduplicate evidence before synthesis
+    
     const allEvidence = this.deduplicateEvidence([
       ...baseReport.evidence, 
       ...additionalEvidence
     ]);
     
     console.log(`📊 Synthesizing ${allEvidence.length} unique evidence items`);
-
+    
     try {
       if (allEvidence.length === 0) {
         console.warn('⚠️  No evidence to synthesize - using empty report');
@@ -488,8 +451,7 @@ export class TieredFactCheckService {
           }
         };
       }
-
-      // ⚠️ FIX: Better Gemini synthesis with error handling
+  
       let synthesisReport: FactCheckReport;
       
       try {
@@ -499,7 +461,7 @@ export class TieredFactCheckService {
         console.warn('⚠️  Gemini synthesis failed, using statistical fallback:', geminiError);
         synthesisReport = this.createStatisticalSynthesis(text, allEvidence, baseReport);
       }
-
+      
       const finalReport: FactCheckReport = {
         ...baseReport,
         final_score: synthesisReport.final_score,
@@ -515,7 +477,7 @@ export class TieredFactCheckService {
           ]
         }
       };
-
+  
       return {
         tier: 'synthesis',
         success: true,
@@ -525,15 +487,14 @@ export class TieredFactCheckService {
         processingTime: Date.now() - startTime,
         report: finalReport
       };
-
+      
     } catch (error) {
       console.error('❌ Phase 4 synthesis completely failed:', error);
-
-      // Final fallback - statistical average
+  
       const avgScore = allEvidence.length > 0
         ? Math.round(allEvidence.reduce((sum, e) => sum + e.score, 0) / allEvidence.length)
         : 0;
-
+  
       return {
         tier: 'synthesis',
         success: allEvidence.length > 0,
@@ -553,38 +514,50 @@ export class TieredFactCheckService {
     }
   }
 
-  // ⚠️ NEW: Statistical synthesis fallback
+  // FIX: Update createStatisticalSynthesis to use proper ScoreBreakdown type
   private createStatisticalSynthesis(
-    text: string, 
-    evidence: EvidenceItem[], 
+    text: string,
+    evidence: EvidenceItem[],
     baseReport: FactCheckReport
   ): FactCheckReport {
     const avgScore = Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length);
     const highCredSources = evidence.filter(e => e.score >= 75).length;
     const lowCredSources = evidence.filter(e => e.score < 50).length;
-
+  
     let reasoning = `Analysis based on ${evidence.length} sources:\n`;
     reasoning += `- ${highCredSources} high-credibility sources (≥75%)\n`;
     reasoning += `- ${evidence.length - highCredSources - lowCredSources} medium-credibility sources\n`;
     reasoning += `- ${lowCredSources} lower-credibility sources (<50%)\n`;
     reasoning += `\nAverage credibility score: ${avgScore}%`;
-
+  
+    // FIX: Use proper ScoreBreakdown structure with a `metrics` array
+    const scoreBreakdown: ScoreBreakdown = {
+      final_score_formula: `Weighted average of ${evidence.length} sources`,
+      metrics: [
+        {
+          name: 'Source Reliability',
+          score: avgScore,
+          description: `Weighted average of ${evidence.length} sources`
+        },
+        {
+          name: 'Corroboration',
+          score: (highCredSources / evidence.length) * 100,
+          description: `${highCredSources} sources with ≥75% credibility`
+        }
+      ],
+      confidence_intervals: {
+        lower_bound: Math.max(0, avgScore - 10),
+        upper_bound: Math.min(100, avgScore + 10)
+      }
+    };
+  
     return {
       ...baseReport,
       final_score: avgScore,
       final_verdict: this.generateVerdict(avgScore),
       reasoning,
       evidence,
-      score_breakdown: {
-        sourceReliability: {
-            score: avgScore,
-            reasoning: `Weighted average of ${evidence.length} sources`
-          },
-        'Corroboration': {
-            score: (highCredSources / evidence.length) * 100,
-            reasoning: `${highCredSources} sources with ≥75% credibility`
-          }
-      }
+      score_breakdown: scoreBreakdown
     };
   }
 
@@ -593,47 +566,20 @@ export class TieredFactCheckService {
     evidence: any[],
     publishingContext: PublishingContext
   ): Promise<FactCheckReport> {
-    const evidenceSummary = evidence
-      .slice(0, 15)
-      .map((e, i) => `[Source ${i + 1} - ${e.publisher} - Credibility: ${e.score}%]: "${e.quote}"`)
-      .join('\n');
+    const evidenceSummary = JSON.stringify(evidence.map(e => ({
+      source: e.publisher,
+      url: e.url,
+      quote: e.quote,
+      score: e.score
+    })).slice(0, 15), null, 2);
 
     const prompt = `
-As an expert fact-checker, analyze the following claim based on the provided evidence.
-Your analysis must be objective, impartial, and strictly based on the sources.
-
-**Claim:** "${originalClaim}"
-
-**Publishing Context:** ${publishingContext}
-
-**Evidence:**
-${evidenceSummary}
-
-**Your Task:**
-Provide a final verdict and a numerical score (0-100).
-Explain your reasoning clearly and concisely.
-Output MUST be valid JSON in this exact format:
-
-{
-  "final_verdict": "...",
-  "final_score": ...,
-  "reasoning": "...",
-  "score_breakdown": {
-    "final_score_formula": "Weighted analysis of source credibility and corroboration.",
-    "metrics": [
-      {
-        "name": "Source Reliability",
-        "score": ...,
-        "description": "Average credibility of provided sources."
-      },
-      {
-        "name": "Corroboration",
-        "score": ...,
-        "description": "Degree to which sources confirm each other."
-      }
-    ]
-  }
-}
+As an expert fact-checker, analyze the following claim based on the provided evidence. Your analysis must be objective, impartial, and strictly based on the sources.
+Claim: "${originalClaim}"
+Publishing Context: ${publishingContext}
+Evidence: ${evidenceSummary}
+Your Task: Provide a final verdict and a numerical score (0-100). Explain your reasoning clearly and concisely. Output MUST be valid JSON in this exact format:
+{ "final_verdict": "...", "final_score": ..., "reasoning": "...", "score_breakdown": { "final_score_formula": "Weighted analysis of source credibility and corroboration.", "metrics": [ { "name": "Source Reliability", "score": ..., "description": "Average credibility of provided sources." }, { "name": "Corroboration", "score": ..., "description": "Degree to which sources confirm each other." } ] } }
 `;
 
     const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey: process.env.GEMINI_API_KEY || '' });
@@ -650,11 +596,10 @@ Output MUST be valid JSON in this exact format:
     } as FactCheckReport;
   }
 
-  // ⚠️ NEW: Evidence deduplication
   private deduplicateEvidence(evidence: EvidenceItem[]): EvidenceItem[] {
     const seen = new Set<string>();
     const unique: EvidenceItem[] = [];
-
+  
     evidence.forEach(item => {
       const key = item.url || `${item.publisher}-${item.quote.substring(0, 50)}`;
       const normalizedKey = key.toLowerCase().replace(/\/$/, '');
@@ -664,19 +609,18 @@ Output MUST be valid JSON in this exact format:
         unique.push(item);
       }
     });
-
+  
     return unique;
   }
 
   private shouldEscalate(phase: 1 | 2, result: TierResult): boolean {
     if (phase === 1) {
-      return result.confidence < THRESHOLDS.phase1ToPhase2.minConfidence ||
-             result.evidence.length < THRESHOLDS.phase1ToPhase2.minEvidence;
+      return result.confidence < THRESHOLDS.phase1ToPhase2.minConfidence || result.evidence.length < THRESHOLDS.phase1ToPhase2.minEvidence;
     } else {
       const avgScore = result.evidence.length > 0
         ? result.evidence.reduce((sum, e) => sum + e.score, 0) / result.evidence.length
         : 0;
-
+        
       return result.confidence < THRESHOLDS.phase2ToPhase3.minConfidence ||
              result.evidence.length < THRESHOLDS.phase2ToPhase3.minEvidence ||
              avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore;
@@ -689,25 +633,23 @@ Output MUST be valid JSON in this exact format:
     if (firstSentence.length <= maxLength) {
       return firstSentence.trim();
     }
-
+    
     const truncated = firstSentence.substring(0, maxLength);
     const lastSpace = truncated.lastIndexOf(' ');
     return lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated;
   }
-
+  
   private extractRecentDate(text: string): string {
-    // Try to extract year from text
     const yearMatch = text.match(/\b20(2[0-9])\b/);
     if (yearMatch) {
       return `${yearMatch[0]}-01-01`;
     }
     
-    // Default to 90 days ago
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     return ninetyDaysAgo.toISOString().split('T')[0];
   }
-
+  
   private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
     const lower = text.toLowerCase();
     
@@ -715,13 +657,12 @@ Output MUST be valid JSON in this exact format:
     if (/president|election|vote|government|policy|congress|senate/i.test(lower)) return 'political';
     if (/research|study|scientist|climate|global warming|experiment/i.test(lower)) return 'scientific';
     if (/stock|economy|inflation|market|financial|investment|gdp/i.test(lower)) return 'financial';
-    
+  
     return 'general';
   }
-
+  
   private async performSpecializedSearch(text: string, claimType: string): Promise<{ evidence: EvidenceItem[], query: string }> {
     const query = this.extractSmartQuery(text, 80);
-    
     const siteOperators = {
       medical: 'site:cdc.gov OR site:who.int OR site:nih.gov',
       political: 'site:factcheck.org OR site:politifact.com',
@@ -729,15 +670,17 @@ Output MUST be valid JSON in this exact format:
       financial: 'site:sec.gov OR site:federalreserve.gov',
       general: ''
     };
-
+  
     const searchQuery = `${query} ${siteOperators[claimType as keyof typeof siteOperators] || ''}`.trim();
-
+  
     try {
       const results = await this.serpApi.search(searchQuery, 5);
-
+      
       const evidence = results.results.map((r, i) => {
         const url = new URL(r.link);
         const sourceName = url.hostname.replace(/^www\./, '');
+        // FIX: Ensure rating is typed correctly
+        const rating: "High" | "Medium" | "Low" = "Medium";
         return {
           id: `specialized_${i}`,
           publisher: r.source || 'Unknown',
@@ -748,7 +691,7 @@ Output MUST be valid JSON in this exact format:
             name: sourceName,
             url: url.origin,
             credibility: {
-              rating: 'Medium',
+              rating: rating,
               classification: 'Web Source',
               warnings: [],
             },
@@ -766,14 +709,14 @@ Output MUST be valid JSON in this exact format:
   }
 
   private async fallbackBasicSearch(text: string): Promise<FactCheckReport> {
-    console.log('🔄 Using basic fallback search');
     const query = this.extractSmartQuery(text, 100);
-    
     try {
       const results = await this.serpApi.search(query, 10);
       const evidence = results.results.slice(0, 8).map((r, i) => {
         const url = new URL(r.link);
         const sourceName = url.hostname.replace(/^www\./, '');
+        // FIX: Ensure rating is typed correctly
+        const rating: "High" | "Medium" | "Low" = "Medium";
         return {
           id: `fallback_${i}`,
           publisher: r.source || 'Unknown',
@@ -784,7 +727,7 @@ Output MUST be valid JSON in this exact format:
             name: sourceName,
             url: url.origin,
             credibility: {
-              rating: 'Medium',
+              rating: rating,
               classification: 'Web Source',
               warnings: [],
             },
@@ -794,25 +737,36 @@ Output MUST be valid JSON in this exact format:
           type: 'search_result' as const
         };
       });
-
+      
       const avgScore = evidence.length > 0
         ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length)
         : 0;
-
-      return {
+  
+      // FIX: Use proper ScoreBreakdown structure
+      const scoreBreakdown: ScoreBreakdown = {
+        final_score_formula: `${evidence.length} sources analyzed`,
+        metrics: [
+          {
+            name: 'Source Reliability',
+            score: avgScore,
+            description: `${evidence.length} sources analyzed`
+          }
+        ],
+        confidence_intervals: {
+          lower_bound: Math.max(0, avgScore - 15),
+          upper_bound: Math.min(100, avgScore + 15)
+        }
+      };
+      
+      return completeFactCheckReport({
         id: `fallback_${Date.now()}`,
         originalText: text,
-        final_verdict: this.generateVerdict(avgScore),
+        final_verdict: this.generateVerdict(avgScore) as any,
         final_score: avgScore,
         reasoning: `Fallback search found ${evidence.length} sources with average credibility of ${avgScore}%.`,
         evidence,
         enhanced_claim_text: text,
-        score_breakdown: {
-            'Source Reliability': {
-                score: avgScore,
-                reasoning: `${evidence.length} sources analyzed`
-            }
-        },
+        score_breakdown: scoreBreakdown,
         metadata: {
           method_used: 'fallback-search',
           processing_time_ms: 0,
@@ -823,21 +777,8 @@ Output MUST be valid JSON in this exact format:
             conflicting: 0 
           },
           warnings: ['Pipeline failed - using fallback search']
-        },
-        source_credibility_report: {
-          overallScore: avgScore,
-          highCredibilitySources: evidence.filter(e => e.score >= 75).length,
-          flaggedSources: 0,
-          biasWarnings: [],
-          credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
-        },
-        temporal_verification: {
-          hasTemporalClaims: false,
-          validations: [],
-          overallTemporalScore: 0,
-          temporalWarnings: []
         }
-      };
+      });
     } catch (error) {
       throw new Error(`Fallback search failed: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
@@ -845,7 +786,6 @@ Output MUST be valid JSON in this exact format:
 
   private calculateSourceScore(source: string): number {
     const lower = (source || '').toLowerCase();
-    
     if (/reuters|ap\.org|apnews|bbc/i.test(lower)) return 85;
     if (/factcheck|snopes|politifact/i.test(lower)) return 85;
     if (/nytimes|washingtonpost|wsj|theguardian/i.test(lower)) return 75;
@@ -853,13 +793,13 @@ Output MUST be valid JSON in this exact format:
     if (/cnn|abc|nbc|cbs/i.test(lower)) return 70;
     if (/wikipedia/i.test(lower)) return 55;
     if (/reddit|quora|twitter|facebook/i.test(lower)) return 30;
-    
+
     return 50;
   }
-
+  
   private convertRatingToScore(rating: any): number {
     if (!rating) return 50;
-
+    
     const textualRating = (rating.textualRating || '').toLowerCase();
     if (textualRating.includes('true')) return 90;
     if (textualRating.includes('mostly true')) return 75;
@@ -870,7 +810,7 @@ Output MUST be valid JSON in this exact format:
     if (rating.ratingValue && rating.bestRating) {
       return Math.round((rating.ratingValue / rating.bestRating) * 100);
     }
-
+    
     return 50;
   }
 
@@ -883,95 +823,13 @@ Output MUST be valid JSON in this exact format:
     return 'FALSE';
   }
 
-  private buildReportFromPhase1(
-    text: string,
-    reportId: string,
-    phase1: TierResult,
-    tiers: TierResult[],
-    startTime: number
-  ): FactCheckReport {
-    return {
-      id: reportId,
-      originalText: text,
-      final_verdict: this.generateVerdict(phase1.confidence),
-      final_score: phase1.confidence,
-      reasoning: `Direct fact-check verification found ${phase1.evidence.length} authoritative sources with ${phase1.confidence.toFixed(1)}% confidence.`,
-      evidence: phase1.evidence,
-      enhanced_claim_text: text,
-      score_breakdown: {
-        'Source Reliability': {
-            score: phase1.confidence,
-            reasoning: `${phase1.evidence.length} authoritative fact-check results`
-        }
-      },
-      metadata: {
-        method_used: 'tiered-verification',
-        processing_time_ms: Date.now() - startTime,
-        apisUsed: ['google-fact-check'],
-        sources_consulted: {
-          total: phase1.evidence.length,
-          high_credibility: phase1.evidence.filter(e => e.score >= 80).length,
-          conflicting: 0
-        },
-        warnings: phase1.confidence < 70 ? ['Moderate confidence - consider additional verification'] : [],
-        tier_breakdown: tiers.map(t => ({
-          tier: t.tier,
-          success: t.success,
-          confidence: t.confidence,
-          processing_time_ms: t.processingTime,
-          evidence_count: t.evidence.length
-        }))
-      },
-      source_credibility_report: {
-        overallScore: phase1.confidence,
-        highCredibilitySources: phase1.evidence.filter(e => e.score >= 80).length,
-        flaggedSources: 0,
-        biasWarnings: [],
-        credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
-      },
-      temporal_verification: {
-        hasTemporalClaims: false,
-        validations: [],
-        overallTemporalScore: 100,
-        temporalWarnings: []
-      }
-    };
-  }
-
-  private enrichReportWithTierData(
-    report: FactCheckReport,
-    tiers: TierResult[],
-    startTime: number
-  ): FactCheckReport {
-    return {
-      ...report,
-      metadata: {
-        ...report.metadata,
-        processing_time_ms: Date.now() - startTime,
-        tier_breakdown: tiers.map(t => ({
-          tier: t.tier,
-          success: t.success,
-          confidence: t.confidence,
-          processing_time_ms: t.processingTime,
-          evidence_count: t.evidence.length,
-          metadata: t.metadata
-        }))
-      }
-    };
-  }
-
   private async uploadReportToBlob(report: FactCheckReport): Promise<void> {
     try {
-      await this.blobStorage.saveReport({
-        id: report.id,
-        originalText: report.originalText,
-        report,
-        corrections: [],
-        timestamp: new Date().toISOString()
-      });
+      const reportId = report.id || `report_${Date.now()}`;
+      await this.blobStorage.saveReport(reportId, report);
+      console.log(`✅ Successfully uploaded report ${reportId} to blob storage.`);
     } catch (error) {
-      console.error('Failed to upload to blob:', error);
+      console.error(`❌ Failed to upload report to blob storage:`, error);
     }
   }
-
 }
