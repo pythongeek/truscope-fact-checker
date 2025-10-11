@@ -456,7 +456,7 @@ async function runPhase4Synthesis(
       metadata: {
         method_used: 'tiered-verification',
         processing_time_ms: Date.now() - startTime,
-        apis_used: ['google-fact-check', 'serp-api', 'webz-news', 'gemini-ai-fallback'],
+        apisUsed: ['google-fact-check', 'serp-api', 'webz-news', 'gemini-ai-fallback'],
         sources_consulted: {
           total: evidence.length,
           high_credibility: evidence.filter(e => e.score >= 75).length,
@@ -534,7 +534,7 @@ function createStatisticalReport(text: string, evidence: EvidenceItem[], tierRes
     metadata: {
       method_used: 'tiered-statistical',
       processing_time_ms: Date.now() - startTime,
-      apis_used: ['serp-api', 'webz-news'],
+      apisUsed: ['serp-api', 'webz-news'],
       sources_consulted: {
         total: evidence.length,
         high_credibility: highCred,

@@ -1,5 +1,5 @@
 import { BlobStorageService, StoredReport } from './blobStorage';
-import { FactCheckReport, HistoryEntry } from '@/types';
+import { FactCheckReport, HistoryEntry, TieredFactCheckResult } from '@/types';
 import { SmartCorrection } from '@/types/corrections';
 
 export class EnhancedHistoryService {
@@ -70,7 +70,8 @@ export class EnhancedHistoryService {
       id: r.id,
       claimText: r.originalText,
       report: r.report,
-      timestamp: r.timestamp
+      timestamp: r.timestamp,
+      query: r.originalText,
     }));
   }
 

@@ -296,9 +296,17 @@ export class GoogleFactCheckService {
       quote: result.text,
       score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
       type: 'claim',
-      title: '',
-      snippet: '',
-      source: ''
+      title: result.claimReview[0]?.title || '',
+      snippet: result.text || '',
+      source: {
+        name: result.claimReview[0]?.publisher || 'Unknown Publisher',
+        url: result.claimReview[0]?.url || '',
+        credibility: {
+            rating: 'Medium',
+            classification: 'Fact-Checker',
+            warnings: [],
+        },
+      }
     }));
 
     const averageScore =
@@ -319,14 +327,19 @@ export class GoogleFactCheckService {
           {
             name: 'Corroboration',
             score: averageScore,
-            reasoning: `${evidenceItems.length} sources found via Google Fact Check API.`,
+            description: `${evidenceItems.length} sources found via Google Fact Check API.`,
+            reasoning: `The score is based on the average rating provided by the fact-checking organizations.`,
           },
         ],
+        confidence_intervals: {
+            lower_bound: averageScore - 10,
+            upper_bound: averageScore + 10,
+        },
       },
       metadata: {
         method_used: 'google-fact-check',
         processing_time_ms: 0,
-        apis_used: ['google-fact-check-api'],
+        apisUsed: ['google-fact-check-api'],
         sources_consulted: {
           total: evidenceItems.length,
           high_credibility: evidenceItems.filter(e => e.score >= 75).length,

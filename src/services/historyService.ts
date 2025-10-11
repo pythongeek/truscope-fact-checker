@@ -36,6 +36,7 @@ export const saveReportToHistory = (claimText: string, report: FactCheckReport):
             timestamp: new Date().toISOString(),
             claimText,
             report,
+            query: claimText,
         };
 
         // Add the new entry to the front and slice to maintain max length

@@ -38,7 +38,6 @@ export const EnhancedDashboard: React.FC = () => {
 
     // Create a mock TieredFactCheckResult
     const result: TieredFactCheckResult = {
-      report: {
         id: '1',
         originalText: query,
         summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
@@ -79,8 +78,6 @@ export const EnhancedDashboard: React.FC = () => {
           },
           warnings: [],
         },
-      },
-      metadata: {}
     };
     setFactCheckResult(result);
     setIsLoading(false);

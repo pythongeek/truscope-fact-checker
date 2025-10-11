@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckReport, PublishingContext, FactCheckMethod } from '@/types';
+import { TieredFactCheckResult, PublishingContext, FactCheckMethod } from '@/types';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
 import { logger } from '../utils/logger';
@@ -9,13 +9,13 @@ import { TieredProgressIndicator, TierProgress } from './TieredProgressIndicator
 import { TieredFactCheckService } from '../services/tieredFactCheckService';
 
 interface FactCheckInterfaceProps {
-  initialReport?: FactCheckReport | null;
+  initialReport?: TieredFactCheckResult | null;
   initialClaimText?: string;
 }
 
 export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialReport = null, initialClaimText = '' }) => {
   const [inputText, setInputText] = useState(initialClaimText);
-  const [report, setReport] = useState<FactCheckReport | null>(initialReport);
+  const [report, setReport] = useState<TieredFactCheckResult | null>(initialReport);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tieredProgress, setTieredProgress] = useState<TierProgress[]>([]);

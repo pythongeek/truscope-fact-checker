@@ -80,8 +80,8 @@ export class EnhancedFactCheckService {
         ...processedReport,
         metadata: {
           ...processedReport.metadata,
-          apis_used: [
-            ...processedReport.metadata.apis_used,
+          apisUsed: [
+            ...processedReport.metadata.apisUsed,
             'advanced-query-pipeline',
             'deep-text-analysis',
             'semantic-extraction',
@@ -242,7 +242,7 @@ export class EnhancedFactCheckService {
       metadata: {
         ...baseReport.metadata,
         method_used: 'comprehensive',
-        apis_used: [...baseReport.metadata.apis_used, 'source-credibility', 'temporal-context', 'media-verification'],
+        apisUsed: [...baseReport.metadata.apisUsed, 'source-credibility', 'temporal-context', 'media-verification'],
         warnings: [
           ...baseReport.metadata.warnings,
           ...sourceCredibilityReport.biasWarnings,
@@ -293,7 +293,7 @@ export class EnhancedFactCheckService {
       metadata: {
         ...baseReport.metadata,
         method_used: 'temporal-verification',
-        apis_used: [...baseReport.metadata.apis_used, 'temporal-context', 'recent-news'],
+        apisUsed: [...baseReport.metadata.apisUsed, 'temporal-context', 'recent-news'],
         warnings: [
           ...baseReport.metadata.warnings,
           ...temporalValidations.filter(v => !v.isValid).map(v => `Temporal: ${v.reasoning}`)
@@ -415,15 +415,17 @@ export class EnhancedFactCheckService {
       metadata: {
         method_used: method,
         processing_time_ms: processingTime,
-        apis_used: ['error-handling'],
+        apisUsed: ['error-handling'],
         sources_consulted: { total: 0, high_credibility: 0, conflicting: 0 },
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
       score_breakdown: {
-        'error': {
-          score: -1,
-          reasoning: `Analysis failed due to a technical error in the '${method}' method. No score breakdown could be generated.`
-        }
+        final_score_formula: 'Error',
+        metrics: [],
+        confidence_intervals: {
+            lower_bound: 0,
+            upper_bound: 0,
+        },
       }
     };
   }

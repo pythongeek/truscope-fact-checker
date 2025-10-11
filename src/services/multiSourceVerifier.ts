@@ -48,6 +48,18 @@ export class MultiSourceVerifier {
       const data = await response.json();
       // FIX: Removed 'id' property from AdvancedEvidence as it's not defined in the type.
       const evidence: AdvancedEvidence = {
+        id: `wiki_${Date.now()}`,
+        title: data.title || query,
+        snippet: data.extract || '',
+        source: {
+            name: 'Wikipedia',
+            url: data.content_urls?.desktop?.page || '',
+            credibility: {
+                rating: 'Medium',
+                classification: 'User-generated',
+                warnings: ['Wikipedia is user-generated and not considered a primary source.'],
+            },
+        },
         publisher: 'Wikipedia',
         url: data.content_urls?.desktop?.page || null,
         quote: data.extract || '',
@@ -96,6 +108,18 @@ export class MultiSourceVerifier {
           if (paper) {
             // FIX: Removed 'id' property from AdvancedEvidence.
             results.push({
+              id: `pubmed_${id}`,
+              title: paper.title,
+              snippet: paper.title,
+              source: {
+                name: 'PubMed',
+                url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
+                credibility: {
+                    rating: 'High',
+                    classification: 'Medical Journal',
+                    warnings: [],
+                },
+              },
               publisher: 'PubMed',
               url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
               quote: paper.title,
@@ -129,7 +153,7 @@ export class MultiSourceVerifier {
 
   private async scrapeFactCheckSites(query: string): Promise<MultiSourceResult> {
     // This method would need a real implementation, perhaps using SerpApiService
-    return { source: 'factcheck.org', available: false, results: [], searchQuery: query };
+    return { source: 'factcheck', available: false, results: [], searchQuery: query };
   }
 
   private async searchArXiv(query: string): Promise<MultiSourceResult> {
@@ -155,6 +179,18 @@ export class MultiSourceVerifier {
         if (id && title) {
           // FIX: Removed 'id' property from AdvancedEvidence.
           results.push({
+            id: `arxiv_${id}`,
+            title: title,
+            snippet: summary.replace(/\n/g, ' '),
+            source: {
+                name: 'arXiv',
+                url: id,
+                credibility: {
+                    rating: 'High',
+                    classification: 'Academic Preprint',
+                    warnings: ['Preprint articles are not peer-reviewed.'],
+                },
+            },
             publisher: 'arXiv',
             url: id,
             quote: `${title}. ${summary.replace(/\n/g, ' ')}`,
@@ -206,11 +242,23 @@ export class MultiSourceVerifier {
         const description = this._parseXml(item, 'description')[0] || '';
         
         if (title && link) {
-          const source = this._parseXml(item, 'source')[0] || 'Google News';
+          const sourceName = this._parseXml(item, 'source')[0] || 'Google News';
           
           // FIX: Removed 'id' property from AdvancedEvidence.
           results.push({
-            publisher: source,
+            id: `gnews_${Date.now()}`,
+            title: title,
+            snippet: description.replace(/<[^>]*>?/gm, ''),
+            source: {
+                name: sourceName,
+                url: link,
+                credibility: {
+                    rating: 'Medium',
+                    classification: 'News',
+                    warnings: [],
+                },
+            },
+            publisher: sourceName,
             url: link,
             quote: `${title}. ${description.replace(/<[^>]*>?/gm, '')}`,
             score: 70,
