@@ -112,18 +112,18 @@ export class TieredFactCheckService {
         finalSynthesizedReport = phase4Result.report || baseReportForSynthesis;
       } else {
         finalSynthesizedReport = this.createBaseReport(operationId, claimText, []);
-        finalSynthesizedReport.final_verdict = "UNVERIFIED - No Evidence";
+        finalSynthesizedReport.final_verdict = "Uncertain";
       }
 
       // Construct the final TieredFactCheckResult
       const finalScore = finalSynthesizedReport?.final_score ?? 0;
-      const finalVerdict = finalSynthesizedReport?.final_verdict ?? "Inconclusive";
+      const finalVerdict = finalSynthesizedReport?.final_verdict ?? "Uncertain";
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
       // 1. Process Evidence with Credibility Scores
       const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
         const reliability = getSourceReliability(e.publisher);
-        const url = new URL(e.url || 'http://example.com');
+        const url = new URL(e.url || 'http://placeholder.com');
         return {
           id: e.id,
           url: e.url || '',
@@ -234,9 +234,7 @@ export class TieredFactCheckService {
         summary: finalReasoning,
         overallAuthenticityScore: finalScore,
         claimVerifications,
-        metadata: {
-          url: "http://example.com"
-        }
+        metadata: {}
       };
 
     } catch (error) {
@@ -248,9 +246,7 @@ export class TieredFactCheckService {
         summary: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         overallAuthenticityScore: 0,
         claimVerifications: [],
-        metadata: {
-          url: "http://example.com/error"
-        }
+        metadata: {}
       };
     }
   }
@@ -260,12 +256,12 @@ export class TieredFactCheckService {
     return {
       id,
       originalText: text,
-      final_verdict: this.generateVerdict(score),
+      final_verdict: this.generateVerdict(score) as any,
       final_score: score,
       reasoning: `Report based on ${evidence.length} sources.`,
       evidence,
       enhanced_claim_text: text,
-      score_breakdown: { final_score_formula: 'Initial score', metrics: [] },
+      score_breakdown: { 'Initial score': { score: 0, reasoning: ''} },
       metadata: { method_used: 'tiered-verification', processing_time_ms: 0, apis_used: [], sources_consulted: { total: evidence.length, high_credibility: 0, conflicting: 0 }, warnings: [] },
       source_credibility_report: { overallScore: score, highCredibilitySources: 0, flaggedSources: 0, biasWarnings: [], credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 } },
       temporal_verification: { hasTemporalClaims: false, validations: [], overallTemporalScore: 0, temporalWarnings: [] }
@@ -435,7 +431,7 @@ export class TieredFactCheckService {
           processingTime: Date.now() - startTime,
           report: {
             ...baseReport,
-            final_verdict: 'INSUFFICIENT EVIDENCE',
+            final_verdict: 'Uncertain',
             final_score: 0,
             reasoning: 'Unable to find sufficient evidence to verify this claim.',
             evidence: []
@@ -530,19 +526,14 @@ export class TieredFactCheckService {
       reasoning,
       evidence,
       score_breakdown: {
-        final_score_formula: 'Statistical average of source credibility',
-        metrics: [
-          {
-            name: 'Source Reliability',
+        'Source Reliability': {
             score: avgScore,
-            description: `Weighted average of ${evidence.length} sources`
+            reasoning: `Weighted average of ${evidence.length} sources`
           },
-          {
-            name: 'Corroboration',
+        'Corroboration': {
             score: (highCredSources / evidence.length) * 100,
-            description: `${highCredSources} sources with ≥75% credibility`
+            reasoning: `${highCredSources} sources with ≥75% credibility`
           }
-        ]
       }
     };
   }
@@ -595,7 +586,7 @@ Output MUST be valid JSON in this exact format:
 }
 `;
 
-    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500 });
+    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey: process.env.GEMINI_API_KEY || '' });
     const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanedJson);
 
@@ -603,7 +594,10 @@ Output MUST be valid JSON in this exact format:
       throw new Error('Invalid JSON structure from Gemini');
     }
 
-    return result as Partial<FactCheckReport> as FactCheckReport;
+    return {
+      ...result,
+      final_verdict: result.final_verdict as any,
+    } as FactCheckReport;
   }
 
   // ⚠️ NEW: Evidence deduplication
@@ -695,6 +689,9 @@ Output MUST be valid JSON in this exact format:
         id: `specialized_${i}`,
         publisher: r.source || 'Unknown',
         url: r.link,
+        title: r.title,
+        snippet: r.snippet || '',
+        source: r.source,
         quote: r.snippet || '',
         score: this.calculateSourceScore(r.source) + 10,
         type: 'search_result' as const
@@ -716,6 +713,9 @@ Output MUST be valid JSON in this exact format:
         id: `fallback_${i}`,
         publisher: r.source || 'Unknown',
         url: r.link,
+        title: r.title,
+        snippet: r.snippet || '',
+        source: r.source,
         quote: r.snippet || '',
         score: this.calculateSourceScore(r.source),
         type: 'search_result' as const
@@ -734,12 +734,10 @@ Output MUST be valid JSON in this exact format:
         evidence,
         enhanced_claim_text: text,
         score_breakdown: {
-          final_score_formula: 'Fallback weighted average',
-          metrics: [{
-            name: 'Source Reliability',
-            score: avgScore,
-            description: `${evidence.length} sources analyzed`
-          }]
+            'Source Reliability': {
+                score: avgScore,
+                reasoning: `${evidence.length} sources analyzed`
+            }
         },
         metadata: {
           method_used: 'fallback-search',
@@ -802,13 +800,13 @@ Output MUST be valid JSON in this exact format:
     return 50;
   }
 
-  private generateVerdict(score: number): string {
-    if (score === 0) return 'UNVERIFIED - No Evidence';
-    if (score >= 85) return 'TRUE - Highly Verified';
-    if (score >= 70) return 'MOSTLY TRUE - Well Supported';
-    if (score >= 50) return 'MIXED - Partial Accuracy';
-    if (score >= 30) return 'MOSTLY FALSE - Limited Support';
-    return 'FALSE - Contradicted by Evidence';
+  private generateVerdict(score: number): any {
+    if (score === 0) return 'Uncertain';
+    if (score >= 85) return 'TRUE';
+    if (score >= 70) return 'MOSTLY TRUE';
+    if (score >= 50) return 'MIXED';
+    if (score >= 30) return 'MOSTLY FALSE';
+    return 'FALSE';
   }
 
   private buildReportFromPhase1(
@@ -827,12 +825,10 @@ Output MUST be valid JSON in this exact format:
       evidence: phase1.evidence,
       enhanced_claim_text: text,
       score_breakdown: {
-        final_score_formula: 'Phase 1: Direct fact-check average',
-        metrics: [{
-          name: 'Source Reliability',
-          score: phase1.confidence,
-          description: `${phase1.evidence.length} authoritative fact-check results`
-        }]
+        'Source Reliability': {
+            score: phase1.confidence,
+            reasoning: `${phase1.evidence.length} authoritative fact-check results`
+        }
       },
       metadata: {
         method_used: 'tiered-verification',
@@ -913,14 +909,16 @@ Output MUST be valid JSON in this exact format:
     return {
       id: reportId,
       originalText: text,
-      final_verdict: 'ANALYSIS ERROR',
+      final_verdict: 'ANALYSIS ERROR' as any,
       final_score: 0,
       evidence: [],
       reasoning: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       enhanced_claim_text: text,
       score_breakdown: {
-        final_score_formula: 'Error',
-        metrics: []
+        'Error': {
+            score: 0,
+            reasoning: `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }
       },
       metadata: {
         method_used: 'tiered-verification-error',

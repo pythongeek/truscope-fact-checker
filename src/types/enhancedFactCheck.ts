@@ -1,7 +1,7 @@
-import { EvidenceItem } from './factCheck';
+import { Evidence } from './factCheck';
 
 // File: src/types/enhancedFactCheck.ts
-export interface AdvancedEvidence extends EvidenceItem {
+export interface AdvancedEvidence extends Evidence {
   sourceCredibility: number; // 0-100
   authorCredibility: number; // 0-100
   recency: number; // Days since publication
