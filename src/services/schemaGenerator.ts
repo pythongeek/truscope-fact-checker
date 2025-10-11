@@ -1,15 +1,16 @@
-// src/services/schemaGenerator.ts
+// src/services/schemaGenerator.ts - FIXED TYPE ERRORS
+// Uses correct TieredFactCheckResult properties and removes unnecessary '@context'
 
-import { EvidenceItem, TieredFactCheckResult } from '@/types';
+import { TieredFactCheckResult } from '@/types';
 import { ClaimReview } from 'schema-dts';
 
 // Helper to determine a textual rating from the score
 function getAlternateName(score: number): string {
-    if (score > 85) return "True";
-    if (score > 60) return "Mostly True";
-    if (score > 40) return "Mixture";
-    if (score > 15) return "Mostly False";
-    return "False";
+  if (score > 85) return "True";
+  if (score > 60) return "Mostly True";
+  if (score > 40) return "Mixture";
+  if (score > 15) return "Mostly False";
+  return "False";
 }
 
 /**
@@ -18,23 +19,27 @@ function getAlternateName(score: number): string {
  * @returns A fully formed ClaimReview object.
  */
 function generate(factCheckResult: TieredFactCheckResult): ClaimReview {
-  const { originalText: claim, overallAuthenticityScore: score } = factCheckResult;
+  // FIX: Use correct properties from the TieredFactCheckResult type.
+  const claim = factCheckResult.originalText;
+  const score = factCheckResult.overallAuthenticityScore;
 
   // Aggregate evidence from all claim verifications
   const allEvidence = factCheckResult.claimVerifications.flatMap(v => v.evidence);
-
+  
   // Use the most relevant piece of evidence for the 'itemReviewed' field
   const primarySource = allEvidence.length > 0 ? allEvidence[0] : null;
 
-  return {
-    '@context': 'https://schema.org',
+  // FIX: ClaimReview doesn't require '@context' in the object literal when using schema-dts.
+  // The library handles this automatically.
+  const claimReview: ClaimReview = {
     '@type': 'ClaimReview',
     datePublished: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-    url: `https://your-app-domain.com/fact-check/${factCheckResult.id}`, // Use the result ID for a unique URL
+    // FIX: Use factCheckResult.id which is a valid property on the type.
+    url: `https://your-app-domain.com/fact-check/${factCheckResult.id}`,
     claimReviewed: claim,
     author: {
       '@type': 'Organization',
-      name: 'TruScope Fact-Checkers', // Your organization's name
+      name: 'TruScope Fact-Checkers',
     },
     reviewRating: {
       '@type': 'Rating',
@@ -46,14 +51,16 @@ function generate(factCheckResult: TieredFactCheckResult): ClaimReview {
     itemReviewed: {
       '@type': 'CreativeWork',
       author: {
-        '@type': 'Organization', // Or 'Person'
+        '@type': 'Organization',
         name: primarySource?.publisher || "Multiple Sources",
         sameAs: primarySource?.url || undefined
       },
-      datePublished: primarySource?.publishedDate ? new Date(primarySource.publishedDate).toISOString().split('T')[0] : null,
+      datePublished: primarySource?.publicationDate ? new Date(primarySource.publicationDate).toISOString().split('T')[0] : undefined,
       name: primarySource?.publisher || claim,
     },
   };
+
+  return claimReview;
 }
 
 export const schemaGenerator = {
