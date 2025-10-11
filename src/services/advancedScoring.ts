@@ -1,4 +1,5 @@
-import { AdvancedEvidence, EvidenceItem } from '../types';
+import { EvidenceItem } from '@/types';
+import { AdvancedEvidence } from '@/types/enhancedFactCheck';
 import { getSourceReliability } from '../data/sourceReliability';
 import { calculateRecency } from '../utils/time';
 

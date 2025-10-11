@@ -12,6 +12,30 @@ const getGenAI = (apiKey: string) => {
   return genAI;
 };
 
+interface GeminiOptions {
+  apiKey: string;
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+}
+
+const generateTextWithFallback = async (prompt: string, options: GeminiOptions): Promise<string | null> => {
+  const models = [options.model || 'gemini-1.5-flash', 'gemini-pro'];
+  for (const model of models) {
+    try {
+      const result = await geminiService.generateText(prompt, options.apiKey, model);
+      if (result) {
+        logger.info(`Successfully generated text with model: ${model}`);
+        return result;
+      }
+    } catch (error) {
+      logger.warn(`Model ${model} failed, trying next model.`, { error });
+    }
+  }
+  logger.error('All Gemini models failed to generate text.', new Error('All models failed'));
+  return null;
+};
+
 export const geminiService = {
   async generateText(prompt: string, apiKey?: string, modelName: string = 'gemini-1.5-flash'): Promise<string> {
     if (!apiKey) {
@@ -30,4 +54,11 @@ export const geminiService = {
       throw error;
     }
   },
+};
+
+export { generateTextWithFallback };
+
+export const fetchAvailableModels = async (apiKey: string): Promise<string[]> => {
+  // This is a mock implementation. In a real scenario, you would query the Gemini API.
+  return ['gemini-1.5-flash', 'gemini-pro'];
 };

@@ -2,7 +2,7 @@
 import { TieredFactCheckService } from './tieredFactCheckService';
 import { autoEditorIntegration } from './autoEditorIntegration';
 import { schemaGenerator } from './schemaGenerator';
-import { TieredFactCheckResult, CorrectionSuggestion } from '../types';
+import { TieredFactCheckResult, CorrectionSuggestion } from '@/types';
 import { ClaimReview } from 'schema-dts';
 
 export interface EditorialPackage {

@@ -3,7 +3,7 @@
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
-import { FactCheckReport, EvidenceItem } from '../types';
+import { FactCheckReport, EvidenceItem } from '@/types';
 
 export interface GoogleFactCheckResult {
   text: string;
@@ -292,10 +292,13 @@ export class GoogleFactCheckService {
     const evidenceItems: EvidenceItem[] = results.map((result, index) => ({
       id: `gfc-${index}`,
       publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
-      url: result.claimReview[0]?.url || null,
+      url: result.claimReview[0]?.url || '',
       quote: result.text,
       score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
       type: 'claim',
+      title: '',
+      snippet: '',
+      source: ''
     }));
 
     const averageScore =
@@ -304,7 +307,10 @@ export class GoogleFactCheckService {
     const report: FactCheckReport = {
       id: `gfc-report-${new Date().getTime()}`,
       originalText: claimText,
-      final_verdict: this.generateVerdict(averageScore),
+      summary: '',
+      overallAuthenticityScore: 0,
+      claimVerifications: [],
+      final_verdict: this.generateVerdict(averageScore) as any,
       final_score: averageScore,
       evidence: evidenceItems,
       score_breakdown: {
@@ -313,7 +319,7 @@ export class GoogleFactCheckService {
           {
             name: 'Corroboration',
             score: averageScore,
-            description: `${evidenceItems.length} sources found via Google Fact Check API.`,
+            reasoning: `${evidenceItems.length} sources found via Google Fact Check API.`,
           },
         ],
       },
@@ -329,7 +335,8 @@ export class GoogleFactCheckService {
         warnings: [],
       },
       enhanced_claim_text: claimText,
-       source_credibility_report: {
+      reasoning: '',
+      source_credibility_report: {
         overallScore: averageScore,
         highCredibilitySources: evidenceItems.filter(e => e.score >= 75).length,
         flaggedSources: 0,
@@ -369,7 +376,7 @@ export class GoogleFactCheckService {
     return 50;
   }
 
-    private generateVerdict(score: number): string {
+    private generateVerdict(score: number): any {
     if (score >= 85) return 'TRUE';
     if (score >= 70) return 'MOSTLY TRUE';
     if (score >= 50) return 'MIXED';

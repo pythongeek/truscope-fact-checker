@@ -1,6 +1,6 @@
 import { TemporalContextService } from '../core/TemporalContextService';
 import { SourceCredibilityService } from '../core/SourceCredibilityService';
-import { FactCheckReport, EvidenceItem } from '../../types/factCheck';
+import { FactCheckReport, EvidenceItem } from '@/types';
 import { executeMultiStrategySearch } from '../webSearch';
 import { generateSHA256 } from '../../utils/hashUtils';
 

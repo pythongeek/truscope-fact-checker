@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
-import { ApiKeys, FactCheckReport } from '../types';
+import { ApiKeys, FactCheckReport } from '@/types';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
 import {
@@ -129,16 +129,11 @@ export default function TruScopeJournalismPlatform() {
     const apiKeys = getApiKeys();
 
     if (!apiKeys.gemini || apiKeys.gemini.trim() === '') {
-      const shouldOpenSettings = window.confirm(
-        '⚠️ Gemini API Key Required\n\n' +
-        'The Gemini API key is required for fact-checking analysis.\n\n' +
-        'Get your free API key from: https://aistudio.google.com/\n\n' +
-        'Would you like to configure your API keys now?'
-      );
-
-      if (shouldOpenSettings) {
-        setIsSettingsModalOpen(true);
-      }
+      // Use mock API if Gemini key is not available
+      const response = await fetch('/api/mock-fact-check');
+      const result = await response.json();
+      setFactCheckResult(result);
+      setActiveTab('report');
       return;
     }
 

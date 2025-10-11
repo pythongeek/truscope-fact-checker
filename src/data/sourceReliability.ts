@@ -1,4 +1,4 @@
-import { SourceReliabilityScore } from '../types';
+import { SourceReliabilityScore } from '@/types';
 
 // File: src/data/sourceReliability.ts
 export const RELIABLE_SOURCES_DB: SourceReliabilityScore[] = [

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { FactCheckReport, PublishingContext, FactCheckMethod } from '../types';
+import { FactCheckReport, PublishingContext, FactCheckMethod } from '@/types';
 import { EnhancedFactCheckService } from '../services/EnhancedFactCheckService';
 import { saveReportToHistory } from '../services/historyService';
 import { logger } from '../utils/logger';

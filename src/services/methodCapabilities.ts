@@ -1,4 +1,4 @@
-import { FactCheckMethod } from '../types';
+import { FactCheckMethod } from '@/types';
 
 export interface MethodCapability {
   id: FactCheckMethod;

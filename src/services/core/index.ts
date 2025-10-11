@@ -8,4 +8,4 @@ export type {
   TemporalAnalysis,
   SourceCredibilityData,
   CategoryRating
-} from '../../types/factCheck';
+} from '@/types/enhancedFactCheck';
