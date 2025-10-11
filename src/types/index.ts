@@ -1,27 +1,38 @@
 // src/types/index.ts
 
+// Consolidate all exports into this "barrel" file.
 export * from './factCheck';
+export * from './enhancedFactCheck';
 export * from './corrections';
-export * from './apiKeys';
 export * from './advancedEditor';
+export * from './apiKeys';
 export * from './factDatabase';
 
-export type FactCheckMethod = 'TIERED' | 'ENHANCED' | 'GOOGLE_ONLY' | 'COMPREHENSIVE' | 'BING_ONLY' | 'tiered-verification';
-export type EditorMode = 'neutral' | 'constructive' | 'critical' | 'quick-fix';
-export type FactVerdict = 'Accurate' | 'Inaccurate' | 'Misleading' | 'Uncertain' | 'TRUE' | 'FALSE' | 'MIXED' | 'MOSTLY TRUE' | 'MOSTLY FALSE';
+// --- Add/Modify the following types directly in this file for clarity ---
 
+// Add the 'link' property to EvidenceItem for SearchResults.tsx
 export interface EvidenceItem {
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    source: string;
-    publisher: string;
-    quote: string;
-    score: number;
-    type: string;
-    publishedDate?: string;
+  id: string;
+  title: string;
+  // Add link property
+  link: string;
+  url: string;
+  snippet: string;
+  source: string;
+  score: number;
+  type: 'news' | 'claim' | 'search_result';
 }
+
+export interface SourceReliabilityScore {
+  score: number;
+  reasoning: string;
+  lastUpdated?: string;
+  domain: string;
+}
+
+// Types that are not in other files and are not creating ambiguity
+export type FactCheckMethod = 'TIERED' | 'ENHANCED' | 'GOOGLE_ONLY' | 'COMPREHENSIVE' | 'BING_ONLY' | 'tiered-verification' | 'TEMPORAL';
+export type FactVerdict = 'Accurate' | 'Inaccurate' | 'Misleading' | 'Uncertain' | 'TRUE' | 'FALSE' | 'MIXED' | 'MOSTLY TRUE' | 'MOSTLY FALSE' | 'Comprehensive Analysis';
 
 export interface ScoreBreakdown {
     [key: string]: {
@@ -30,32 +41,7 @@ export interface ScoreBreakdown {
     };
 }
 
-export interface FactCheckReport {
-    id: string;
-    originalText: string;
-    summary: string;
-    overallAuthenticityScore: number;
-    claimVerifications: any[]; // Replace 'any' with a proper type if available
-    evidence: EvidenceItem[];
-    final_score: number;
-    final_verdict: FactVerdict;
-    reasoning: string;
-    score_breakdown: ScoreBreakdown;
-    enhanced_claim_text?: string;
-    originalTextSegments?: any[]; // Replace 'any' with a proper type if available
-    searchEvidence?: any; // Replace 'any' with a proper type if available
-    metadata?: {
-        url?: string;
-        publicationDate?: string;
-        method_used?: string;
-        processing_time_ms?: number;
-        sources_consulted?: any; // Replace 'any' with a proper type if available
-        warnings?: string[];
-        apis_used?: string[];
-        tier_breakdown?: any; // Replace 'any' with a proper type if available
-    };
-}
-
+// FactCheckReport is imported from ./factCheck, so it's available for TieredFactCheckResult
 export interface TieredFactCheckResult {
     report: FactCheckReport;
     metadata: any; // Replace 'any' with a proper type if available
@@ -79,6 +65,7 @@ export interface FactCheckMetadata {
     method: FactCheckMethod;
     processingTime: number;
     sourcesConsulted: number;
+    apisUsed?: string[];
 }
 
 export interface ScoreMetric {
@@ -93,24 +80,9 @@ export interface SearchEvidence {
     snippet: string;
 }
 
-export interface SourceReliabilityScore {
-    source: string;
-    domain: string;
-    score: number;
-    justification: string;
-    reliabilityScore: number;
-    category: string;
-    biasRating: string;
-}
-
-export interface PublishingContext {
-    platform: 'Web' | 'Social Media' | 'Print';
-    audience: 'General' | 'Academic' | 'Specialized';
-}
+export type PublishingContext = 'NewsArticle' | 'SocialMediaPost' | 'AcademicPaper' | 'GeneralWebPage';
 
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
 }
-
-export * from './factCheck';

@@ -1,7 +1,7 @@
 // src/types/apiKeys.ts
 // Type definitions for API keys
 
-export interface ApiKeys {
+interface ApiKeys {
   gemini?: string;
   geminiModel?: string;
   factCheck?: string;
@@ -9,9 +9,9 @@ export interface ApiKeys {
   searchId?: string;
 }
 
-export type ApiKeyField = keyof ApiKeys;
+type ApiKeyField = keyof ApiKeys;
 
-export interface ApiKeyConfig {
+interface ApiKeyConfig {
   id: ApiKeyField;
   label: string;
   group: string;

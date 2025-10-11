@@ -137,7 +137,7 @@ export const EnhancedDashboard: React.FC = () => {
       {/* Conditionally render the assistant */}
       {factCheckResult && (
         <>
-          <EnhancedFactCheckReport result={factCheckResult} />
+          <EnhancedFactCheckReport report={factCheckResult} />
           <FactCheckAssistant report={factCheckResult} />
         </>
       )}

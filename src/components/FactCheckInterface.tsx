@@ -21,7 +21,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
   const [tieredProgress, setTieredProgress] = useState<TierProgress[]>([]);
   const [currentPhase, setCurrentPhase] = useState(0);
 
-  const selectedMethod = 'tiered-verification';
+  const selectedMethod: FactCheckMethod = 'TEMPORAL';
 
   React.useEffect(() => {
     setReport(initialReport);
@@ -81,7 +81,8 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
     setReport(null);
     setTieredProgress([]);
 
-    await handleTieredFactCheck(inputText, { platform: 'Web', audience: 'General' });
+    const context: PublishingContext = 'NewsArticle';
+    await handleTieredFactCheck(inputText, context);
   }, [inputText]);
 
   const selectedCapability = getMethodCapabilities(selectedMethod);
