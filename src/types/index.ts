@@ -5,9 +5,9 @@ export * from './corrections';
 export * from './apiKeys';
 export * from './advancedEditor';
 export * from './factDatabase';
+export * from './enhancedFactCheck';
 
-export type FactCheckMethod = 'TIERED' | 'ENHANCED' | 'GOOGLE_ONLY' | 'COMPREHENSIVE' | 'BING_ONLY' | 'tiered-verification';
-export type EditorMode = 'neutral' | 'constructive' | 'critical' | 'quick-fix';
+
 export type FactVerdict = 'Accurate' | 'Inaccurate' | 'Misleading' | 'Uncertain' | 'TRUE' | 'FALSE' | 'MIXED' | 'MOSTLY TRUE' | 'MOSTLY FALSE';
 
 export interface EvidenceItem {
@@ -30,87 +30,27 @@ export interface ScoreBreakdown {
     };
 }
 
-export interface FactCheckReport {
-    id: string;
-    originalText: string;
-    summary: string;
-    overallAuthenticityScore: number;
-    claimVerifications: any[]; // Replace 'any' with a proper type if available
-    evidence: EvidenceItem[];
-    final_score: number;
-    final_verdict: FactVerdict;
-    reasoning: string;
-    score_breakdown: ScoreBreakdown;
-    enhanced_claim_text?: string;
-    originalTextSegments?: any[]; // Replace 'any' with a proper type if available
-    searchEvidence?: any; // Replace 'any' with a proper type if available
-    metadata?: {
-        url?: string;
-        publicationDate?: string;
-        method_used?: string;
-        processing_time_ms?: number;
-        sources_consulted?: any; // Replace 'any' with a proper type if available
-        warnings?: string[];
-        apis_used?: string[];
-        tier_breakdown?: any; // Replace 'any' with a proper type if available
-    };
-}
-
-export interface TieredFactCheckResult {
-    report: FactCheckReport;
-    metadata: any; // Replace 'any' with a proper type if available
-}
-
-export interface Segment {
-    text: string;
-    color: string;
-    score: number;
-    temporalIssues?: any;
-}
-
-export interface HistoryEntry {
-    id: string;
-    timestamp: string;
-    query: string;
-    report: FactCheckReport;
-}
-
-export interface FactCheckMetadata {
-    method: FactCheckMethod;
-    processingTime: number;
-    sourcesConsulted: number;
-}
-
 export interface ScoreMetric {
-    name: string;
-    score: number;
-    reasoning: string;
+  name: string;
+  score: number;
+  reasoning: string;
+  // Add missing 'description' property
+  description: string;
 }
 
 export interface SearchEvidence {
-    title: string;
-    url:'string'
-    snippet: string;
+  source: string;
+  // Add missing 'query' and 'results' properties
+  query: string;
+  results: EvidenceItem[];
 }
 
-export interface SourceReliabilityScore {
-    source: string;
-    domain: string;
-    score: number;
-    justification: string;
-    reliabilityScore: number;
-    category: string;
-    biasRating: string;
-}
+// Make sure PublishingContext is defined and exported
+export type PublishingContext = 'NewsArticle' | 'SocialMediaPost' | 'ResearchPaper' | 'Other';
 
-export interface PublishingContext {
-    platform: 'Web' | 'Social Media' | 'Print';
-    audience: 'General' | 'Academic' | 'Specialized';
-}
+export * from './enums';
 
 export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
 }
-
-export * from './factCheck';
