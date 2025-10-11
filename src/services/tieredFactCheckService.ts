@@ -232,7 +232,7 @@ export class TieredFactCheckService {
             metadata: finalSynthesizedReport?.metadata || {
                 method_used: 'unknown',
                 processing_time_ms: 0,
-                apis_used: [],
+                apisUsed: [],
                 sources_consulted: {
                     total: 0,
                     high_credibility: 0,
@@ -242,7 +242,7 @@ export class TieredFactCheckService {
             },
         },
         metadata: {
-            tier_breakdown: tierResults.map(t => ({
+            tierBreakdown: tierResults.map(t => ({
                 tier: t.tier,
                 success: t.success,
                 confidence: t.confidence,
@@ -343,9 +343,30 @@ export class TieredFactCheckService {
         queryUsed = keywordQuery;
         const newsResults = await this.newsService.searchNews({ query: keywordQuery, fromDate: this.extractRecentDate(text) });
         if (newsResults?.posts?.length > 0) {
-          evidence.push(...newsResults.posts.slice(0, 5).map((article, i) => ({
-            id: `news_${i}`, publisher: article.author || 'News Source', url: article.url, quote: article.text.substring(0, 300) + '...', score: 70, type: 'news' as const, publishedDate: article.published
-          })));
+          evidence.push(...newsResults.posts.slice(0, 5).map((article, i) => {
+            const url = new URL(article.url);
+            const sourceName = url.hostname.replace(/^www\./, '');
+            return {
+              id: `news_${i}`,
+              publisher: article.author || 'News Source',
+              url: article.url,
+              quote: article.text.substring(0, 300) + '...',
+              score: 70,
+              type: 'news' as const,
+              publishedDate: article.published,
+              title: article.title,
+              snippet: article.text.substring(0, 150) + '...',
+              source: {
+                name: sourceName,
+                url: url.origin,
+                credibility: {
+                  rating: 'Medium',
+                  classification: 'News Media',
+                  warnings: [],
+                },
+              },
+            };
+          }));
         } else {
           const newsFromSerp = await this.getNewsFromSerp(keywordQuery);
           evidence.push(...newsFromSerp);
@@ -402,14 +423,29 @@ export class TieredFactCheckService {
                  url.includes('apnews') ||
                  url.includes('bbc');
         })
-        .map((r, i) => ({
-          id: `news_serp_${i}`,
-          publisher: r.source || 'News Source',
-          url: r.link,
-          quote: r.snippet || '',
-          score: 65,
-          type: 'news' as const
-        }));
+        .map((r, i) => {
+          const url = new URL(r.link);
+          const sourceName = url.hostname.replace(/^www\./, '');
+          return {
+            id: `news_serp_${i}`,
+            publisher: r.source || 'News Source',
+            url: r.link,
+            quote: r.snippet || '',
+            score: 65,
+            type: 'news' as const,
+            title: r.title,
+            snippet: r.snippet || '',
+            source: {
+              name: sourceName,
+              url: url.origin,
+              credibility: {
+                rating: 'Medium',
+                classification: 'News Media',
+                warnings: [],
+              },
+            },
+          };
+        });
     } catch (error) {
       console.error('News SERP fallback failed:', error);
       return [];
@@ -540,7 +576,7 @@ export class TieredFactCheckService {
       reasoning,
       evidence,
       score_breakdown: {
-        'Source Reliability': {
+        sourceReliability: {
             score: avgScore,
             reasoning: `Weighted average of ${evidence.length} sources`
           },
@@ -699,17 +735,29 @@ Output MUST be valid JSON in this exact format:
     try {
       const results = await this.serpApi.search(searchQuery, 5);
 
-      const evidence = results.results.map((r, i) => ({
-        id: `specialized_${i}`,
-        publisher: r.source || 'Unknown',
-        url: r.link,
-        title: r.title,
-        snippet: r.snippet || '',
-        source: r.source,
-        quote: r.snippet || '',
-        score: this.calculateSourceScore(r.source) + 10,
-        type: 'search_result' as const
-      }));
+      const evidence = results.results.map((r, i) => {
+        const url = new URL(r.link);
+        const sourceName = url.hostname.replace(/^www\./, '');
+        return {
+          id: `specialized_${i}`,
+          publisher: r.source || 'Unknown',
+          url: r.link,
+          title: r.title,
+          snippet: r.snippet || '',
+          source: {
+            name: sourceName,
+            url: url.origin,
+            credibility: {
+              rating: 'Medium',
+              classification: 'Web Source',
+              warnings: [],
+            },
+          },
+          quote: r.snippet || '',
+          score: this.calculateSourceScore(r.source) + 10,
+          type: 'search_result' as const
+        };
+      });
       return { evidence, query: searchQuery };
     } catch (error) {
       console.error('Specialized search failed:', error);
@@ -723,17 +771,29 @@ Output MUST be valid JSON in this exact format:
     
     try {
       const results = await this.serpApi.search(query, 10);
-      const evidence = results.results.slice(0, 8).map((r, i) => ({
-        id: `fallback_${i}`,
-        publisher: r.source || 'Unknown',
-        url: r.link,
-        title: r.title,
-        snippet: r.snippet || '',
-        source: r.source,
-        quote: r.snippet || '',
-        score: this.calculateSourceScore(r.source),
-        type: 'search_result' as const
-      }));
+      const evidence = results.results.slice(0, 8).map((r, i) => {
+        const url = new URL(r.link);
+        const sourceName = url.hostname.replace(/^www\./, '');
+        return {
+          id: `fallback_${i}`,
+          publisher: r.source || 'Unknown',
+          url: r.link,
+          title: r.title,
+          snippet: r.snippet || '',
+          source: {
+            name: sourceName,
+            url: url.origin,
+            credibility: {
+              rating: 'Medium',
+              classification: 'Web Source',
+              warnings: [],
+            },
+          },
+          quote: r.snippet || '',
+          score: this.calculateSourceScore(r.source),
+          type: 'search_result' as const
+        };
+      });
 
       const avgScore = evidence.length > 0
         ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length)
@@ -756,7 +816,7 @@ Output MUST be valid JSON in this exact format:
         metadata: {
           method_used: 'fallback-search',
           processing_time_ms: 0,
-          apis_used: ['serp-api'],
+          apisUsed: ['serp-api'],
           sources_consulted: { 
             total: evidence.length, 
             high_credibility: evidence.filter(e => e.score >= 75).length,
@@ -847,7 +907,7 @@ Output MUST be valid JSON in this exact format:
       metadata: {
         method_used: 'tiered-verification',
         processing_time_ms: Date.now() - startTime,
-        apis_used: ['google-fact-check'],
+        apisUsed: ['google-fact-check'],
         sources_consulted: {
           total: phase1.evidence.length,
           high_credibility: phase1.evidence.filter(e => e.score >= 80).length,
