@@ -81,8 +81,8 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
     setReport(null);
     setTieredProgress([]);
 
-    await handleTieredFactCheck(inputText, 'journalism');
-  }, [inputText, factCheckService]);
+    await handleTieredFactCheck(inputText, { platform: 'Web', audience: 'General' });
+  }, [inputText]);
 
   const selectedCapability = getMethodCapabilities(selectedMethod);
 
@@ -169,7 +169,7 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       {report && (
         <div>
           <h2 className="text-2xl font-bold text-slate-100 mb-6">Analysis Results</h2>
-          <EnhancedFactCheckReport report={report} />
+          <EnhancedFactCheckReport result={{ report }} />
         </div>
       )}
 

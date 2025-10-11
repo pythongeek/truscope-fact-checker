@@ -6,7 +6,7 @@ export * from './apiKeys';
 export * from './advancedEditor';
 export * from './factDatabase';
 
-export type FactCheckMethod = 'TIERED' | 'ENHANCED' | 'GOOGLE_ONLY' | 'COMPREHENSIVE' | 'BING_ONLY';
+export type FactCheckMethod = 'TIERED' | 'ENHANCED' | 'GOOGLE_ONLY' | 'COMPREHENSIVE' | 'BING_ONLY' | 'tiered-verification';
 export type EditorMode = 'neutral' | 'constructive' | 'critical' | 'quick-fix';
 export type FactVerdict = 'Accurate' | 'Inaccurate' | 'Misleading' | 'Uncertain' | 'TRUE' | 'FALSE' | 'MIXED' | 'MOSTLY TRUE' | 'MOSTLY FALSE';
 
@@ -64,6 +64,8 @@ export interface TieredFactCheckResult {
 export interface Segment {
     text: string;
     color: string;
+    score: number;
+    temporalIssues?: any;
 }
 
 export interface HistoryEntry {
@@ -104,6 +106,11 @@ export interface SourceReliabilityScore {
 export interface PublishingContext {
     platform: 'Web' | 'Social Media' | 'Print';
     audience: 'General' | 'Academic' | 'Specialized';
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
 }
 
 export * from './factCheck';
