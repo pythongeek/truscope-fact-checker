@@ -26,9 +26,9 @@ export class EnhancedFactCheckService {
 
     try {
       switch (method) {
-        case 'comprehensive':
+        case 'COMPREHENSIVE':
           return await this.runComprehensiveAnalysis(text);
-        case 'temporal-verification':
+        case 'TEMPORAL':
           return await this.runTemporalVerification(text);
         default:
           // Fallback to comprehensive
@@ -229,7 +229,7 @@ export class EnhancedFactCheckService {
     return {
       ...baseReport,
       final_score: finalScore,
-      final_verdict: `Comprehensive Analysis: ${categoryRating.reasoning}`,
+      final_verdict: 'Comprehensive Analysis',
       category_rating: categoryRating,
       source_credibility_report: sourceCredibilityReport,
       media_verification_report: mediaVerificationReport,
@@ -280,7 +280,7 @@ export class EnhancedFactCheckService {
     return {
       ...baseReport,
       final_score: finalScore,
-      final_verdict: `Temporal Verification: ${this.generateTemporalVerdict(finalScore, temporalValidations)}`,
+      final_verdict: temporalValidations.every(v => v.isValid) ? 'TRUE' : 'FALSE',
       category_rating: categoryRating,
       source_credibility_report: sourceCredibilityReport,
       temporal_verification: {
@@ -420,8 +420,10 @@ export class EnhancedFactCheckService {
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
       score_breakdown: {
-        final_score_formula: 'Error - unable to calculate',
-        metrics: []
+        'error': {
+          score: -1,
+          reasoning: `Analysis failed due to a technical error in the '${method}' method. No score breakdown could be generated.`
+        }
       }
     };
   }

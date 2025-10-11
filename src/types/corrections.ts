@@ -1,6 +1,6 @@
 import { AdvancedEvidence } from './enhancedFactCheck';
 
-export interface DetectedIssue {
+interface DetectedIssue {
   type: 'factual_error' | 'misleading_context' | 'outdated_info' | 'missing_context' | 'unsupported_claim';
   severity: 'low' | 'medium' | 'high' | 'critical';
   originalText: string;
@@ -11,7 +11,7 @@ export interface DetectedIssue {
   confidence: number; // 0-100
 }
 
-export interface SmartCorrection {
+interface SmartCorrection {
   id: string;
   originalStatement: string;
   correctedStatement: string;
@@ -23,7 +23,7 @@ export interface SmartCorrection {
   correctionReasoning: string;
 }
 
-export interface CorrectionAnalysis {
+interface CorrectionAnalysis {
   totalIssues: number;
   issuesByType: Record<DetectedIssue['type'], number>;
   issuesBySeverity: Record<DetectedIssue['severity'], number>;
@@ -32,7 +32,7 @@ export interface CorrectionAnalysis {
   issues: DetectedIssue[];
 }
 
-export interface CorrectionSuggestion {
+interface CorrectionSuggestion {
     id: string; // Unique ID for the suggestion
     originalSegment: string; // The specific text snippet to be replaced
     suggestedCorrection: string; // The proposed new text

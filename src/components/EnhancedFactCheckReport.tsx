@@ -1,16 +1,14 @@
 // src/components/EnhancedFactCheckReport.tsx
 import React from 'react';
-import { FactCheckReport } from '@/types';
+import { TieredFactCheckResult } from '@/types';
 import EnhancedClaimAnalysis from './EnhancedClaimAnalysis';
 
 interface EnhancedFactCheckReportProps {
-  result: {
-    report: FactCheckReport;
-  };
+  report: TieredFactCheckResult;
 }
 
-export const EnhancedFactCheckReport: React.FC<EnhancedFactCheckReportProps> = ({ result }) => {
-  const { report } = result;
+export const EnhancedFactCheckReport: React.FC<EnhancedFactCheckReportProps> = ({ report: tieredFactCheckResult }) => {
+  const { report } = tieredFactCheckResult;
   return (
     <div className="p-6 bg-gray-50 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">Fact-Check Report</h2>

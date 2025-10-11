@@ -1,6 +1,6 @@
 // src/types/factCheck.ts
 
-export interface Evidence {
+interface Evidence {
   url: string;
   title: string;
   snippet: string;
@@ -10,7 +10,7 @@ export interface Evidence {
   relevanceScore: number;
 }
 
-export interface ClaimVerificationResult {
+interface ClaimVerificationResult {
   id: string;
   claimText: string;
   status: 'Verified' | 'Unverified' | 'Misleading' | 'Accurate' | 'Needs Context' | 'Error';
@@ -25,7 +25,7 @@ export interface ClaimVerificationResult {
   evidence: Evidence[];
 }
 
-export interface FactCheckReport {
+interface FactCheckReport {
   id: string;
   originalText: string;
   summary: string;
@@ -38,28 +38,28 @@ export interface FactCheckReport {
   };
 }
 
-export interface PublishingContext {
+interface PublishingContext {
   platform: 'Web' | 'Social Media' | 'Print';
   audience: 'General' | 'Academic' | 'Specialized';
 }
 
-export interface SearchPhaseResult {
+interface SearchPhaseResult {
   service: string;
   query: string;
   results: Evidence[];
 }
 
-export interface NewsSource {
+interface NewsSource {
     name: string;
     url: string;
 }
-export interface SearchParams {
+interface SearchParams {
     query: string;
     fromDate?: string;
     toDate?: string;
     sources?: NewsSource[];
 }
-export interface GoogleSearchResult {
+interface GoogleSearchResult {
     title: string;
     link: string;
     snippet: string;

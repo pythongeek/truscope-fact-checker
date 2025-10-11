@@ -1,6 +1,6 @@
 import { FactCheckReport } from './factCheck';
 
-export interface FactCheckSegment {
+interface FactCheckSegment {
   text: string;
   score: number;
   color: 'green' | 'yellow' | 'orange' | 'red';
@@ -9,7 +9,7 @@ export interface FactCheckSegment {
   reason: string;
 }
 
-export interface FactCheckAnalysis {
+interface FactCheckAnalysis {
   segments: FactCheckSegment[];
   overallScore: number;
   verdict: string;
@@ -23,7 +23,7 @@ export interface FactCheckAnalysis {
   originalReport: FactCheckReport;
 }
 
-export type EditorMode =
+type EditorMode =
   | 'quick-fix'
   | 'enhanced'
   | 'complete-rewrite'
@@ -31,7 +31,7 @@ export type EditorMode =
   | 'academic'
   | 'expansion';
 
-export interface ContentChange {
+interface ContentChange {
   type: 'modification' | 'addition' | 'deletion';
   originalPhrase: string;
   newPhrase: string;
@@ -40,7 +40,7 @@ export interface ContentChange {
   position: { start: number; end: number };
 }
 
-export interface EditorResult {
+interface EditorResult {
   mode: EditorMode;
   originalText: string;
   editedText: string;
