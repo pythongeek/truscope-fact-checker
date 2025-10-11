@@ -26,13 +26,11 @@ export interface ClaimVerificationResult {
 }
 
 
+import { ScoreMetric } from ".";
+
 export interface ScoreBreakdown {
   final_score_formula: string;
-  metrics: {
-    name: string;
-    score: number;
-    description: string;
-  }[];
+  metrics: ScoreMetric[];
   confidence_intervals: {
     lower_bound: number;
     upper_bound: number;
@@ -49,12 +47,13 @@ export interface FactCheckMetadata {
   };
   apisUsed?: string[];
   warnings: string[];
+  pipelineMetadata?: any;
 }
 export interface EvidenceItem {
   id: string;
   publisher: string;
   url: string;
-  quote: string;
+  quote?: string;
   score: number;
   type: 'claim' | 'news' | 'search_result';
   title: string;
@@ -85,7 +84,7 @@ export interface SearchEvidence {
 }
 
 
-export interface FactCheckReport {
+export interface TieredFactCheckResult {
   id: string;
   originalText: string;
   final_score: number;
@@ -104,7 +103,15 @@ export interface FactCheckReport {
   category_rating?: CategoryRating;
   searchEvidence?: SearchEvidence;
   score_breakdown: ScoreBreakdown;
-  metadata: FactCheckMetadata;
+  metadata: FactCheckMetadata & {
+    tier_breakdown?: Array<{
+        tier: string;
+        success: boolean;
+        confidence: number;
+        processing_time_ms: number;
+        evidence_count: number;
+    }>;
+  };
   claimVerifications?: ClaimVerificationResult[];
   summary?: string;
   overallAuthenticityScore?: number;
@@ -123,25 +130,13 @@ export interface FactCheckReport {
   searchPhases?: any;
 }
 
-export interface TieredFactCheckResult {
-  report: FactCheckReport;
-  metadata: {
-    tier_breakdown?: Array<{
-      tier: string;
-      success: boolean;
-      confidence: number;
-      processing_time_ms: number;
-      evidence_count: number;
-    }>;
-    [key: string]: any;
-  };
-}
+export interface FactCheckReport extends TieredFactCheckResult {}
 
 export interface HistoryEntry {
     id: string;
     timestamp: string;
     query: string;
-    report: FactCheckReport;
+    report: TieredFactCheckResult;
     claimText: string;
 }
 

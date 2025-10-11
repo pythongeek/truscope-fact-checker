@@ -23,7 +23,7 @@ export const editorialOrchestrator = {
     const factCheckResult = await TieredFactCheckService.getInstance().performTieredCheck(text, 'journalism');
 
     // 2. Generate correction suggestions based on the fact-check findings
-    const correctionSuggestions = await autoEditorIntegration.generateSuggestions(factCheckResult.report);
+    const correctionSuggestions = await autoEditorIntegration.generateSuggestions(factCheckResult);
 
     // 3. Generate the ClaimReview schema based on the same findings
     const claimReviewSchema = await schemaGenerator.generate(factCheckResult);

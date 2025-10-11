@@ -46,8 +46,35 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
       expertValidation: true
     }
   },
-  'temporal-verification': {
-    id: 'temporal-verification',
+  COMPREHENSIVE: {
+    id: 'COMPREHENSIVE',
+    name: 'Comprehensive Analysis',
+    description: 'Multi-layered professional fact-checking with source credibility, temporal verification, and bias detection',
+    strengths: [
+      'Combines multiple verification strategies',
+      'Source credibility assessment',
+      'Temporal consistency checking',
+      'Bias detection and warnings',
+      'Professional-grade reporting'
+    ],
+    limitations: [
+      'Requires internet connection',
+      'Longer processing time',
+      'May be complex for simple claims'
+    ],
+    processingTime: 'medium',
+    accuracyLevel: 'very-high',
+    requiresInternet: true,
+    features: {
+      sourceVerification: true,
+      temporalAnalysis: true,
+      mediaVerification: true,
+      biasDetection: true,
+      expertValidation: true
+    }
+  },
+  TEMPORAL: {
+    id: 'TEMPORAL',
     name: 'Temporal Verification',
     description: 'Specialized analysis for time-sensitive claims and breaking news verification',
     strengths: [
@@ -76,27 +103,35 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
     id: 'tiered-verification',
     name: 'Tiered Verification',
     description: 'A cost-effective, multi-phase approach that escalates from fast, direct checks to comprehensive analysis as needed.',
-    strengths: [
-      'Cost-efficient by design',
-      'Balances speed and accuracy',
-      'Starts with the most economical checks',
-      'Escalates automatically for complex claims'
-    ],
-    limitations: [
-      'Processing time is variable',
-      'Can be slow for claims requiring full escalation',
-      'Relies on multiple external APIs'
-    ],
-    processingTime: 'slow',
-    accuracyLevel: 'very-high',
+    strengths: [],
+    limitations: [],
+    processingTime: 'medium',
+    accuracyLevel: 'high',
     requiresInternet: true,
     features: {
       sourceVerification: true,
       temporalAnalysis: true,
       mediaVerification: false,
       biasDetection: false,
-      expertValidation: true
-    }
+      expertValidation: false,
+    },
+  },
+  CITATION: {
+    id: 'CITATION',
+    name: 'Citation Analysis',
+    description: 'Analyzes the citations and sources within a text to determine its credibility.',
+    strengths: [],
+    limitations: [],
+    processingTime: 'fast',
+    accuracyLevel: 'high',
+    requiresInternet: true,
+    features: {
+        sourceVerification: true,
+        temporalAnalysis: false,
+        mediaVerification: false,
+        biasDetection: false,
+        expertValidation: false,
+    },
   }
 };
 

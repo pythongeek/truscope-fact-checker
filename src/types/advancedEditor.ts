@@ -49,3 +49,13 @@ export interface EditorResult {
   processingTime: number;
   confidence: number;
 }
+
+export interface CorrectionSuggestion {
+    id: string; // Unique ID for the suggestion
+    originalSegment: string; // The specific text snippet to be replaced
+    suggestedCorrection: string; // The proposed new text
+    explanation: string; // Why the change is being suggested
+    claimId: string; // The ID of the claim this correction relates to
+    evidenceUrl?: string; // A direct link to the most compelling piece of evidence
+    severity: 'High' | 'Medium' | 'Low'; // e.g., Factual error vs. Minor clarification
+}

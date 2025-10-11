@@ -110,7 +110,7 @@ export class IFCNComplianceService {
     }
 
     // Check processing transparency
-    if (!report.metadata?.processing_time_ms && !report.metadata?.apis_used) {
+    if (!report.metadata?.processing_time_ms && !report.metadata?.apisUsed) {
       score -= 15;
       issues.push('Processing details not provided');
       recommendations.push('Disclose processing methods and tools used');

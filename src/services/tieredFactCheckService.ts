@@ -8,7 +8,7 @@ import { GoogleFactCheckService } from './googleFactCheckService';
 import { SerpApiService } from './serpApiService';
 import { WebzNewsService } from './webzNewsService';
 import { AdvancedCacheService } from './advancedCacheService';
-import { BlobStorageService } from './blobStorage';
+import { BlobStorageService, StoredReport } from './blobStorage';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
@@ -275,7 +275,7 @@ export class TieredFactCheckService {
   private async runPhase2AdvancedPipeline(text: string): Promise<TierResult> {
     const startTime = Date.now();
     try {
-      const report = await this.enhancedService.runAdvancedPipeline(text);
+      const report = await this.enhancedService.orchestrateFactCheck(text, 'COMPREHENSIVE');
       const evidenceCount = report.evidence.length;
       const shouldEscalate = this.shouldEscalate(2, {
         tier: 'pipeline-search',
@@ -537,12 +537,14 @@ export class TieredFactCheckService {
         {
           name: 'Source Reliability',
           score: avgScore,
-          description: `Weighted average of ${evidence.length} sources`
+          description: `Weighted average of ${evidence.length} sources`,
+          reasoning: 'The reliability score is the average of all sources.'
         },
         {
           name: 'Corroboration',
           score: (highCredSources / evidence.length) * 100,
-          description: `${highCredSources} sources with ≥75% credibility`
+          description: `${highCredSources} sources with ≥75% credibility`,
+          reasoning: 'The corroboration score is based on the number of high-credibility sources.'
         }
       ],
       confidence_intervals: {
@@ -749,7 +751,8 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
           {
             name: 'Source Reliability',
             score: avgScore,
-            description: `${evidence.length} sources analyzed`
+            description: `${evidence.length} sources analyzed`,
+            reasoning: 'The reliability score is the average of all sources found in the fallback search.'
           }
         ],
         confidence_intervals: {
@@ -825,11 +828,18 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 
   private async uploadReportToBlob(report: FactCheckReport): Promise<void> {
     try {
-      const reportId = report.id || `report_${Date.now()}`;
-      await this.blobStorage.saveReport(reportId, report);
-      console.log(`✅ Successfully uploaded report ${reportId} to blob storage.`);
+        const reportId = report.id || `report_${Date.now()}`;
+        const storedReport: StoredReport = {
+            id: reportId,
+            originalText: report.originalText,
+            report: report,
+            corrections: [],
+            timestamp: new Date().toISOString(),
+        };
+        await this.blobStorage.saveReport(storedReport);
+        console.log(`✅ Successfully uploaded report ${reportId} to blob storage.`);
     } catch (error) {
-      console.error(`❌ Failed to upload report to blob storage:`, error);
+        console.error(`❌ Failed to upload report to blob storage:`, error);
     }
-  }
+}
 }

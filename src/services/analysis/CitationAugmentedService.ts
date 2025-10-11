@@ -213,7 +213,7 @@ export class CitationAugmentedService {
     const metadata = {
       method_used: 'citation-augmented',
       processing_time_ms: Date.now() - Date.now(), // Placeholder
-      apis_used: ['internal-analysis', 'source-credibility'],
+      apisUsed: ['internal-analysis', 'source-credibility'],
       sources_consulted: {
         total: allEvidence.length,
         high_credibility: allEvidence.filter(e => e.score >= 80).length,
@@ -255,14 +255,20 @@ export class CitationAugmentedService {
           {
             name: 'Claim Verification',
             score: Math.round(overallConfidence),
-            description: 'Average confidence across all identified claims'
+            description: 'Average confidence across all identified claims',
+            reasoning: 'The confidence score is the average of all claim segments.'
           },
           {
             name: 'Temporal Accuracy',
             score: Math.round(temporalScore),
-            description: 'Accuracy of time-based references'
+            description: 'Accuracy of time-based references',
+            reasoning: 'The temporal score is the percentage of valid temporal claims.'
           }
-        ]
+        ],
+        confidence_intervals: {
+            lower_bound: finalScore - 5,
+            upper_bound: finalScore + 5,
+        }
       }
     };
   }
@@ -340,14 +346,18 @@ export class CitationAugmentedService {
         score_breakdown: {
             final_score_formula: "Weighted average of search metrics.",
             metrics: [
-                { name: 'Source Reliability', score: combinedScores.source_reliability, description: 'Average reliability of sources' },
-                { name: 'Corroboration', score: combinedScores.corroboration, description: 'Number of sources found' }
-            ]
+                { name: 'Source Reliability', score: combinedScores.source_reliability, description: 'Average reliability of sources', reasoning: 'The reliability score is the average of all sources.' },
+                { name: 'Corroboration', score: combinedScores.corroboration, description: 'Number of sources found', reasoning: 'The corroboration score is based on the number of sources found.' }
+            ],
+            confidence_intervals: {
+                lower_bound: finalScore - 5,
+                upper_bound: finalScore + 5,
+            }
         },
         metadata: {
             method_used: 'citation-augmented-search',
             processing_time_ms: 0,
-            apis_used: ['google-search'],
+            apisUsed: ['google-search'],
             sources_consulted: { total: evidence.length, high_credibility: evidence.filter(e => e.score >= 80).length, conflicting: 0 },
             warnings: []
         },

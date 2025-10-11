@@ -11,7 +11,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({ report }) => 
   return (
     <div className="compliance-dashboard">
       <h2>Compliance Overview</h2>
-      <p>Overall Score: {report.report.overallAuthenticityScore}</p>
+      <p>Overall Score: {report.overallAuthenticityScore}</p>
       <EnhancedFactCheckReport report={report} />
     </div>
   );

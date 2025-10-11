@@ -336,6 +336,9 @@ export class PipelineIntegration {
             const score = this.calculateEvidenceScore(result);
             const type = this.determineEvidenceType(result);
 
+            const title = result.title || quote.substring(0, 80);
+            const snippet = this.extractQuote(result);
+
             return {
                 id: `evidence-${index + 1}`,
                 publisher,
@@ -343,6 +346,8 @@ export class PipelineIntegration {
                 quote,
                 score,
                 type,
+                title,
+                snippet,
                 source: {
                     name: publisher,
                     url: url,

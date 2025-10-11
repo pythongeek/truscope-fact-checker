@@ -99,7 +99,7 @@ vi.mock('../services/analysis/CitationAugmentedService', () => {
         metadata: {
           method_used: 'citation-augmented',
           processing_time_ms: 100,
-          apis_used: ['base-api'],
+          apisUsed: ['base-api'],
           sources_consulted: { total: 1, high_credibility: 1, conflicting: 0 },
           warnings: [],
         },
@@ -267,7 +267,7 @@ describe('Streamlined Fact Check System', () => {
 
   test('Method capabilities are properly defined', () => {
     const comprehensive = getMethodCapabilities('comprehensive');
-    const temporal = getMethodCapabilities('temporal-verification');
+    const temporal = getMethodCapabilities('TEMPORAL');
 
     expect(comprehensive.features.sourceVerification).toBe(true);
     expect(comprehensive.features.mediaVerification).toBe(true);

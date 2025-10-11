@@ -2,7 +2,7 @@ export interface TemporalValidation {
   isValid: boolean;
   context: string;
   confidence: number;
-  dateType: 'past' | 'present' | 'near_future' | 'far_future';
+  dateType: 'past' | 'present' | 'near_future' | 'far_future' | 'future';
   reasoning: string;
 }
 
