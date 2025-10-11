@@ -48,3 +48,20 @@ export interface SearchPhaseResult {
   query: string;
   results: Evidence[];
 }
+
+export interface NewsSource {
+    name: string;
+    url: string;
+}
+export interface SearchParams {
+    query: string;
+    fromDate?: string;
+    toDate?: string;
+    sources?: NewsSource[];
+}
+export interface GoogleSearchResult {
+    title: string;
+    link: string;
+    snippet: string;
+    source: string;
+}

@@ -18,7 +18,7 @@ export class FactCheckScoring {
      * often provides the final score directly.
      */
     static calculateFinalScore(breakdown: ScoreBreakdown): number {
-        if (!breakdown || !breakdown.metrics || breakdown.metrics.length === 0) {
+        if (!breakdown) {
             return 50; // Return a neutral score if no metrics are available.
         }
 
@@ -26,15 +26,18 @@ export class FactCheckScoring {
         let totalWeight = 0;
         let contradictionScore = 0;
 
-        for (const metric of breakdown.metrics) {
-            const weight = METRIC_WEIGHTS[metric.name];
-            if (weight !== undefined) {
-                if (metric.name === 'Contradiction') {
-                    // A higher contradiction score indicates more contradictions, which should lower the overall score.
-                    contradictionScore = metric.score;
-                } else {
-                    weightedTotal += metric.score * weight;
-                    totalWeight += weight;
+        for (const metricName in breakdown) {
+            if (Object.prototype.hasOwnProperty.call(breakdown, metricName)) {
+                const metric = breakdown[metricName];
+                const weight = METRIC_WEIGHTS[metricName];
+                if (weight !== undefined) {
+                    if (metricName === 'Contradiction') {
+                        // A higher contradiction score indicates more contradictions, which should lower the overall score.
+                        contradictionScore = metric.score;
+                    } else {
+                        weightedTotal += metric.score * weight;
+                        totalWeight += weight;
+                    }
                 }
             }
         }

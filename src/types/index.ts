@@ -105,3 +105,5 @@ export interface PublishingContext {
     platform: 'Web' | 'Social Media' | 'Print';
     audience: 'General' | 'Academic' | 'Specialized';
 }
+
+export * from './factCheck';
