@@ -93,10 +93,10 @@ export const TieredFactCheckTester: React.FC = () => {
             <p><strong>Evidence Count:</strong> {result.evidence.length}</p>
           </div>
 
-          {result.metadata.tier_breakdown && (
+          {(result.metadata as any).tier_breakdown && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h4 className="font-semibold text-blue-800 mb-2">Tier Breakdown</h4>
-              {result.metadata.tier_breakdown.map((tier, index) => (
+              {(result.metadata as any).tier_breakdown.map((tier: any, index: number) => (
                 <div key={index} className="mb-2 p-2 bg-white rounded border">
                   <p><strong>Phase {index + 1}:</strong> {tier.tier}</p>
                   <p>Success: {tier.success ? '✅' : '❌'} |

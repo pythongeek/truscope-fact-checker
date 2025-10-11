@@ -1,7 +1,7 @@
 import { Evidence } from './factCheck';
 
 // File: src/types/enhancedFactCheck.ts
-interface AdvancedEvidence extends Evidence {
+export interface AdvancedEvidence extends Evidence {
   sourceCredibility: number; // 0-100
   authorCredibility: number; // 0-100
   recency: number; // Days since publication
@@ -14,7 +14,7 @@ interface AdvancedEvidence extends Evidence {
   lastVerified: string;
 }
 
-interface MultiSourceResult {
+export interface MultiSourceResult {
   source: 'politifact' | 'snopes' | 'factcheck' | 'reuters' | 'ap' | 'pubmed' | 'scholar' | 'wikipedia' | 'arxiv' | 'googleNews';
   available: boolean;
   results: AdvancedEvidence[];
@@ -22,11 +22,22 @@ interface MultiSourceResult {
   searchQuery: string;
 }
 
-interface SourceReliabilityScore {
+export interface SourceReliabilityScore {
   domain: string;
   reliabilityScore: number; // 0-100
   category: 'news' | 'academic' | 'government' | 'fact_check' | 'social' | 'blog';
   biasRating: 'left' | 'center-left' | 'center' | 'center-right' | 'right' | 'unknown';
   lastUpdated: string;
   verificationCount: number;
+}
+
+export interface SourceCredibilityData {
+  domain: string;
+  credibilityScore: number;
+  biasRating: string;
+  factualReporting: string;
+  category: 'academic' | 'news' | 'government' | 'social' | 'blog' | 'ngo';
+  lastUpdated: Date;
+  verificationStatus: 'verified' | 'flagged' | 'unverified';
+  notes?: string;
 }

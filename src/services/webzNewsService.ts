@@ -2,6 +2,8 @@ import { RobustHttpClient } from './httpClient';
 import { NewsSource, SearchParams } from '@/types/factCheck';
 
 export class WebzNewsService implements NewsSource {
+  readonly name: string = 'Webz.io News';
+  readonly url: string = 'https://webz.io/';
   private httpClient: RobustHttpClient;
 
   constructor() {

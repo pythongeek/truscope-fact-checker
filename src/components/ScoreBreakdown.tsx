@@ -3,7 +3,7 @@ import { ScoreBreakdown as ScoreBreakdownType, ScoreMetric } from '@/types';
 import { LightBulbIcon } from './icons';
 
 const MetricBar: React.FC<{ metric: ScoreMetric }> = ({ metric }) => {
-    const { name, score, description } = metric;
+    const { name, score, reasoning, description } = metric;
     
     const getBarColor = (s: number) => {
         if (s > 75) return 'bg-green-500';

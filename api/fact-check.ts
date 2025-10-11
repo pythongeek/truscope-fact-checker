@@ -144,7 +144,15 @@ async function runPhase1(text: string, config: any) {
           type: 'claim',
           title: '',
           snippet: '',
-          source: ''
+          source: {
+            name: 'Unknown',
+            url: '',
+            credibility: {
+              rating: 'Medium',
+              classification: 'Unverified',
+              warnings: [],
+            },
+          }
         });
       }
     }
@@ -213,7 +221,15 @@ async function runPhase2(text: string, req: VercelRequest, config: any) {
         type: 'search_result',
         title: '',
         snippet: '',
-        source: ''
+        source: {
+            name: 'Unknown',
+            url: '',
+            credibility: {
+              rating: 'Medium',
+              classification: 'Unverified',
+              warnings: [],
+            },
+          }
       });
     }
 
@@ -297,7 +313,15 @@ async function runPhase3(text: string, existingEvidence: any[], req: VercelReque
         publishedDate: post.published,
         title: '',
         snippet: '',
-        source: ''
+        source: {
+            name: 'Unknown',
+            url: '',
+            credibility: {
+              rating: 'Medium',
+              classification: 'Unverified',
+              warnings: [],
+            },
+          }
       });
     }
 
@@ -356,7 +380,15 @@ async function fallbackNewsSearch(query: string, startTime: number, req: VercelR
       type: 'news' as const,
       title: '',
       snippet: '',
-      source: ''
+      source: {
+            name: 'Unknown',
+            url: '',
+            credibility: {
+              rating: 'Medium',
+              classification: 'Unverified',
+              warnings: [],
+            },
+          }
     }));
 
     return {
