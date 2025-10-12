@@ -1,6 +1,6 @@
 // api/fact-check.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateTextWithFallback } from '../src/services/geminiService';
+import { generateTextWithFallback } from '../src/services/geminiService.js';
 import { logger } from '../src/utils/logger';
 import { EvidenceItem, FactVerdict } from '../src/types';
 
