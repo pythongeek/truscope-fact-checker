@@ -1,6 +1,27 @@
 // src/types/factCheck.ts
 
+export type FactVerdict =
+  | 'Accurate'
+  | 'Inaccurate'
+  | 'Misleading'
+  | 'Unverifiable'
+  | 'Partially Accurate'
+  | 'Needs Context'
+  | 'Satire'
+  | 'Opinion';
+
+export interface Source {
+  name: string;
+  url: string;
+  credibility: {
+    rating: 'High' | 'Medium' | 'Low' | 'Unknown';
+    classification: string;
+    warnings: string[];
+  };
+}
+
 export interface Evidence {
+  id: string;
   url: string;
   title: string;
   snippet: string;
@@ -8,163 +29,104 @@ export interface Evidence {
   publicationDate?: string;
   credibilityScore: number;
   relevanceScore: number;
+  type: 'claim' | 'news' | 'search_result' | 'official_source';
+  source: Source;
+  quote?: string;
 }
 
-export interface ClaimVerificationResult {
-  id: string;
-  claimText: string;
-  status: 'Verified' | 'Unverified' | 'Misleading' | 'Accurate' | 'Needs Context' | 'Error';
-  confidenceScore: number;
-  explanation: string;
-  reasoning: {
-    totalSources: number;
-    supportingSources: number;
-    conflictingSources: number;
-    conclusion: string;
-  };
-  evidence: Evidence[];
+export interface ScoreMetric {
+  name: string;
+  score: number;
+  weight: number;
+  description: string;
+  reasoning: string;
 }
-
-
-import { ScoreMetric } from ".";
 
 export interface ScoreBreakdown {
-  final_score_formula: string;
+  finalScoreFormula: string;
   metrics: ScoreMetric[];
-  confidence_intervals: {
-    lower_bound: number;
-    upper_bound: number;
+  confidenceIntervals?: {
+    lowerBound: number;
+    upperBound: number;
   };
+}
+
+export interface ClaimVerification {
+  id: string;
+  claimText: string;
+  status: 'Verified' | 'Unverified' | 'Disputed' | 'Retracted';
+  confidenceScore: number;
+  explanation: string;
+  evidence: Evidence[];
+  reasoning?: string;
 }
 
 export interface FactCheckMetadata {
-  method_used: any;
-  processing_time_ms: number;
-  sources_consulted: {
+  methodUsed: string;
+  processingTimeMs: number;
+  sourcesConsulted: {
     total: number;
-    high_credibility: number;
+    highCredibility: number;
     conflicting: number;
   };
   apisUsed?: string[];
   warnings: string[];
-  pipelineMetadata?: any;
-}
-export interface EvidenceItem {
-  id: string;
-  publisher: string;
-  url: string;
-  quote?: string;
-  score: number;
-  type: 'claim' | 'news' | 'search_result';
-  title: string;
-  snippet: string;
-  source: {
-    name: string;
-    url: string;
-    credibility: {
-      rating: 'High' | 'Medium' | 'Low';
-      classification: string;
-      warnings: string[];
-    };
-  };
-  publishedDate?: string;
-  relevanceScore?: number;
-}
-export interface SourceCredibilityReport {}
-export interface TemporalVerification {}
-export interface MediaVerificationReport {}
-export interface CategoryRating {}
-export interface SearchEvidence {
-  query: string;
-  results: {
-    title: string;
-    url: string;
-    snippet: string;
-  }[];
+  pipelineMetadata?: Record<string, any>;
+  tierBreakdown?: Array<{
+    tier: string;
+    success: boolean;
+    confidence: number;
+    processingTimeMs: number;
+    evidenceCount: number;
+  }>;
 }
 
+export interface Segment {
+  text: string;
+  isFact: boolean;
+  score: number;
+  color: 'green' | 'yellow' | 'red' | 'default';
+}
 
 export interface TieredFactCheckResult {
   id: string;
   originalText: string;
-  final_score: number;
-  final_verdict: string;
+  finalScore: number;
+  finalVerdict: FactVerdict;
+  summary: string;
   reasoning: string;
-  evidence: EvidenceItem[];
-  enhanced_claim_text?: string;
-  originalTextSegments?: Array<{
-    text: string;
-    score: number;
-    color: 'green' | 'yellow' | 'red';
-  }>;
-  source_credibility_report?: SourceCredibilityReport;
-  temporal_verification?: TemporalVerification;
-  media_verification_report?: MediaVerificationReport;
-  category_rating?: CategoryRating;
-  searchEvidence?: SearchEvidence;
-  score_breakdown: ScoreBreakdown;
-  metadata: FactCheckMetadata & {
-    tier_breakdown?: Array<{
-        tier: string;
-        success: boolean;
-        confidence: number;
-        processing_time_ms: number;
-        evidence_count: number;
-    }>;
-  };
-  claimVerifications?: ClaimVerificationResult[];
-  summary?: string;
-  overallAuthenticityScore?: number;
-  claimBreakdown?: Array<{
-    id: string;
-    text: string;
-    type: string;
-    verifiability: string;
-    priority: number;
-  }>;
-  extractedEntities?: Array<{
-    name: string;
-    type: string;
-    relevance: number;
-  }>;
-  searchPhases?: any;
+  evidence: Evidence[];
+  claimVerifications: ClaimVerification[];
+  scoreBreakdown: ScoreBreakdown;
+  metadata: FactCheckMetadata;
+  overallAuthenticityScore: number;
+  originalTextSegments?: Segment[];
 }
 
 export interface FactCheckReport extends TieredFactCheckResult {}
 
 export interface HistoryEntry {
-    id: string;
-    timestamp: string;
-    query: string;
-    report: TieredFactCheckResult;
-    claimText: string;
+  id: string;
+  timestamp: string;
+  query: string;
+  claimText: string;
+  result: TieredFactCheckResult;
 }
 
 export type PublishingContext =
   | 'NewsArticle'
-  | 'journalism'
-  | 'social-media'
-  | 'academic';
+  | 'Journalism'
+  | 'SocialMedia'
+  | 'Academic'
+  | 'General';
 
-export interface SearchPhaseResult {
-  service: string;
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface SearchEvidence {
   query: string;
-  results: Evidence[];
-}
-
-export interface NewsSource {
-    name: string;
-    url: string;
-}
-export interface SearchParams {
-    query: string;
-    fromDate?: string;
-    toDate?: string;
-    sources?: NewsSource[];
-}
-export interface GoogleSearchResult {
-    title: string;
-    link: string;
-    snippet: string;
-    source: string;
+  results: SearchResult[];
 }
