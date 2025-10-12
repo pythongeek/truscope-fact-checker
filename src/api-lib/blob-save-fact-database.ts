@@ -1,4 +1,3 @@
-
 import { put } from '@vercel/blob';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -8,12 +7,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Debugging: Check if the environment variable is available
-    console.log(
-      'BLOB_READ_WRITE_TOKEN is set:',
-      !!process.env.BLOB_READ_WRITE_TOKEN
-    );
-
     const facts = req.body;
     console.log('Received facts to save:', JSON.stringify(facts, null, 2));
 
@@ -22,8 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const blob = await put(dbPath, JSON.stringify(facts, null, 2), {
       access: 'public',
       contentType: 'application/json',
-      addRandomSuffix: false,
-      allowOverwrite: true,
+      addRandomSuffix: false, // This ensures the file is overwritten at the same path
+      // 'allowOverwrite' is deprecated and has been removed.
     });
 
     console.log('Successfully saved fact database. Blob URL:', blob.url);
