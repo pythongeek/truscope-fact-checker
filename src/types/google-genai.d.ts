@@ -30,6 +30,9 @@ declare module '@google/genai' {
     getGenerativeModel(config: { model: string }): GenerativeModel;
   }
 
+  // Alias for GoogleGenerativeAI (used in some files)
+  export class GoogleGenAI extends GoogleGenerativeAI {}
+
   export class GenerativeModel {
     generateContent(request: GenerateContentRequest | string): Promise<GenerateContentResponse>;
   }
@@ -48,4 +51,61 @@ declare module '@google/genai' {
     ARRAY: string;
     OBJECT: string;
   };
+
+  // Type export for use in type annotations
+  export type Type = Schema;
+}
+
+// Type declarations for @google/generative-ai module (official package)
+declare module '@google/generative-ai' {
+  export interface GenerativeModelConfig {
+    model?: string;
+    apiKey?: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+  }
+
+  export interface GenerateContentRequest {
+    contents: Array<{
+      role?: string;
+      parts: Array<{
+        text: string;
+      }>;
+    }>;
+  }
+
+  export interface GenerateContentResponse {
+    response: {
+      text(): string;
+      candidates?: any[];
+    };
+  }
+
+  export class GoogleGenerativeAI {
+    constructor(apiKey: string);
+    getGenerativeModel(config: { model: string }): GenerativeModel;
+  }
+
+  export class GenerativeModel {
+    generateContent(request: GenerateContentRequest | string): Promise<GenerateContentResponse>;
+  }
+
+  export interface Schema {
+    type: string;
+    properties?: Record<string, any>;
+    required?: string[];
+  }
+
+  // Export SchemaType for the official package
+  export enum SchemaType {
+    STRING = "string",
+    NUMBER = "number",
+    INTEGER = "integer",
+    BOOLEAN = "boolean",
+    ARRAY = "array",
+    OBJECT = "object"
+  }
+
+  // Type export for use in type annotations
+  export type Type = Schema;
 }
