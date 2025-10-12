@@ -1,3 +1,5 @@
+// src/components/AutoEditorTab.tsx
+
 import React, { useState } from 'react';
 import { CorrectionSuggestion } from '../types';
 import { editorialOrchestrator, EditorialPackage } from '../services/EditorialOrchestrationService';
@@ -15,26 +17,22 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
   const handleAnalyze = async () => {
     setIsLoading(true);
     try {
-      const result = await editorialOrchestrator.processText(initialText, 'enhanced'); // Assuming a default context
+      const result = await editorialOrchestrator.processText(initialText);
       setEditorialPackage(result);
       setSuggestions(result.correctionSuggestions);
     } catch (error) {
-      console.error("Failed to analyze text:", error);
-      // Optionally, set an error state to show a message to the user
+      console.error("Failed to analyze text for suggestions:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAccept = (suggestionToAccept: CorrectionSuggestion) => {
-    // Replace the original text with the suggested text
     setEditedText(prev => prev.replace(suggestionToAccept.originalText, suggestionToAccept.suggestedText));
-    // Remove the accepted suggestion from the list
     setSuggestions(prev => prev.filter(s => s.originalText !== suggestionToAccept.originalText));
   };
 
   const handleReject = (suggestionToReject: CorrectionSuggestion) => {
-    // Remove the rejected suggestion from the list
     setSuggestions(prev => prev.filter(s => s.originalText !== suggestionToReject.originalText));
   };
 
@@ -44,11 +42,10 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
 
   return (
     <div>
-      <button onClick={handleAnalyze} disabled={isLoading} className={buttonClasses}>
+      <button onClick={handleAnalyze} disabled={isLoading || !initialText} className={buttonClasses}>
         {isLoading ? 'Analyzing...' : 'Analyze & Suggest Corrections'}
       </button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-        {/* Left Panel: The Text Editor */}
         <div>
           <h3 className="font-semibold mb-2">Editor</h3>
           <textarea
@@ -58,7 +55,6 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
             aria-label="Edited text"
           />
         </div>
-        {/* Right Panel: The Suggestion List */}
         <div>
           <h3 className="font-semibold mb-2">Suggestions ({suggestions.length})</h3>
           <div className="space-y-3 overflow-y-auto h-96 p-2 border rounded-md bg-gray-50">
@@ -76,7 +72,7 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
               ))
             ) : (
               <div className="flex items-center justify-center h-full text-gray-500">
-                {isLoading ? 'Loading suggestions...' : 'No suggestions to display. Click "Analyze" to begin.'}
+                {isLoading ? 'Loading suggestions...' : 'No suggestions to display.'}
               </div>
             )}
           </div>
