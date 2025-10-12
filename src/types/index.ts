@@ -9,31 +9,51 @@
 // (e.g., factCheck.ts, apiKeys.ts) to avoid conflicts and improve organization.
 
 // Types from src/types/apiKeys.ts
-export type { ApiKeys, SettingsConfig, AnalysisConfig, ApiStatus } from './apiKeys';
+export type { 
+  ApiKeys, 
+  SettingsConfig, 
+  AnalysisConfig, 
+  ApiStatus 
+} from './apiKeys';
 
 // Types from src/types/advancedEditor.ts
-export type { CorrectionSuggestion, EditorResult, EditorMode } from './advancedEditor';
+export type { 
+  CorrectionSuggestion, 
+  EditorResult, 
+  EditorMode 
+} from './advancedEditor';
 
 // Types from src/types/factCheck.ts - The primary source of truth for core types.
 export type {
   FactVerdict,
   Source,
-  Evidence, // Note: 'EvidenceItem' is now 'Evidence'.
+  Evidence,
+  EvidenceItem, // Legacy alias for Evidence
   ScoreMetric,
   ScoreBreakdown,
   ClaimVerification,
-  FactCheckMetadata, // Note: 'FactCheckMethod' has been replaced by this.
+  ClaimVerificationResult, // Legacy alias for ClaimVerification
+  FactCheckMetadata,
+  TierBreakdown, // ADDED - Used in api/fact-check.ts
   Segment,
   TieredFactCheckResult,
   FactCheckReport,
+  PartialFactCheckReport, // ADDED - Used in helpers.ts
   HistoryEntry,
   PublishingContext,
   SearchResult,
   SearchEvidence,
+  GoogleSearchResult, // ADDED - Used in webSearch.ts
+  NewsSource, // ADDED - Used in webzNewsService.ts
+  SearchParams, // ADDED - Used in webzNewsService.ts
+  AdvancedEvidence, // ADDED - Used in intelligentCorrector.ts and multiSourceVerifier.ts
+  FactCheckMethod, // ADDED - Used in multiple service files
 } from './factCheck';
 
 // Types from src/types/factDatabase.ts
-export type { FactDatabase } from './factDatabase';
+export type { 
+  FactDatabase 
+} from './factDatabase';
 
 // Types from src/types/enhancedFactCheck.ts and other UI/component-specific files.
 export type {
