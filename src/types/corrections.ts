@@ -32,12 +32,22 @@ export interface CorrectionAnalysis {
   issues: DetectedIssue[];
 }
 
+// Note: This interface is also defined in advancedEditor.ts
+// Keep them in sync or re-export from a single source
 export interface CorrectionSuggestion {
-    id: string; // Unique ID for the suggestion
-    originalSegment: string; // The specific text snippet to be replaced
-    suggestedCorrection: string; // The proposed new text
-    explanation: string; // Why the change is being suggested
-    claimId: string; // The ID of the claim this correction relates to
-    evidenceUrl?: string; // A direct link to the most compelling piece of evidence
-    severity: 'High' | 'Medium' | 'Low'; // e.g., Factual error vs. Minor clarification
+  id: string; // Unique ID for the suggestion
+  
+  // Support both naming conventions for compatibility
+  originalText?: string; // The specific text snippet to be replaced
+  suggestedText?: string; // The proposed new text
+  originalSegment?: string; // Alias for originalText
+  suggestedCorrection?: string; // Alias for suggestedText
+  
+  // Additional properties
+  explanation?: string; // Why the change is being suggested
+  reason?: string; // Alias for explanation
+  claimId?: string; // The ID of the claim this correction relates to
+  evidenceUrl?: string; // A direct link to the most compelling piece of evidence
+  severity?: 'High' | 'Medium' | 'Low' | 'high' | 'medium' | 'low'; // e.g., Factual error vs. Minor clarification
+  type?: string; // Type of correction
 }
