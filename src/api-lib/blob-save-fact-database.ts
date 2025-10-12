@@ -16,7 +16,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       access: 'public',
       contentType: 'application/json',
       addRandomSuffix: false, // This ensures the file is overwritten at the same path
-      // 'allowOverwrite' is deprecated and has been removed.
     });
 
     console.log('Successfully saved fact database. Blob URL:', blob.url);
