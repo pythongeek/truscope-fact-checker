@@ -25,7 +25,8 @@ export type FactVerdict =
   | 'mixed'
   | 'mostly-true'
   | 'mostly-false'
-  | 'Error';
+  | 'Error'
+  | 'Analysis Incomplete'; // Added for helpers.ts
 
 export interface Source {
   name: string;
@@ -171,8 +172,11 @@ export interface FactCheckReport extends TieredFactCheckResult {
   scoreBreakdown: ScoreBreakdown;
   // Additional optional properties used in various components
   claimBreakdown?: any;
-  enhanced_claim_text?: string;
-  source_credibility_report?: {
+  enhancedClaimText?: string; // camelCase version
+  enhanced_claim_text?: string; // snake_case for backward compatibility
+  extractedEntities?: any; // Added for EnhancedFactCheckService.ts
+  timelineAnalysis?: any; // Added for EnhancedFactCheckService.ts
+  sourceCredibilityReport?: { // camelCase version
     overallScore: number;
     highCredibilitySources: number;
     flaggedSources: number;
@@ -184,17 +188,43 @@ export interface FactCheckReport extends TieredFactCheckResult {
       social: number;
     };
   };
-  temporal_verification?: {
+  source_credibility_report?: { // snake_case for backward compatibility
+    overallScore: number;
+    highCredibilitySources: number;
+    flaggedSources: number;
+    biasWarnings: string[];
+    credibilityBreakdown: {
+      academic: number;
+      news: number;
+      government: number;
+      social: number;
+    };
+  };
+  temporalVerification?: { // camelCase version
     hasTemporalClaims: boolean;
     validations: any[];
     overallTemporalScore: number;
     temporalWarnings: string[];
   };
-  category_rating?: {
+  temporal_verification?: { // snake_case for backward compatibility
+    hasTemporalClaims: boolean;
+    validations: any[];
+    overallTemporalScore: number;
+    temporalWarnings: string[];
+  };
+  categoryRating?: { // camelCase version
     category: string;
     reasoning: string;
   };
-  media_verification_report?: {
+  category_rating?: { // snake_case for backward compatibility
+    category: string;
+    reasoning: string;
+  };
+  mediaVerificationReport?: { // camelCase version
+    hasVisualContent: boolean;
+    reverseImageResults: any[];
+  };
+  media_verification_report?: { // snake_case for backward compatibility
     hasVisualContent: boolean;
     reverseImageResults: any[];
   };
@@ -258,11 +288,9 @@ export interface SearchParams {
 
 // Advanced Evidence type for more complex scenarios
 export interface AdvancedEvidence extends Evidence {
-  // Make id required for AdvancedEvidence
-  id: string;
-  publisher?: string;
-  quote?: string;
+  // All properties from Evidence are inherited
   // Additional properties from enhancedFactCheck.ts
+  publisher: string; // Make required instead of optional to satisfy Evidence
   sourceCredibility?: number;
   authorCredibility?: number;
   recency?: number;
@@ -271,7 +299,7 @@ export interface AdvancedEvidence extends Evidence {
   factCheckVerdict?: 'true' | 'false' | 'mixed' | 'unproven' | 'unknown';
   biasScore?: number;
   lastVerified?: string;
-  credibilityScore: number; // Ensure this is required
+  publishedDate?: string;
 }
 
 // Method capabilities
@@ -285,7 +313,8 @@ export type FactCheckMethod =
   | 'statistical-fallback'
   | 'comprehensive'
   | 'COMPREHENSIVE'
-  | 'TEMPORAL';
+  | 'TEMPORAL'
+  | 'CITATION'; // Added for methodCapabilities.ts
 
 // View and UI types
 export type ViewType = 'report' | 'methodology' | 'history';
