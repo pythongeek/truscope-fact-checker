@@ -16,30 +16,29 @@ const ColorCodedText: React.FC<ColorCodedTextProps> = ({ segments }) => {
                 </div>
                 <h3 className="text-lg font-semibold text-slate-300">No Text Analysis Available</h3>
                 <p className="text-slate-400 max-w-md mx-auto">
-                    Text analysis with color-coding is only available with the Citation-Augmented Analysis method.
+                    A detailed text analysis will appear here once a fact-check is complete.
                 </p>
             </div>
         );
     }
 
-    const getColorClass = (color: Segment['color']) => {
-        switch (color) {
-            case 'green':
-                return 'bg-green-500/20 text-green-200 border-green-500/30';
-            case 'yellow':
-                return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/30';
-            case 'red':
-                return 'bg-red-500/20 text-red-200 border-red-500/30';
-            default:
-                return 'text-slate-300 border-slate-600/30';
-        }
+    const getColorClass = (confidence: number | undefined) => {
+        if (confidence === undefined) return 'text-slate-300 border-slate-600/30';
+        if (confidence >= 75) return 'bg-green-500/20 text-green-200 border-green-500/30';
+        if (confidence >= 40) return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/30';
+        return 'bg-red-500/20 text-red-200 border-red-500/30';
     };
 
-    const getScoreLabel = (score: number) => {
-        if (score >= 75) return 'High Confidence';
-        if (score >= 40) return 'Medium Confidence';
+    const getScoreLabel = (confidence: number | undefined) => {
+        if (confidence === undefined) return 'Not a fact';
+        if (confidence >= 75) return 'High Confidence';
+        if (confidence >= 40) return 'Medium Confidence';
         return 'Low Confidence';
     };
+
+    const totalScore = segments.reduce((acc, s) => acc + (s.factCheckResult?.confidence || 0), 0);
+    const factSegments = segments.filter(s => s.isFact);
+    const averageScore = factSegments.length > 0 ? Math.round(totalScore / factSegments.length) : 0;
 
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl space-y-6">
@@ -50,73 +49,45 @@ const ColorCodedText: React.FC<ColorCodedTextProps> = ({ segments }) => {
                 </p>
             </div>
 
-            {/* Color Legend */}
             <div className="flex flex-wrap gap-4 p-4 bg-slate-900/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    <span className="text-xs text-slate-300">High Confidence (75-100)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                    <span className="text-xs text-slate-300">Medium Confidence (40-74)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    <span className="text-xs text-slate-300">Low Confidence (0-39)</span>
-                </div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full"></div><span className="text-xs text-slate-300">High Confidence</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-yellow-500 rounded-full"></div><span className="text-xs text-slate-300">Medium Confidence</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-full"></div><span className="text-xs text-slate-300">Low Confidence</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-slate-500 rounded-full"></div><span className="text-xs text-slate-300">Opinion/Non-Factual</span></div>
             </div>
 
-            {/* Analyzed Text */}
             <div className="bg-slate-900/50 p-6 rounded-lg">
                 <h4 className="text-sm font-semibold text-slate-300 mb-4">Analyzed Text Segments</h4>
                 <div className="space-y-3">
-                    {segments.map((segment, index) => (
-                        <div key={index} className={`p-3 rounded-lg border transition-colors ${getColorClass(segment.color)}`}>
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                                <p className="text-base leading-relaxed flex-1">
-                                    {segment.text}
-                                    {/* Add temporal issue indicator */}
-                                    {segment.temporalIssues && (
-                                        <span className="ml-2 px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded-full">
-                                            ⏰ Temporal Issue
-                                        </span>
+                    {segments.map((segment, index) => {
+                        const confidence = segment.factCheckResult?.confidence;
+                        return (
+                            <div key={index} className={`p-3 rounded-lg border transition-colors ${getColorClass(confidence)}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <p className="text-base leading-relaxed flex-1">{segment.text}</p>
+                                    {segment.isFact && confidence !== undefined && (
+                                        <div className="flex-shrink-0 text-right">
+                                            <div className="text-sm font-semibold">{confidence}/100</div>
+                                            <div className="text-xs opacity-75">{getScoreLabel(confidence)}</div>
+                                        </div>
                                     )}
-                                </p>
-                                <div className="flex-shrink-0 text-right">
-                                    <div className="text-sm font-semibold">
-                                        {segment.score}/100
-                                    </div>
-                                    <div className="text-xs opacity-75">
-                                        {getScoreLabel(segment.score)}
-                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* Analysis Summary */}
             <div className="bg-slate-900/50 p-4 rounded-lg">
                 <h4 className="text-sm font-semibold text-slate-300 mb-2">Analysis Summary</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
                     <div>
-                        <div className="text-lg font-bold text-green-400">
-                            {segments.filter(s => s.score >= 75).length}
-                        </div>
-                        <div className="text-xs text-slate-400">High Confidence Segments</div>
+                        <div className="text-lg font-bold text-slate-100">{averageScore}<span className="text-sm">%</span></div>
+                        <div className="text-xs text-slate-400">Average Confidence</div>
                     </div>
                     <div>
-                        <div className="text-lg font-bold text-yellow-400">
-                            {segments.filter(s => s.score >= 40 && s.score < 75).length}
-                        </div>
-                        <div className="text-xs text-slate-400">Medium Confidence Segments</div>
-                    </div>
-                    <div>
-                        <div className="text-lg font-bold text-red-400">
-                            {segments.filter(s => s.score < 40).length}
-                        </div>
-                        <div className="text-xs text-slate-400">Low Confidence Segments</div>
+                        <div className="text-lg font-bold text-slate-100">{factSegments.length}</div>
+                        <div className="text-xs text-slate-400">Factual Claims Identified</div>
                     </div>
                 </div>
             </div>
