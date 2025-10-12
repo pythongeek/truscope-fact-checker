@@ -36,8 +36,8 @@ const ColorCodedText: React.FC<ColorCodedTextProps> = ({ segments }) => {
         return 'Low Confidence';
     };
 
-    const totalScore = segments.reduce((acc, s) => acc + (s.factCheckResult?.confidence || 0), 0);
-    const factSegments = segments.filter(s => s.isFact);
+    const factSegments = segments.filter(s => s.isFact && s.factCheckResult);
+    const totalScore = factSegments.reduce((acc, s) => acc + (s.factCheckResult?.confidence || 0), 0);
     const averageScore = factSegments.length > 0 ? Math.round(totalScore / factSegments.length) : 0;
 
     return (
