@@ -21,9 +21,9 @@ export function completeFactCheckReport(
     id: partial.id || `report-${now}`,
     originalText: partial.originalText,
 
-    // Scoring
-    final_score: partial.final_score ?? 0,
-    final_verdict: partial.final_verdict || 'Analysis Incomplete',
+    // Scoring (using camelCase)
+    finalScore: partial.finalScore ?? 0,
+    finalVerdict: partial.finalVerdict || 'Analysis Incomplete',
     reasoning: partial.reasoning || 'Analysis in progress',
 
     // Evidence
@@ -33,13 +33,13 @@ export function completeFactCheckReport(
     enhanced_claim_text: partial.enhanced_claim_text || partial.originalText,
     originalTextSegments: partial.originalTextSegments || [],
 
-    // Score breakdown
-    score_breakdown: partial.score_breakdown || {
-      final_score_formula: 'Default scoring',
+    // Score breakdown (using camelCase)
+    scoreBreakdown: partial.scoreBreakdown || {
+      finalScoreFormula: 'Default scoring',
       metrics: [],
-      confidence_intervals: {
-        lower_bound: 0,
-        upper_bound: 0,
+      confidenceIntervals: {
+        lowerBound: 0,
+        upperBound: 0,
       },
     },
 
@@ -65,22 +65,24 @@ export function completeFactCheckReport(
       temporalWarnings: []
     },
 
-    // Metadata
+    // Metadata (using camelCase)
     metadata: partial.metadata || {
-      method_used: 'unknown',
-      processing_time_ms: 0,
+      methodUsed: 'unknown',
+      processingTimeMs: 0,
       apisUsed: [],
-      sources_consulted: {
+      sourcesConsulted: {
         total: 0,
-        high_credibility: 0,
+        highCredibility: 0,
         conflicting: 0
       },
       warnings: []
     },
 
+    // Required properties from FactCheckReport
+    claimVerifications: partial.claimVerifications || [],
+
     // Optional fields (only include if provided)
     ...(partial.searchEvidence && { searchEvidence: partial.searchEvidence }),
-    ...(partial.claimVerifications && { claimVerifications: partial.claimVerifications }),
     ...(partial.overallAuthenticityScore !== undefined && {
       overallAuthenticityScore: partial.overallAuthenticityScore
     }),
@@ -88,7 +90,8 @@ export function completeFactCheckReport(
     ...(partial.category_rating && { category_rating: partial.category_rating }),
     ...(partial.media_verification_report && {
       media_verification_report: partial.media_verification_report
-    })
+    }),
+    ...(partial.corrections && { corrections: partial.corrections })
   };
 }
 
@@ -104,14 +107,14 @@ export function createErrorReport(
 
   return completeFactCheckReport({
     originalText: text,
-    final_score: 0,
-    final_verdict: 'Error',
+    finalScore: 0,
+    finalVerdict: 'Error',
     reasoning: `Analysis failed: ${errorMessage}`,
     metadata: {
-      method_used: method,
-      processing_time_ms: 0,
+      methodUsed: method,
+      processingTimeMs: 0,
       apisUsed: [],
-      sources_consulted: { total: 0, high_credibility: 0, conflicting: 0 },
+      sourcesConsulted: { total: 0, highCredibility: 0, conflicting: 0 },
       warnings: [`Error: ${errorMessage}`]
     }
   });
@@ -127,9 +130,13 @@ export function createDefaultEvidence(partial: Partial<EvidenceItem>): EvidenceI
     url: partial.url || '',
     quote: partial.quote || '',
     score: partial.score ?? 50,
+    credibilityScore: partial.credibilityScore ?? partial.score ?? 50,
+    relevanceScore: partial.relevanceScore ?? 50,
     type: partial.type || 'search_result',
     title: partial.title || 'Untitled',
     snippet: partial.snippet || partial.quote || '',
+    publicationDate: partial.publicationDate,
+    publishedDate: partial.publishedDate || partial.publicationDate,
     source: partial.source || {
       name: partial.publisher || 'Unknown',
       url: partial.url || '',
