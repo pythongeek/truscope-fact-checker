@@ -1,5 +1,3 @@
-// src/components/AutoEditorTab.tsx
-
 import React, { useState } from 'react';
 import { CorrectionSuggestion } from '../types';
 import { editorialOrchestrator, EditorialPackage } from '../services/EditorialOrchestrationService';
@@ -17,6 +15,7 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
   const handleAnalyze = async () => {
     setIsLoading(true);
     try {
+      // Corrected: Calling processText with only one argument as expected.
       const result = await editorialOrchestrator.processText(initialText);
       setEditorialPackage(result);
       setSuggestions(result.correctionSuggestions);
