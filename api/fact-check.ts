@@ -1,8 +1,8 @@
 // api/fact-check.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateTextWithFallback } from '../src/services/geminiService.js';
-import { logger } from '../src/utils/logger';
-import { EvidenceItem, FactVerdict } from '../src/types';
+import { logger } from '../src/utils/logger.js';
+import { EvidenceItem, FactVerdict } from '../src/types/index.js';
 
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 
