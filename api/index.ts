@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put, del } from '@vercel/blob';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+export const config = {
+  maxDuration: 60,
+};
+
 // Initialize Gemini AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
