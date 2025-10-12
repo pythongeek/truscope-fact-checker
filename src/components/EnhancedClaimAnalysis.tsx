@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClaimVerification } from '../types'; // CORRECTED: Was ClaimVerificationResult
+import { ClaimVerification } from '../types';
 
 interface EnhancedClaimAnalysisProps {
   claim: ClaimVerification;
@@ -14,20 +14,13 @@ const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ claim }) 
     );
   }
 
-  // Helper to determine the color based on the verdict
   const getVerdictColor = (status: ClaimVerification['status']) => {
     switch (status) {
-      case 'TRUE':
-        return 'text-green-600';
-      case 'FALSE':
-        return 'text-red-600';
-      case 'MISLEADING':
-        return 'text-orange-600';
-      case 'MIXED':
-        return 'text-yellow-600';
-      case 'UNVERIFIED':
-      default:
-        return 'text-gray-600';
+      case 'TRUE': return 'text-green-600';
+      case 'FALSE': return 'text-red-600';
+      case 'MISLEADING': return 'text-orange-600';
+      case 'MIXED': return 'text-yellow-600';
+      default: return 'text-gray-600';
     }
   };
 
@@ -35,7 +28,6 @@ const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ claim }) 
     <div className="p-4 border rounded-lg bg-white shadow-md mb-4">
       <p className="font-semibold text-gray-800">Claim: "{claim.claim}"</p>
 
-      {/* Data-Driven Verdict Section */}
       <div className={`mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-center p-3 bg-slate-50 rounded-lg`}>
         <div>
           <p className="text-sm font-medium text-gray-500">Verdict</p>
@@ -47,14 +39,12 @@ const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ claim }) 
         </div>
       </div>
 
-      {/* AI Explanation */}
       {claim.explanation && (
         <div className="mt-4 prose prose-sm max-w-none">
           <p><strong>Explanation:</strong> {claim.explanation}</p>
         </div>
       )}
 
-      {/* Enhanced Evidence Display */}
       <div className="mt-4">
         <h4 className="font-semibold mb-2">Evidence ({claim.evidence.length} sources)</h4>
         <div className="space-y-3">
@@ -65,7 +55,7 @@ const EnhancedClaimAnalysis: React.FC<EnhancedClaimAnalysisProps> = ({ claim }) 
                   {evidenceItem.publisher}
                 </a>
                 <div className="flex space-x-3 text-xs">
-                  <span className="font-medium">Score: {evidenceItem.score}%</span>
+                  {evidenceItem.score && <span className="font-medium">Credibility: {evidenceItem.score}%</span>}
                   {evidenceItem.relevance && <span className="font-medium">Relevance: {evidenceItem.relevance}%</span>}
                 </div>
               </div>
