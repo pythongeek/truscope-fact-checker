@@ -48,6 +48,9 @@ export type {
   SearchParams, // ADDED - Used in webzNewsService.ts
   AdvancedEvidence, // ADDED - Used in intelligentCorrector.ts and multiSourceVerifier.ts
   FactCheckMethod, // ADDED - Used in multiple service files
+  ViewType, // MOVED from enhancedFactCheck.ts - now in factCheck.ts
+  TabType, // MOVED from enhancedFactCheck.ts - now in factCheck.ts
+  ChatMessage, // MOVED from enhancedFactCheck.ts - now in factCheck.ts
 } from './factCheck';
 
 // Types from src/types/factDatabase.ts
@@ -57,8 +60,26 @@ export type {
 
 // Types from src/types/enhancedFactCheck.ts and other UI/component-specific files.
 export type {
-  ViewType,
-  TabType,
-  ChatMessage,
-  SourceReliabilityScore
+  SourceReliabilityScore,
+  MultiSourceResult,
+  SourceCredibilityData,
+  SourceCredibilityReport,
+  MediaVerificationReport,
+  TimelineEvent,
+  TemporalValidation,
+  CategoryRating,
+  TemporalAnalysis
 } from './enhancedFactCheck';
+
+// Re-export helper functions
+export { 
+  completeFactCheckReport, 
+  createErrorReport, 
+  createDefaultEvidence 
+} from './helpers';
+
+// Re-export type guards
+export { 
+  isFactCheckReport, 
+  getReport 
+} from './guards';
