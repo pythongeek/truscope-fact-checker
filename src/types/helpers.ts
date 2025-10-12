@@ -23,14 +23,15 @@ export function completeFactCheckReport(
 
     // Scoring (using camelCase)
     finalScore: partial.finalScore ?? 0,
-    finalVerdict: partial.finalVerdict || 'Analysis Incomplete',
+    finalVerdict: partial.finalVerdict || ('Analysis Incomplete' as const),
     reasoning: partial.reasoning || 'Analysis in progress',
 
     // Evidence
     evidence: partial.evidence || [],
 
-    // Enhanced fields with defaults
-    enhanced_claim_text: partial.enhanced_claim_text || partial.originalText,
+    // Enhanced fields with defaults (both camelCase and snake_case)
+    enhancedClaimText: partial.enhancedClaimText || partial.enhanced_claim_text || partial.originalText,
+    enhanced_claim_text: partial.enhanced_claim_text || partial.enhancedClaimText || partial.originalText,
     originalTextSegments: partial.originalTextSegments || [],
 
     // Score breakdown (using camelCase)
@@ -43,8 +44,20 @@ export function completeFactCheckReport(
       },
     },
 
-    // Source credibility
-    source_credibility_report: partial.source_credibility_report || {
+    // Source credibility (both camelCase and snake_case)
+    sourceCredibilityReport: partial.sourceCredibilityReport || partial.source_credibility_report || {
+      overallScore: 0,
+      highCredibilitySources: 0,
+      flaggedSources: 0,
+      biasWarnings: [],
+      credibilityBreakdown: {
+        academic: 0,
+        news: 0,
+        government: 0,
+        social: 0
+      }
+    },
+    source_credibility_report: partial.source_credibility_report || partial.sourceCredibilityReport || {
       overallScore: 0,
       highCredibilitySources: 0,
       flaggedSources: 0,
@@ -57,8 +70,14 @@ export function completeFactCheckReport(
       }
     },
 
-    // Temporal verification
-    temporal_verification: partial.temporal_verification || {
+    // Temporal verification (both camelCase and snake_case)
+    temporalVerification: partial.temporalVerification || partial.temporal_verification || {
+      hasTemporalClaims: false,
+      validations: [],
+      overallTemporalScore: 0,
+      temporalWarnings: []
+    },
+    temporal_verification: partial.temporal_verification || partial.temporalVerification || {
       hasTemporalClaims: false,
       validations: [],
       overallTemporalScore: 0,
@@ -87,11 +106,16 @@ export function completeFactCheckReport(
       overallAuthenticityScore: partial.overallAuthenticityScore
     }),
     ...(partial.summary && { summary: partial.summary }),
+    ...(partial.extractedEntities && { extractedEntities: partial.extractedEntities }),
+    ...(partial.timelineAnalysis && { timelineAnalysis: partial.timelineAnalysis }),
+    ...(partial.categoryRating && { categoryRating: partial.categoryRating }),
     ...(partial.category_rating && { category_rating: partial.category_rating }),
+    ...(partial.mediaVerificationReport && { mediaVerificationReport: partial.mediaVerificationReport }),
     ...(partial.media_verification_report && {
       media_verification_report: partial.media_verification_report
     }),
-    ...(partial.corrections && { corrections: partial.corrections })
+    ...(partial.corrections && { corrections: partial.corrections }),
+    ...(partial.claimBreakdown && { claimBreakdown: partial.claimBreakdown })
   };
 }
 
