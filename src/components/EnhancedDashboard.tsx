@@ -1,9 +1,8 @@
 // src/components/EnhancedDashboard.tsx
-// (Updated to include Editor and Schema Generation)
 
 import React, { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
-import { EvidenceItem, TieredFactCheckResult } from '@/types';
+import { Evidence, TieredFactCheckResult } from '@/types';
 import { fetchAllEvidence } from '../services/evidenceService';
 import { computeValidatedScore } from '../services/validator';
 import { schemaGenerator } from '../services/schemaGenerator';
@@ -16,7 +15,7 @@ export const EnhancedDashboard: React.FC = () => {
   const [query, setQuery] = useState('');
   const [articleText, setArticleText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [validationScore, setValidationScore] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
@@ -31,53 +30,52 @@ export const EnhancedDashboard: React.FC = () => {
     setIsLoading(true);
     setError(null);
     setFactCheckResult(null);
+
+    // Assuming these service calls return data conforming to the new types
     const allEvidence = await fetchAllEvidence(query);
     const { finalScore, scoredEvidence } = computeValidatedScore(allEvidence);
     setEvidence(scoredEvidence);
     setValidationScore(finalScore);
 
-    // Create a mock TieredFactCheckResult
+    // Create a mock TieredFactCheckResult that conforms to the new types
     const result: TieredFactCheckResult = {
-        id: '1',
-        originalText: query,
-        summary: `Based on the analysis, the claim "${query}" has a validation score of ${finalScore}.`,
-        overallAuthenticityScore: finalScore,
-        claimVerifications: scoredEvidence.map((item) => ({
-          id: item.id,
-          claimText: query,
-          status: item.score > 70 ? 'Verified' : 'Unverified',
-          confidenceScore: item.score / 100,
-          explanation: item.snippet,
-          reasoning: {
-            totalSources: 0,
-            supportingSources: 0,
-            conflictingSources: 0,
-            conclusion: '',
-          },
-          evidence: [],
-        })),
-        evidence: scoredEvidence,
-        final_score: finalScore,
-        final_verdict: 'Uncertain',
-        reasoning: '',
-        score_breakdown: {
-          final_score_formula: '',
-          metrics: [],
-          confidence_intervals: {
-            lower_bound: 0,
-            upper_bound: 0,
-          },
+      id: new Date().toISOString(),
+      originalText: query,
+      summary: `Based on a preliminary analysis, the claim "${query}" has a validation score of ${finalScore}.`,
+      overallAuthenticityScore: finalScore,
+      claimVerifications: scoredEvidence.map((item) => ({
+        id: item.id,
+        claimText: query,
+        status: item.relevanceScore > 0.7 ? 'Verified' : 'Disputed',
+        confidenceScore: item.credibilityScore / 100,
+        explanation: item.snippet,
+        evidence: [item], // Self-reference evidence for this mock-up
+      })),
+      evidence: scoredEvidence,
+      finalScore: finalScore,
+      finalVerdict: 'Needs Context', // Default verdict for mock
+      reasoning: 'This is a mock result based on automated evidence scoring.',
+      scoreBreakdown: {
+        finalScoreFormula: 'Weighted average of credibility and relevance.',
+        metrics: [
+          { name: 'Average Credibility', score: 80, weight: 0.6, description: 'Source credibility score', reasoning: 'Based on known reliable sources.' },
+          { name: 'Relevance Match', score: 75, weight: 0.4, description: 'How relevant sources are to the claim', reasoning: 'Based on semantic matching.' }
+        ],
+        confidenceIntervals: {
+          lowerBound: finalScore - 5,
+          upperBound: finalScore + 5,
         },
-        metadata: {
-          method_used: 'mock',
-          processing_time_ms: 100,
-          sources_consulted: {
-            total: 0,
-            high_credibility: 0,
-            conflicting: 0,
-          },
-          warnings: [],
+      },
+      metadata: {
+        methodUsed: 'Automated Mock Analysis',
+        processingTimeMs: 500,
+        sourcesConsulted: {
+          total: scoredEvidence.length,
+          highCredibility: scoredEvidence.filter(e => e.credibilityScore > 75).length,
+          conflicting: 0,
         },
+        warnings: ['This is not a final fact-check report.'],
+      },
     };
     setFactCheckResult(result);
     setIsLoading(false);
@@ -85,8 +83,8 @@ export const EnhancedDashboard: React.FC = () => {
 
   const handleGenerateSchema = () => {
     if (!factCheckResult) {
-        alert("Please run an analysis first to generate evidence.");
-        return;
+      alert("Please run an analysis first to generate a report.");
+      return;
     }
     const schema = schemaGenerator.generate(factCheckResult);
     setGeneratedSchema(schema);
@@ -125,30 +123,30 @@ export const EnhancedDashboard: React.FC = () => {
               {isLoading ? 'Analyzing...' : <Search className="w-5 h-5" />}
             </button>
           </div>
-           <button
-              onClick={handleGenerateSchema}
-              disabled={isLoading || evidence.length === 0}
-              className="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-gray-400"
-            >
-              <FileText size={18} className="mr-2" />
-              Generate Fact-Check Report (JSON-LD)
+          <button
+            onClick={handleGenerateSchema}
+            disabled={isLoading || evidence.length === 0}
+            className="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 flex items-center justify-center disabled:bg-gray-400"
+          >
+            <FileText size={18} className="mr-2" />
+            Generate Fact-Check Report (JSON-LD)
           </button>
         </div>
 
         {/* Right Side: Results */}
         <div className="space-y-6">
-            <div className="bg-white p-4 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Validation Score</h3>
-                <div className="text-center text-6xl font-bold text-gray-800">{validationScore}</div>
-                <p className="text-center text-gray-500">out of 100</p>
-            </div>
-             <div className="bg-white p-4 rounded-lg shadow max-h-[60vh] overflow-y-auto">
-                {isLoading ? (
-                    <div className="text-center py-8">Fetching and analyzing sources...</div>
-                ) : (
-                    <EvidenceList evidence={evidence} />
-                )}
-            </div>
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Validation Score</h3>
+            <div className="text-center text-6xl font-bold text-gray-800">{validationScore}</div>
+            <p className="text-center text-gray-500">out of 100</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow max-h-[60vh] overflow-y-auto">
+            {isLoading ? (
+              <div className="text-center py-8">Fetching and analyzing sources...</div>
+            ) : (
+              <EvidenceList evidence={evidence} />
+            )}
+          </div>
         </div>
       </div>
 
@@ -156,7 +154,7 @@ export const EnhancedDashboard: React.FC = () => {
         <SchemaModal schema={generatedSchema} onClose={() => setShowSchema(false)} />
       )}
 
-      {/* Conditionally render the assistant */}
+      {/* Conditionally render the report and assistant */}
       {factCheckResult && (
         <>
           <EnhancedFactCheckReport report={factCheckResult} />
