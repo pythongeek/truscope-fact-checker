@@ -15,7 +15,7 @@ const AutoEditorTab: React.FC<Props> = ({ initialText }) => {
   const handleAnalyze = async () => {
     setIsLoading(true);
     try {
-      // Corrected: Calling processText with only the required argument.
+      // Corrected: Calling processText with only the single required argument.
       const result = await editorialOrchestrator.processText(initialText);
       setEditorialPackage(result);
       setSuggestions(result.correctionSuggestions);
