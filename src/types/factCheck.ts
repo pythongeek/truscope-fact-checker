@@ -18,7 +18,14 @@ export type FactVerdict =
   | 'Verified'
   | 'Unverified'
   | 'Disputed'
-  | 'Retracted';
+  | 'Retracted'
+  // Additional values from components
+  | 'true'
+  | 'false'
+  | 'mixed'
+  | 'mostly-true'
+  | 'mostly-false'
+  | 'Error';
 
 export interface Source {
   name: string;
@@ -45,10 +52,16 @@ export interface Evidence {
   // Additional properties used in API
   score: number; // Alias for credibilityScore for backward compatibility
   publishedDate?: string; // Alias for publicationDate
+  // Optional property from EnhancedClaimAnalysis
+  relevance?: number;
 }
 
 // Legacy Evidence type for API compatibility
-export interface EvidenceItem extends Evidence {}
+export interface EvidenceItem extends Evidence {
+  // Ensure all required properties from Evidence are present
+  credibilityScore: number;
+  relevanceScore: number;
+}
 
 export interface ScoreMetric {
   name: string;
@@ -70,7 +83,7 @@ export interface ScoreBreakdown {
 export interface ClaimVerification {
   id: string;
   claimText: string;
-  status: 'Verified' | 'Unverified' | 'Disputed' | 'Retracted';
+  status: 'Verified' | 'Unverified' | 'Disputed' | 'Retracted' | 'Error';
   confidenceScore: number;
   explanation: string;
   evidence: Evidence[];
@@ -94,7 +107,13 @@ export interface FactCheckMetadata {
   apisUsed?: string[];
   warnings: string[];
   pipelineMetadata?: Record<string, any>;
-  tierBreakdown?: TierBreakdown[];
+  tierBreakdown?: Array<{
+    tier: string;
+    success: boolean;
+    confidence: number;
+    processingTimeMs: number;
+    evidenceCount: number;
+  }>;
 }
 
 export interface TierBreakdown {
@@ -110,7 +129,7 @@ export interface Segment {
   text: string;
   isFact: boolean;
   score: number;
-  color: 'green' | 'yellow' | 'red' | 'default';
+  color: 'green' | 'yellow' | 'red' | 'default' | 'orange';
   factCheckResult?: any; // For backward compatibility
 }
 
@@ -119,8 +138,14 @@ export interface CorrectionSuggestion {
   originalText: string;
   suggestedText: string;
   reason: string;
-  severity: 'high' | 'medium' | 'low';
+  severity: 'high' | 'medium' | 'low' | 'High' | 'Medium' | 'Low';
   type: string;
+  // Additional properties from advancedEditor.ts
+  originalSegment?: string;
+  suggestedCorrection?: string;
+  explanation?: string;
+  claimId?: string;
+  evidenceUrl?: string;
 }
 
 export interface TieredFactCheckResult {
@@ -144,6 +169,35 @@ export interface FactCheckReport extends TieredFactCheckResult {
   // Ensure all required properties are present
   claimVerifications: ClaimVerification[];
   scoreBreakdown: ScoreBreakdown;
+  // Additional optional properties used in various components
+  claimBreakdown?: any;
+  enhanced_claim_text?: string;
+  source_credibility_report?: {
+    overallScore: number;
+    highCredibilitySources: number;
+    flaggedSources: number;
+    biasWarnings: string[];
+    credibilityBreakdown: {
+      academic: number;
+      news: number;
+      government: number;
+      social: number;
+    };
+  };
+  temporal_verification?: {
+    hasTemporalClaims: boolean;
+    validations: any[];
+    overallTemporalScore: number;
+    temporalWarnings: string[];
+  };
+  category_rating?: {
+    category: string;
+    reasoning: string;
+  };
+  media_verification_report?: {
+    hasVisualContent: boolean;
+    reverseImageResults: any[];
+  };
 }
 
 // Partial report for intermediate processing
@@ -158,6 +212,7 @@ export interface HistoryEntry {
   query: string;
   claimText: string;
   result: TieredFactCheckResult;
+  report?: FactCheckReport; // Additional property from HistoryView
 }
 
 export type PublishingContext =
@@ -165,7 +220,8 @@ export type PublishingContext =
   | 'Journalism'
   | 'SocialMedia'
   | 'Academic'
-  | 'General';
+  | 'General'
+  | 'journalism'; // lowercase variant
 
 export interface SearchResult {
   title: string;
@@ -182,7 +238,10 @@ export interface SearchEvidence {
   results: SearchResult[];
 }
 
-export interface GoogleSearchResult extends SearchResult {}
+export interface GoogleSearchResult extends SearchResult {
+  // Ensure url is required for GoogleSearchResult
+  url: string;
+}
 
 export interface NewsSource {
   name: string;
@@ -199,9 +258,20 @@ export interface SearchParams {
 
 // Advanced Evidence type for more complex scenarios
 export interface AdvancedEvidence extends Evidence {
+  // Make id required for AdvancedEvidence
+  id: string;
   publisher?: string;
   quote?: string;
-  id?: string;
+  // Additional properties from enhancedFactCheck.ts
+  sourceCredibility?: number;
+  authorCredibility?: number;
+  recency?: number;
+  contradictsClaim?: boolean;
+  supportsClaim?: boolean;
+  factCheckVerdict?: 'true' | 'false' | 'mixed' | 'unproven' | 'unknown';
+  biasScore?: number;
+  lastVerified?: string;
+  credibilityScore: number; // Ensure this is required
 }
 
 // Method capabilities
@@ -212,7 +282,10 @@ export type FactCheckMethod =
   | 'ai-synthesis'
   | 'tiered-verification'
   | 'citation-augmented'
-  | 'statistical-fallback';
+  | 'statistical-fallback'
+  | 'comprehensive'
+  | 'COMPREHENSIVE'
+  | 'TEMPORAL';
 
 // View and UI types
 export type ViewType = 'report' | 'methodology' | 'history';
