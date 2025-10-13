@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { getGeminiApiKey } from './apiKeyService';
 import { Segment } from '@/types';
 import { parseAIJsonResponse } from '../utils/jsonParser';
@@ -24,27 +24,27 @@ export interface ContentRewrite {
 
 // Schema for text segmentation analysis
 const textSegmentationSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
         segments: {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-                type: Type.OBJECT,
+                type: SchemaType.OBJECT,
                 properties: {
-                    text: { type: Type.STRING, description: "A segment of the original text" },
-                    score: { type: Type.INTEGER, description: "Confidence score 0-100 for this segment" },
+                    text: { type: SchemaType.STRING, description: "A segment of the original text" },
+                    score: { type: SchemaType.INTEGER, description: "Confidence score 0-100 for this segment" },
                     color: {
-                        type: Type.STRING,
+                        type: SchemaType.STRING,
                         enum: ['green', 'yellow', 'red', 'default'],
                         description: "Color coding based on factual confidence"
                     },
                     issues: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
+                        type: SchemaType.ARRAY,
+                        items: { type: SchemaType.STRING },
                         description: "Specific issues found in this segment"
                     },
                     category: {
-                        type: Type.STRING,
+                        type: SchemaType.STRING,
                         enum: ['factual_claim', 'opinion', 'context', 'speculation', 'misleading'],
                         description: "Category of the text segment"
                     }
@@ -52,33 +52,33 @@ const textSegmentationSchema = {
                 required: ['text', 'score', 'color']
             }
         },
-        overallScore: { type: Type.INTEGER, description: "Overall confidence score for the entire text" },
-        analysisMethod: { type: Type.STRING, description: "Method used for segmentation analysis" }
+        overallScore: { type: SchemaType.INTEGER, description: "Overall confidence score for the entire text" },
+        analysisMethod: { type: SchemaType.STRING, description: "Method used for segmentation analysis" }
     },
     required: ['segments', 'overallScore', 'analysisMethod']
 };
 
 // Schema for content rewriting
 const contentRewriteSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-        originalText: { type: Type.STRING },
-        rewrittenText: { type: Type.STRING, description: "The improved, fact-checked version of the text" },
-        changesExplanation: { type: Type.STRING, description: "Explanation of what changes were made and why" },
-        improvementScore: { type: Type.INTEGER, description: "Score indicating how much the content was improved (0-100)" },
+        originalText: { type: SchemaType.STRING },
+        rewrittenText: { type: SchemaType.STRING, description: "The improved, fact-checked version of the text" },
+        changesExplanation: { type: SchemaType.STRING, description: "Explanation of what changes were made and why" },
+        improvementScore: { type: SchemaType.INTEGER, description: "Score indicating how much the content was improved (0-100)" },
         editsApplied: {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-                type: Type.OBJECT,
+                type: SchemaType.OBJECT,
                 properties: {
                     type: {
-                        type: Type.STRING,
+                        type: SchemaType.STRING,
                         enum: ['removal', 'modification', 'addition', 'fact-correction'],
                         description: "Type of edit applied"
                     },
-                    originalPhrase: { type: Type.STRING, description: "The original text that was changed" },
-                    newPhrase: { type: Type.STRING, description: "The new text (if applicable)", nullable: true },
-                    reason: { type: Type.STRING, description: "Explanation for this specific change" }
+                    originalPhrase: { type: SchemaType.STRING, description: "The original text that was changed" },
+                    newPhrase: { type: SchemaType.STRING, description: "The new text (if applicable)", nullable: true },
+                    reason: { type: SchemaType.STRING, description: "Explanation for this specific change" }
                 },
                 required: ['type', 'originalPhrase', 'reason']
             }
@@ -96,7 +96,8 @@ export const analyzeTextSegments = async (
     method: string = 'default'
 ): Promise<TextSegmentAnalysis> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+        const apiKey = getGeminiApiKey();
+        const genAI = new GoogleGenerativeAI(apiKey);
 
         const prompt = `
             You are an expert fact-checking analyst. Analyze the following text and break it down into meaningful segments.
@@ -118,14 +119,33 @@ export const analyzeTextSegments = async (
             - Default segments: Neutral content like opinions, transitions, or non-factual statements
 
             Break the text into logical segments (sentences or clauses) rather than individual words.
+
+            Return your response as a JSON object matching this structure:
+            {
+              "segments": [{"text": "...", "score": 0-100, "color": "green|yellow|red|default", "isFact": true|false}],
+              "overallScore": 0-100,
+              "analysisMethod": "ai-segmentation"
+            }
         `;
 
-        const result = await ai.models.generateContent({
+        const model = genAI.getGenerativeModel({ 
             model: "gemini-2.0-flash-exp",
-            contents: prompt,
+            generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 2048
+            }
         });
-        const responseText = result.text;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
         const analysis = parseAIJsonResponse(responseText) as TextSegmentAnalysis;
+        
+        // Ensure all segments have isFact property
+        analysis.segments = analysis.segments.map(seg => ({
+            ...seg,
+            isFact: seg.isFact !== undefined ? seg.isFact : seg.color !== 'default'
+        }));
+        
         analysis.analysisMethod = method;
 
         return analysis;
@@ -136,7 +156,8 @@ export const analyzeTextSegments = async (
         const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
         const fallbackSegments: Segment[] = sentences.map(sentence => ({
             text: sentence.trim(),
-            score: 50, // Neutral score
+            isFact: false,
+            score: 50,
             color: 'default' as const
         }));
 
@@ -158,7 +179,8 @@ export const rewriteContent = async (
     userPrompt?: string
 ): Promise<ContentRewrite> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+        const apiKey = getGeminiApiKey();
+        const genAI = new GoogleGenerativeAI(apiKey);
 
         const defaultPrompt = `
             You are an expert editor and fact-checker. Your task is to rewrite the provided text to make it more accurate,
@@ -186,13 +208,20 @@ export const rewriteContent = async (
             Focus especially on the segments marked as red (low confidence) or yellow (medium confidence).
 
             Provide a detailed explanation of changes made and track specific edits.
+
+            Return your response as a valid JSON object.
         `;
 
-        const result = await ai.models.generateContent({
+        const model = genAI.getGenerativeModel({ 
             model: "gemini-2.0-flash-exp",
-            contents: prompt,
+            generationConfig: {
+                temperature: 0.4,
+                maxOutputTokens: 2048
+            }
         });
-        const responseText = result.text;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
         return parseAIJsonResponse(responseText) as ContentRewrite;
     } catch (error) {
         console.error("Error rewriting content:", error);
