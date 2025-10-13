@@ -212,15 +212,21 @@ export class CitationAugmentedService {
         upperBound: finalScore + 5,
       }
     };
-    
-    const claimVerifications: ClaimVerification[] = await Promise.all(segmentAnalyses.map(async (analysis) => ({
-        id: await generateSHA256(analysis.claimSegment),
-        claimText: analysis.claimSegment,
-        confidenceScore: analysis.confidence,
-        status: analysis.verificationStatus,
-        supportingEvidence: analysis.supportingEvidence,
-        contradictingEvidence: analysis.contradictingEvidence,
-    })));
+
+    const claimVerifications: ClaimVerification[] = await Promise.all(segmentAnalyses.map(async (analysis) => {
+        const evidence = [...analysis.supportingEvidence, ...analysis.contradictingEvidence];
+        const explanation = `This claim has a confidence score of ${analysis.confidence} and is considered ${analysis.verificationStatus}.`;
+        return {
+            id: await generateSHA256(analysis.claimSegment),
+            claimText: analysis.claimSegment,
+            confidenceScore: analysis.confidence,
+            status: analysis.verificationStatus,
+            supportingEvidence: analysis.supportingEvidence,
+            contradictingEvidence: analysis.contradictingEvidence,
+            explanation: explanation,
+            evidence: evidence,
+        };
+    }));
 
     return {
       id: `report-${Date.now()}`,
@@ -313,7 +319,7 @@ export class CitationAugmentedService {
     const combinedScores = this.combineScores(evidence);
     const finalScore = this.calculateFinalScore(combinedScores);
     const finalVerdict = this.getVerdict(finalScore);
-    
+
     const scoreBreakdown: ScoreBreakdown = {
       finalScoreFormula: "Weighted average of search metrics.",
       metrics: [
