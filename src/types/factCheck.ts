@@ -26,7 +26,9 @@ export type FactVerdict =
   | 'mostly-true'
   | 'mostly-false'
   | 'Error'
-  | 'Analysis Incomplete';
+  | 'Analysis Incomplete'
+  | 'Comprehensive Analysis'
+  | 'Analysis failed due to technical error';
 
 export interface Source {
   name: string;
@@ -65,7 +67,7 @@ export interface EvidenceItem extends Evidence {
 export interface ScoreMetric {
   name: string;
   score: number;
-  weight: number;
+  weight?: number; // Made optional since many places don't provide it
   description: string;
   reasoning: string;
 }
@@ -78,10 +80,15 @@ export interface ScoreBreakdown {
   confidenceIntervals?: {
     lowerBound: number;
     upperBound: number;
+    // Support snake_case for backward compatibility
+    lower_bound?: number;
+    upper_bound?: number;
   };
   confidence_intervals?: {
     lowerBound: number;
     upperBound: number;
+    lower_bound?: number;
+    upper_bound?: number;
   };
 }
 
@@ -323,7 +330,9 @@ export type FactCheckMethod =
   | 'comprehensive'
   | 'COMPREHENSIVE'
   | 'TEMPORAL'
-  | 'CITATION';
+  | 'CITATION'
+  | 'tiered-verification-synthesis'
+  | 'tiered-statistical-fallback';
 
 export type ViewType = 'report' | 'methodology' | 'history';
 export type TabType = 'analysis' | 'evidence' | 'editor' | 'export';
@@ -358,4 +367,14 @@ export interface ApiStatus {
   serp: boolean;
   webz: boolean;
   googleFactCheck: boolean;
+}
+
+// New interface for SERP API results
+export interface SerpApiResult {
+  title: string;
+  link: string;
+  snippet: string;
+  domain?: string;
+  source?: string;
+  date?: string; // Added to fix error in tieredFactCheckService.ts
 }
