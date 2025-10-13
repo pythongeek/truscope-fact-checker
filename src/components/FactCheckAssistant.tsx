@@ -10,7 +10,11 @@ interface Props {
 
 export const FactCheckAssistant: React.FC<Props> = ({ report }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', content: "Hello! Ask me any questions about the generated report." }
+    { 
+      role: 'model', 
+      content: "Hello! Ask me any questions about the generated report.",
+      timestamp: Date.now()
+    }
   ]);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,15 +30,28 @@ export const FactCheckAssistant: React.FC<Props> = ({ report }) => {
     e.preventDefault();
     if (!query.trim() || isLoading) return;
 
-    const newMessages: ChatMessage[] = [...messages, { role: 'user', content: query }];
+    const newMessages: ChatMessage[] = [
+      ...messages, 
+      { 
+        role: 'user', 
+        content: query,
+        timestamp: Date.now()
+      }
+    ];
     setMessages(newMessages);
     const currentQuery = query;
     setQuery('');
     setIsLoading(true);
 
     const response = await factCheckAssistantService.getAssistantResponse(report, newMessages, currentQuery);
-
-    setMessages(prev => [...prev, { role: 'model', content: response }]);
+    setMessages(prev => [
+      ...prev, 
+      { 
+        role: 'model', 
+        content: response,
+        timestamp: Date.now()
+      }
+    ]);
     setIsLoading(false);
   };
 
