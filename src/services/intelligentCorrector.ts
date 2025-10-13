@@ -1,21 +1,22 @@
 import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '@/types/corrections';
 import { AdvancedEvidence } from '@/types/enhancedFactCheck';
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenerativeAI;
 
   constructor() {
-    // Reverting to the user's original constructor pattern
-    this.ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
+    this.ai = new GoogleGenerativeAI(getGeminiApiKey());
   }
 
   async analyzeForCorrections(
     originalText: string,
     evidence: AdvancedEvidence[]
   ): Promise<CorrectionAnalysis> {
+
+    const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
 
     const prompt = `
       You are an expert fact-checker and editor. Analyze the following text for factual errors, misleading context, outdated information, and missing context.
@@ -51,11 +52,8 @@ export class IntelligentCorrector {
     `;
 
     try {
-      const result = await this.ai.models.generateContent({
-        model: getGeminiModel(),
-        contents: prompt,
-      });
-      const responseText = result.text;
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
       const response = parseAIJsonResponse(responseText);
 
       return {
@@ -96,6 +94,8 @@ export class IntelligentCorrector {
     evidence: AdvancedEvidence[]
   ): Promise<SmartCorrection | null> {
 
+    const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
+
     const relevantEvidence = evidence.filter(e =>
       e.quote.toLowerCase().includes(issue.originalText.toLowerCase()) ||
       issue.originalText.toLowerCase().includes(e.quote.toLowerCase())
@@ -129,11 +129,8 @@ export class IntelligentCorrector {
     `;
 
     try {
-      const result = await this.ai.models.generateContent({
-        model: getGeminiModel(),
-        contents: prompt,
-      });
-      const responseText = result.text;
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
       const response = parseAIJsonResponse(responseText);
 
       return {
