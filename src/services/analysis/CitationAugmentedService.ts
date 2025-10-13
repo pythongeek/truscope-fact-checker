@@ -1,6 +1,6 @@
 import { TemporalContextService } from '../core/TemporalContextService';
 import { SourceCredibilityService } from '../core/SourceCredibilityService';
-import { FactCheckReport, EvidenceItem, FactVerdict, Segment, FactCheckMetadata, ScoreBreakdown } from '@/types';
+import { FactCheckReport, EvidenceItem, FactVerdict, Segment, FactCheckMetadata, ScoreBreakdown, ClaimVerification } from '@/types';
 import { executeMultiStrategySearch } from '../webSearch';
 import { generateSHA256 } from '../../utils/hashUtils';
 
@@ -191,37 +191,46 @@ export class CitationAugmentedService {
       ]
     };
 
-    const score_breakdown: ScoreBreakdown = {
-        finalScoreFormula: 'Claim Confidence (80%) + Temporal Accuracy (20%)',
-        metrics: [
-          {
-            name: 'Claim Verification',
-            score: Math.round(overallConfidence),
-            description: 'Average confidence across all identified claims',
-            reasoning: 'The confidence score is the average of all claim segments.'
-          },
-          {
-            name: 'Temporal Accuracy',
-            score: Math.round(temporalScore),
-            description: 'Accuracy of time-based references',
-            reasoning: 'The temporal score is the percentage of valid temporal claims.'
-          }
-        ],
-        confidence_intervals: {
-          lowerBound: finalScore - 5,
-          upperBound: finalScore + 5,
+    const scoreBreakdown: ScoreBreakdown = {
+      finalScoreFormula: 'Claim Confidence (80%) + Temporal Accuracy (20%)',
+      metrics: [
+        {
+          name: 'Claim Verification',
+          score: Math.round(overallConfidence),
+          description: 'Average confidence across all identified claims',
+          reasoning: 'The confidence score is the average of all claim segments.'
+        },
+        {
+          name: 'Temporal Accuracy',
+          score: Math.round(temporalScore),
+          description: 'Accuracy of time-based references',
+          reasoning: 'The temporal score is the percentage of valid temporal claims.'
         }
-      };
+      ],
+      confidence_intervals: {
+        lowerBound: finalScore - 5,
+        upperBound: finalScore + 5,
+      }
+    };
+    
+    const claimVerifications: ClaimVerification[] = segmentAnalyses.map(analysis => ({
+        claim: analysis.claimSegment,
+        confidence: analysis.confidence,
+        verificationStatus: analysis.verificationStatus,
+        supportingEvidence: analysis.supportingEvidence,
+        contradictingEvidence: analysis.contradictingEvidence,
+    }));
 
     return {
       id: `report-${Date.now()}`,
-      final_verdict: this.generateVerdict(finalScore, segmentAnalyses),
-      final_score: finalScore,
+      finalVerdict: this.generateVerdict(finalScore, segmentAnalyses),
+      finalScore: finalScore,
       reasoning: this.generateReasoning(segmentAnalyses, temporalAnalysis),
       evidence: allEvidence,
       originalText,
       enhanced_claim_text: originalText,
       originalTextSegments,
+      claimVerifications,
       temporal_verification: {
         hasTemporalClaims: temporalAnalysis.length > 0,
         validations: temporalAnalysis,
@@ -236,7 +245,7 @@ export class CitationAugmentedService {
         credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
       },
       metadata,
-      score_breakdown,
+      scoreBreakdown,
     };
   }
 
@@ -251,14 +260,14 @@ export class CitationAugmentedService {
     const verifiedCount = analyses.filter(a => a.verificationStatus === 'verified').length;
 
     if (disputedCount > verifiedCount) {
-      return 'contains disputed claims';
+      return 'contains disputed claims' as FactVerdict;
     }
 
-    if (score >= 85) return 'highly accurate';
-    if (score >= 70) return 'generally accurate';
-    if (score >= 50) return 'mixed accuracy';
-    if (score >= 30) return 'questionable accuracy';
-    return 'low accuracy';
+    if (score >= 85) return 'highly accurate' as FactVerdict;
+    if (score >= 70) return 'generally accurate' as FactVerdict;
+    if (score >= 50) return 'mixed accuracy' as FactVerdict;
+    if (score >= 30) return 'questionable accuracy' as FactVerdict;
+    return 'low accuracy' as FactVerdict;
   }
 
   private generateReasoning(analyses: CitationContext[], temporalAnalysis: any[]): string {
@@ -304,26 +313,27 @@ export class CitationAugmentedService {
     const finalScore = this.calculateFinalScore(combinedScores);
     const finalVerdict = this.getVerdict(finalScore);
     
-    const score_breakdown: ScoreBreakdown = {
-        finalScoreFormula: "Weighted average of search metrics.",
-        metrics: [
-          { name: 'Source Reliability', score: combinedScores.source_reliability, description: 'Average reliability of sources', reasoning: 'The reliability score is the average of all sources.' },
-          { name: 'Corroboration', score: combinedScores.corroboration, description: 'Number of sources found', reasoning: 'The corroboration score is based on the number of sources found.' }
-        ],
-        confidence_intervals: {
-          lowerBound: finalScore - 5,
-          upperBound: finalScore + 5,
-        }
-      };
+    const scoreBreakdown: ScoreBreakdown = {
+      finalScoreFormula: "Weighted average of search metrics.",
+      metrics: [
+        { name: 'Source Reliability', score: combinedScores.source_reliability, description: 'Average reliability of sources', reasoning: 'The reliability score is the average of all sources.' },
+        { name: 'Corroboration', score: combinedScores.corroboration, description: 'Number of sources found', reasoning: 'The corroboration score is based on the number of sources found.' }
+      ],
+      confidence_intervals: {
+        lowerBound: finalScore - 5,
+        upperBound: finalScore + 5,
+      }
+    };
 
     const report: FactCheckReport = {
       id: `report-${Date.now()}`,
       originalText: claimText,
-      final_verdict: finalVerdict,
-      final_score: finalScore,
+      finalVerdict: finalVerdict,
+      finalScore: finalScore,
       reasoning: `Analysis based on ${evidence.length} search results.`,
       evidence: evidence,
-      score_breakdown,
+      scoreBreakdown,
+      claimVerifications: [],
       metadata: {
         methodUsed: 'citation-augmented-search',
         processingTimeMs: 0,
@@ -373,10 +383,10 @@ export class CitationAugmentedService {
   }
 
   private getVerdict(score: number): FactVerdict {
-    if (score >= 85) return 'highly credible';
-    if (score >= 70) return 'credible';
-    if (score >= 50) return 'mixed';
-    if (score >= 30) return 'not credible';
-    return 'highly not credible';
+    if (score >= 85) return 'highly credible' as FactVerdict;
+    if (score >= 70) return 'credible' as FactVerdict;
+    if (score >= 50) return 'mixed' as FactVerdict;
+    if (score >= 30) return 'not credible' as FactVerdict;
+    return 'highly not credible' as FactVerdict;
   }
 }
