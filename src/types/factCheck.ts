@@ -26,7 +26,7 @@ export type FactVerdict =
   | 'mostly-true'
   | 'mostly-false'
   | 'Error'
-  | 'Analysis Incomplete'; // Added for helpers.ts
+  | 'Analysis Incomplete';
 
 export interface Source {
   name: string;
@@ -51,15 +51,13 @@ export interface Evidence {
   source: Source;
   quote?: string;
   // Additional properties used in API
-  score: number; // Alias for credibilityScore for backward compatibility
-  publishedDate?: string; // Alias for publicationDate
-  // Optional property from EnhancedClaimAnalysis
+  score: number;
+  publishedDate?: string;
   relevance?: number;
 }
 
 // Legacy Evidence type for API compatibility
 export interface EvidenceItem extends Evidence {
-  // Ensure all required properties from Evidence are present
   credibilityScore: number;
   relevanceScore: number;
 }
@@ -73,9 +71,15 @@ export interface ScoreMetric {
 }
 
 export interface ScoreBreakdown {
+  // Support both naming conventions
   finalScoreFormula: string;
+  final_score_formula?: string;
   metrics: ScoreMetric[];
   confidenceIntervals?: {
+    lowerBound: number;
+    upperBound: number;
+  };
+  confidence_intervals?: {
     lowerBound: number;
     upperBound: number;
   };
@@ -89,20 +93,27 @@ export interface ClaimVerification {
   explanation: string;
   evidence: Evidence[];
   reasoning?: string;
-  // Additional properties used in components
   claim?: string;
   confidence?: number;
 }
 
-// Legacy type alias
 export interface ClaimVerificationResult extends ClaimVerification {}
 
 export interface FactCheckMetadata {
+  // Support both naming conventions
   methodUsed: string;
+  method_used?: string;
   processingTimeMs: number;
+  processing_time_ms?: number;
   sourcesConsulted: {
     total: number;
     highCredibility: number;
+    conflicting: number;
+  };
+  sources_consulted?: {
+    total: number;
+    high_credibility?: number;
+    highCredibility?: number;
     conflicting: number;
   };
   apisUsed?: string[];
@@ -131,7 +142,7 @@ export interface Segment {
   isFact: boolean;
   score: number;
   color: 'green' | 'yellow' | 'red' | 'default' | 'orange';
-  factCheckResult?: any; // For backward compatibility
+  factCheckResult?: any;
 }
 
 export interface CorrectionSuggestion {
@@ -141,7 +152,6 @@ export interface CorrectionSuggestion {
   reason: string;
   severity: 'high' | 'medium' | 'low' | 'High' | 'Medium' | 'Low';
   type: string;
-  // Additional properties from advancedEditor.ts
   originalSegment?: string;
   suggestedCorrection?: string;
   explanation?: string;
@@ -152,13 +162,17 @@ export interface CorrectionSuggestion {
 export interface TieredFactCheckResult {
   id: string;
   originalText: string;
+  // Support both naming conventions
   finalScore: number;
+  final_score?: number;
   finalVerdict: FactVerdict;
+  final_verdict?: FactVerdict;
   summary?: string;
   reasoning: string;
   evidence: Evidence[];
   claimVerifications?: ClaimVerification[];
   scoreBreakdown?: ScoreBreakdown;
+  score_breakdown?: ScoreBreakdown;
   metadata: FactCheckMetadata;
   overallAuthenticityScore?: number;
   originalTextSegments?: Segment[];
@@ -167,16 +181,15 @@ export interface TieredFactCheckResult {
 }
 
 export interface FactCheckReport extends TieredFactCheckResult {
-  // Ensure all required properties are present
   claimVerifications: ClaimVerification[];
   scoreBreakdown: ScoreBreakdown;
-  // Additional optional properties used in various components
+  score_breakdown?: ScoreBreakdown;
   claimBreakdown?: any;
-  enhancedClaimText?: string; // camelCase version
-  enhanced_claim_text?: string; // snake_case for backward compatibility
-  extractedEntities?: any; // Added for EnhancedFactCheckService.ts
-  timelineAnalysis?: any; // Added for EnhancedFactCheckService.ts
-  sourceCredibilityReport?: { // camelCase version
+  enhancedClaimText?: string;
+  enhanced_claim_text?: string;
+  extractedEntities?: any;
+  timelineAnalysis?: any;
+  sourceCredibilityReport?: {
     overallScore: number;
     highCredibilitySources: number;
     flaggedSources: number;
@@ -188,7 +201,7 @@ export interface FactCheckReport extends TieredFactCheckResult {
       social: number;
     };
   };
-  source_credibility_report?: { // snake_case for backward compatibility
+  source_credibility_report?: {
     overallScore: number;
     highCredibilitySources: number;
     flaggedSources: number;
@@ -200,37 +213,38 @@ export interface FactCheckReport extends TieredFactCheckResult {
       social: number;
     };
   };
-  temporalVerification?: { // camelCase version
+  temporalVerification?: {
     hasTemporalClaims: boolean;
     validations: any[];
     overallTemporalScore: number;
     temporalWarnings: string[];
+    timelineAnalysis?: any;
   };
-  temporal_verification?: { // snake_case for backward compatibility
+  temporal_verification?: {
     hasTemporalClaims: boolean;
     validations: any[];
     overallTemporalScore: number;
     temporalWarnings: string[];
+    timelineAnalysis?: any;
   };
-  categoryRating?: { // camelCase version
+  categoryRating?: {
     category: string;
     reasoning: string;
   };
-  category_rating?: { // snake_case for backward compatibility
+  category_rating?: {
     category: string;
     reasoning: string;
   };
-  mediaVerificationReport?: { // camelCase version
+  mediaVerificationReport?: {
     hasVisualContent: boolean;
     reverseImageResults: any[];
   };
-  media_verification_report?: { // snake_case for backward compatibility
+  media_verification_report?: {
     hasVisualContent: boolean;
     reverseImageResults: any[];
   };
 }
 
-// Partial report for intermediate processing
 export interface PartialFactCheckReport extends Partial<FactCheckReport> {
   id: string;
   originalText: string;
@@ -242,7 +256,7 @@ export interface HistoryEntry {
   query: string;
   claimText: string;
   result: TieredFactCheckResult;
-  report?: FactCheckReport; // Additional property from HistoryView
+  report?: FactCheckReport;
 }
 
 export type PublishingContext =
@@ -251,7 +265,7 @@ export type PublishingContext =
   | 'SocialMedia'
   | 'Academic'
   | 'General'
-  | 'journalism'; // lowercase variant
+  | 'journalism';
 
 export interface SearchResult {
   title: string;
@@ -269,7 +283,6 @@ export interface SearchEvidence {
 }
 
 export interface GoogleSearchResult extends SearchResult {
-  // Ensure url is required for GoogleSearchResult
   url: string;
 }
 
@@ -286,11 +299,8 @@ export interface SearchParams {
   site?: string;
 }
 
-// Advanced Evidence type for more complex scenarios
 export interface AdvancedEvidence extends Evidence {
-  // All properties from Evidence are inherited
-  // Additional properties from enhancedFactCheck.ts
-  publisher: string; // Make required instead of optional to satisfy Evidence
+  publisher: string;
   sourceCredibility?: number;
   authorCredibility?: number;
   recency?: number;
@@ -302,7 +312,6 @@ export interface AdvancedEvidence extends Evidence {
   publishedDate?: string;
 }
 
-// Method capabilities
 export type FactCheckMethod = 
   | 'google-factcheck'
   | 'web-search'
@@ -314,19 +323,17 @@ export type FactCheckMethod =
   | 'comprehensive'
   | 'COMPREHENSIVE'
   | 'TEMPORAL'
-  | 'CITATION'; // Added for methodCapabilities.ts
+  | 'CITATION';
 
-// View and UI types
 export type ViewType = 'report' | 'methodology' | 'history';
 export type TabType = 'analysis' | 'evidence' | 'editor' | 'export';
 
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'model';
   content: string;
   timestamp: number;
 }
 
-// Settings and configuration
 export interface SettingsConfig {
   apiKeys: {
     gemini?: string;
