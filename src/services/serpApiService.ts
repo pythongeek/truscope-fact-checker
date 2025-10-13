@@ -1,4 +1,4 @@
-// src/services/serpApiService.ts - FIXED VERSION WITH CORRECT CACHE TTL
+// src/services/serpApiService.ts - FIXED VERSION WITH DATE PROPERTY
 
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
@@ -11,6 +11,7 @@ export interface SerpApiResult {
   snippet: string;
   source: string;
   position?: number;
+  date?: string; // ADDED: Date property for published date
 }
 
 export interface SerpApiResponse {
@@ -147,13 +148,22 @@ export class SerpApiService {
     const snippet = result.snippet || result.description || result.text || '';
     const source = result.source || result.displayLink || this.extractDomain(link);
     const position = result.position || result.rank || undefined;
+    
+    // ADDED: Extract date from various possible fields
+    const date = result.date || 
+                 result.published_date || 
+                 result.publishedDate || 
+                 result.datePublished || 
+                 result.pubDate ||
+                 undefined;
 
     return {
       title: this.cleanText(title),
       link,
       snippet: this.cleanText(snippet),
       source: this.cleanText(source),
-      position
+      position,
+      date // ADDED: Include date in the result
     };
   }
 
