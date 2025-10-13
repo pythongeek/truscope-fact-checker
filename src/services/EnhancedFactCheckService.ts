@@ -213,7 +213,7 @@ export class EnhancedFactCheckService {
 
     // 5. Calculate final weighted score
     const finalScore = this.calculateComprehensiveScore(
-      baseReport.final_score,
+      baseReport.finalScore,
       sourceCredibilityReport.overallScore,
       temporalScore,
       mediaVerificationReport
@@ -228,11 +228,22 @@ export class EnhancedFactCheckService {
 
     return {
       ...baseReport,
+      finalScore: finalScore,
       final_score: finalScore,
+      finalVerdict: 'Comprehensive Analysis',
       final_verdict: 'Comprehensive Analysis',
+      categoryRating: categoryRating,
       category_rating: categoryRating,
+      sourceCredibilityReport: sourceCredibilityReport,
       source_credibility_report: sourceCredibilityReport,
+      mediaVerificationReport: mediaVerificationReport,
       media_verification_report: mediaVerificationReport,
+      temporalVerification: {
+        hasTemporalClaims: temporalValidations.length > 0,
+        validations: temporalValidations,
+        overallTemporalScore: temporalScore,
+        temporalWarnings: temporalValidations.filter(v => !v.isValid).map(v => v.reasoning)
+      },
       temporal_verification: {
         hasTemporalClaims: temporalValidations.length > 0,
         validations: temporalValidations,
@@ -241,10 +252,11 @@ export class EnhancedFactCheckService {
       },
       metadata: {
         ...baseReport.metadata,
+        methodUsed: 'comprehensive',
         method_used: 'comprehensive',
-        apisUsed: [...baseReport.metadata.apisUsed, 'source-credibility', 'temporal-context', 'media-verification'],
+        apisUsed: [...(baseReport.metadata.apisUsed || []), 'source-credibility', 'temporal-context', 'media-verification'],
         warnings: [
-          ...baseReport.metadata.warnings,
+          ...(baseReport.metadata.warnings || []),
           ...sourceCredibilityReport.biasWarnings,
           ...temporalValidations.filter(v => !v.isValid).map(v => `Temporal: ${v.reasoning}`)
         ]
@@ -266,7 +278,7 @@ export class EnhancedFactCheckService {
 
     // 4. Calculate temporal-weighted score
     const temporalScore = temporalValidations.filter(v => v.isValid).length / Math.max(temporalValidations.length, 1) * 100;
-    const finalScore = Math.round((baseReport.final_score * 0.4) + (temporalScore * 0.4) + (recentNewsScore * 0.2));
+    const finalScore = Math.round((baseReport.finalScore * 0.4) + (temporalScore * 0.4) + (recentNewsScore * 0.2));
 
     // 5. Basic source credibility (lighter than comprehensive)
     const sourceCredibilityReport = await this.generateBasicSourceCredibilityReport(baseReport.evidence);
@@ -279,10 +291,21 @@ export class EnhancedFactCheckService {
 
     return {
       ...baseReport,
+      finalScore: finalScore,
       final_score: finalScore,
+      finalVerdict: temporalValidations.every(v => v.isValid) ? 'TRUE' : 'FALSE',
       final_verdict: temporalValidations.every(v => v.isValid) ? 'TRUE' : 'FALSE',
+      categoryRating: categoryRating,
       category_rating: categoryRating,
+      sourceCredibilityReport: sourceCredibilityReport,
       source_credibility_report: sourceCredibilityReport,
+      temporalVerification: {
+        hasTemporalClaims: temporalValidations.length > 0,
+        validations: temporalValidations,
+        overallTemporalScore: temporalScore,
+        temporalWarnings: temporalValidations.filter(v => !v.isValid).map(v => v.reasoning),
+        timelineAnalysis: await this.generateTimelineAnalysis(text, temporalValidations)
+      },
       temporal_verification: {
         hasTemporalClaims: temporalValidations.length > 0,
         validations: temporalValidations,
@@ -292,10 +315,11 @@ export class EnhancedFactCheckService {
       },
       metadata: {
         ...baseReport.metadata,
+        methodUsed: 'temporal-verification',
         method_used: 'temporal-verification',
-        apisUsed: [...baseReport.metadata.apisUsed, 'temporal-context', 'recent-news'],
+        apisUsed: [...(baseReport.metadata.apisUsed || []), 'temporal-context', 'recent-news'],
         warnings: [
-          ...baseReport.metadata.warnings,
+          ...(baseReport.metadata.warnings || []),
           ...temporalValidations.filter(v => !v.isValid).map(v => `Temporal: ${v.reasoning}`)
         ]
       }
@@ -390,21 +414,37 @@ export class EnhancedFactCheckService {
   }
 
   private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
-    // Implementation from original file...
     return {
       id: `error-${Date.now()}`,
       originalText: text,
-      final_verdict: 'Analysis failed due to technical error',
+      finalVerdict: 'Error',
+      final_verdict: 'Error',
+      finalScore: 0,
       final_score: 0,
       reasoning: `Error during ${method} analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
       evidence: [],
+      claimVerifications: [],
+      enhancedClaimText: text,
       enhanced_claim_text: text,
+      sourceCredibilityReport: {
+        overallScore: 0,
+        highCredibilitySources: 0,
+        flaggedSources: 0,
+        biasWarnings: [],
+        credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+      },
       source_credibility_report: {
         overallScore: 0,
         highCredibilitySources: 0,
         flaggedSources: 0,
         biasWarnings: [],
         credibilityBreakdown: { academic: 0, news: 0, government: 0, social: 0 }
+      },
+      temporalVerification: {
+        hasTemporalClaims: false,
+        validations: [],
+        overallTemporalScore: 0,
+        temporalWarnings: []
       },
       temporal_verification: {
         hasTemporalClaims: false,
@@ -413,19 +453,48 @@ export class EnhancedFactCheckService {
         temporalWarnings: []
       },
       metadata: {
+        methodUsed: method,
         method_used: method,
+        processingTimeMs: processingTime,
         processing_time_ms: processingTime,
         apisUsed: ['error-handling'],
-        sources_consulted: { total: 0, high_credibility: 0, conflicting: 0 },
+        sourcesConsulted: { total: 0, highCredibility: 0, conflicting: 0 },
+        sources_consulted: { total: 0, high_credibility: 0, highCredibility: 0, conflicting: 0 },
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
-      score_breakdown: {
+      scoreBreakdown: {
+        finalScoreFormula: 'Error',
         final_score_formula: 'Error',
         metrics: [],
-        confidence_intervals: {
-            lower_bound: 0,
-            upper_bound: 0,
+        confidenceIntervals: {
+          lowerBound: 0,
+          upperBound: 0,
+          lower_bound: 0,
+          upper_bound: 0
         },
+        confidence_intervals: {
+          lowerBound: 0,
+          upperBound: 0,
+          lower_bound: 0,
+          upper_bound: 0
+        }
+      },
+      score_breakdown: {
+        finalScoreFormula: 'Error',
+        final_score_formula: 'Error',
+        metrics: [],
+        confidenceIntervals: {
+          lowerBound: 0,
+          upperBound: 0,
+          lower_bound: 0,
+          upper_bound: 0
+        },
+        confidence_intervals: {
+          lowerBound: 0,
+          upperBound: 0,
+          lower_bound: 0,
+          upper_bound: 0
+        }
       }
     };
   }
