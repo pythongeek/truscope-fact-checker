@@ -4,6 +4,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // --- CONSTANTS ---
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const SERPER_API_URL = 'https://google.serper.dev/search';
+const WEBZ_API_URL = 'https://api.webz.io/newsApiLite';
 
 // --- INLINE TYPE DEFINITIONS ---
 type FactVerdict = 'TRUE' | 'FALSE' | 'MIXED' | 'UNVERIFIED' | 'MISLEADING';
