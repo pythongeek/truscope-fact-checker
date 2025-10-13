@@ -48,10 +48,9 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       setReport(result);
       // Ensure result is not null before saving to history
       if (result) {
-        // FIXED: Correct arguments order - claimText, report, result
-        // Note: result here is a FactCheckReport, but we need TieredFactCheckResult
-        // We'll pass result as both the report and the tiered result for now
-        saveReportToHistory(text, result, result as any);
+        // FIXED: Correct arguments - claimText, report (as FactCheckReport), result (as TieredFactCheckResult)
+        // Since FactCheckReport extends TieredFactCheckResult, we pass result for both parameters
+        saveReportToHistory(text, result, result);
       }
     } catch (error) {
       logger.error('Error running fact check from interface', error);
