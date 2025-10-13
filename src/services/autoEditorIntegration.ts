@@ -3,6 +3,7 @@ import {
   FactCheckReport,
   TieredFactCheckResult,
   EditorMode,
+  ClaimVerification,
 } from '@/types';
 import {
   EditorResult,
@@ -394,8 +395,8 @@ export class AutoEditorIntegrationService {
 
       const analysis: FactCheckAnalysis = {
         segments,
-        overallScore: factCheckReport.final_score,
-        verdict: factCheckReport.final_verdict,
+        overallScore: factCheckReport.finalScore,
+        verdict: factCheckReport.finalVerdict,
         timestamp: new Date().toISOString(),
         corrections,
         originalReport: factCheckReport
@@ -432,14 +433,14 @@ export class AutoEditorIntegrationService {
         currentIndex += segmentLength;
       });
     } else {
-      const overallColor = this.scoreToColor(report.final_score);
+      const overallColor = this.scoreToColor(report.finalScore);
       segments.push({
         text: text,
-        score: report.final_score,
+        score: report.finalScore,
         color: overallColor,
         startIndex: 0,
         endIndex: text.length,
-        reason: this.getReasonForScore(report.final_score, overallColor)
+        reason: this.getReasonForScore(report.finalScore, overallColor)
       });
     }
 
@@ -670,7 +671,7 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
     factCheckResult: TieredFactCheckResult
   ): Promise<CorrectionSuggestion[]> {
     const inaccurateClaims = factCheckResult.claimVerifications.filter(
-      (v) => v.status === 'Unverified' || v.status === 'Misleading'
+      (v) => v.status === 'Unverified' || v.status === 'Disputed'
     );
     if (inaccurateClaims.length === 0) {
       return [];
