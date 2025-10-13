@@ -1,16 +1,117 @@
-// api/fact-check.ts
+// api/fact-check.ts - SELF-CONTAINED VERSION (No src/ imports)
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateTextWithFallback } from '../src/services/geminiService';
-import { logger } from '../src/utils/logger';
-import { Evidence, FactVerdict, TierBreakdown, FactCheckReport, Source } from '../src/types/factCheck';
-import { ApiKeys } from '../src/types/apiKeys';
 
 const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-interface FactCheckRequest {
-  text: string;
-  publishingContext?: string;
-  config?: ApiKeys;
+// Inline type definitions (no imports from src/)
+type FactVerdict = 'TRUE' | 'FALSE' | 'MIXED' | 'UNVERIFIED' | 'MISLEADING';
+
+interface Evidence {
+  id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  publisher: string;
+  publicationDate?: string;
+  credibilityScore: number;
+  relevanceScore: number;
+  type: 'claim' | 'news' | 'search_result' | 'official_source';
+  source: {
+    name: string;
+    url: string;
+    credibility: {
+      rating: 'High' | 'Medium' | 'Low';
+      classification: string;
+      warnings: string[];
+    };
+  };
+  quote: string;
+  score: number;
+  publishedDate?: string;
+}
+
+interface TierBreakdown {
+  tier: string;
+  success: boolean;
+  confidence: number;
+  evidence: Evidence[];
+  processingTime: number;
+  escalationReason?: string;
+}
+
+interface FactCheckReport {
+  id: string;
+  originalText: string;
+  finalVerdict: FactVerdict;
+  finalScore: number;
+  reasoning: string;
+  evidence: Evidence[];
+  claimVerifications: any[];
+  scoreBreakdown: {
+    finalScoreFormula: string;
+    metrics: Array<{
+      name: string;
+      score: number;
+      weight: number;
+      description: string;
+      reasoning: string;
+    }>;
+  };
+  metadata: {
+    methodUsed: string;
+    processingTimeMs: number;
+    apisUsed: string[];
+    sourcesConsulted: {
+      total: number;
+      highCredibility: number;
+      conflicting: number;
+    };
+    warnings: string[];
+    tierBreakdown: Array<{
+      tier: string;
+      success: boolean;
+      confidence: number;
+      processingTimeMs: number;
+      evidenceCount: number;
+    }>;
+  };
+}
+
+// Inline logger (replaces import from src/)
+const logger = {
+  info: (msg: string, meta?: any) => console.log(`[INFO] ${msg}`, meta || ''),
+  warn: (msg: string, meta?: any) => console.warn(`[WARN] ${msg}`, meta || ''),
+  error: (msg: string, meta?: any) => console.error(`[ERROR] ${msg}`, meta || '')
+};
+
+// Inline Gemini service (replaces import from src/)
+async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'gemini-2.0-flash-exp'): Promise<string> {
+  try {
+    const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 1024
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  } catch (error: any) {
+    logger.error('Gemini API call failed', { error: error.message });
+    throw error;
+  }
 }
 
 // --- Main Handler ---
@@ -31,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const startTime = Date.now();
-  const { text, publishingContext = 'journalism', config = {} }: FactCheckRequest = req.body;
+  const { text, publishingContext = 'journalism', config = {} } = req.body;
 
   if (!text || text.trim().length === 0) {
     logger.warn('Text is required for fact-checking');
@@ -81,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 // --- Verification Phases ---
 
-async function runPhase1(text: string, config: ApiKeys): Promise<TierBreakdown> {
+async function runPhase1(text: string, config: any): Promise<TierBreakdown> {
   const startTime = Date.now();
   try {
     const query = extractSmartQuery(text, 100);
@@ -303,7 +404,7 @@ async function runPhase4Synthesis(
   context: string,
   tierResults: TierBreakdown[],
   startTime: number,
-  config: ApiKeys
+  config: any
 ): Promise<FactCheckReport> {
   try {
     const geminiApiKey = config.gemini || process.env.GEMINI_API_KEY;
@@ -314,12 +415,7 @@ async function runPhase4Synthesis(
     }
 
     const prompt = buildSynthesisPrompt(text, evidence, context);
-    const geminiText = await generateTextWithFallback(prompt, {
-      apiKey: geminiApiKey,
-      model: config.geminiModel,
-      temperature: 0.3,
-      maxOutputTokens: 1024,
-    });
+    const geminiText = await callGeminiAPI(prompt, geminiApiKey, config.geminiModel);
 
     if (!geminiText) {
       throw new Error('Empty response from Gemini');
