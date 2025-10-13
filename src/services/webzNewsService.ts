@@ -4,6 +4,7 @@ import { NewsSource, SearchParams } from '@/types/factCheck';
 export class WebzNewsService implements NewsSource {
   readonly name: string = 'Webz.io News';
   readonly url: string = 'https://webz.io/';
+  readonly reliability: number = 80; // Added the missing 'reliability' property
   private httpClient: RobustHttpClient;
 
   constructor() {
