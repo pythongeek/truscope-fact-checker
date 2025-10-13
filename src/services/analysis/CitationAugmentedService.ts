@@ -214,18 +214,32 @@ export class CitationAugmentedService {
     };
 
     const claimVerifications: ClaimVerification[] = await Promise.all(segmentAnalyses.map(async (analysis) => {
-        const evidence = [...analysis.supportingEvidence, ...analysis.contradictingEvidence];
-        const explanation = `This claim has a confidence score of ${analysis.confidence} and is considered ${analysis.verificationStatus}.`;
-        return {
-            id: await generateSHA256(analysis.claimSegment),
-            claimText: analysis.claimSegment,
-            confidenceScore: analysis.confidence,
-            status: analysis.verificationStatus,
-            supportingEvidence: analysis.supportingEvidence,
-            contradictingEvidence: analysis.contradictingEvidence,
-            explanation: explanation,
-            evidence: evidence,
-        };
+      const evidence = [...analysis.supportingEvidence, ...analysis.contradictingEvidence];
+      const explanation = `This claim has a confidence score of ${analysis.confidence} and is considered ${analysis.verificationStatus}.`;
+      
+      let mappedStatus: "Verified" | "Unverified" | "Disputed" | "Retracted" | "Error";
+      switch (analysis.verificationStatus) {
+          case "verified":
+              mappedStatus = "Verified";
+              break;
+          case "disputed":
+              mappedStatus = "Disputed";
+              break;
+          case "unverifiable":
+              mappedStatus = "Unverified";
+              break;
+      }
+
+      return {
+          id: await generateSHA256(analysis.claimSegment),
+          claimText: analysis.claimSegment,
+          confidenceScore: analysis.confidence,
+          status: mappedStatus,
+          supportingEvidence: analysis.supportingEvidence,
+          contradictingEvidence: analysis.contradictingEvidence,
+          explanation: explanation,
+          evidence: evidence,
+      };
     }));
 
     return {
