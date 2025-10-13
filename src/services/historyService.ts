@@ -1,4 +1,4 @@
-import { FactCheckReport, HistoryEntry } from '@/types';
+import { FactCheckReport, HistoryEntry, TieredFactCheckResult } from '@/types';
 
 const HISTORY_STORAGE_KEY = 'truescope_history';
 const MAX_HISTORY_ITEMS = 20;
@@ -26,8 +26,9 @@ export const getHistory = (): HistoryEntry[] => {
  * Saves a new fact-check report to the history in local storage.
  * @param {string} claimText The original text that was analyzed.
  * @param {FactCheckReport} report The resulting analysis report.
+ * @param {TieredFactCheckResult} result The tiered fact-check result object.
  */
-export const saveReportToHistory = (claimText: string, report: FactCheckReport): void => {
+export const saveReportToHistory = (claimText: string, report: FactCheckReport, result: TieredFactCheckResult): void => {
     try {
         const currentHistory = getHistory();
 
@@ -36,7 +37,7 @@ export const saveReportToHistory = (claimText: string, report: FactCheckReport):
             timestamp: new Date().toISOString(),
             claimText,
             report,
-            result: report.summary, // Added the missing 'result' property
+            result, // Correctly assigned the result object
             query: claimText,
         };
 
