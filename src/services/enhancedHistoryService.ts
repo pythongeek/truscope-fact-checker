@@ -72,6 +72,7 @@ export class EnhancedHistoryService {
       report: r.report,
       timestamp: r.timestamp,
       query: r.originalText,
+      result: r.report, // Added missing result property
     }));
   }
 
