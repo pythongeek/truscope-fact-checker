@@ -346,6 +346,7 @@ export class PipelineIntegration {
               quote,
               credibilityScore: score,
               relevanceScore: score,
+              score: score, // Added missing score property
               type,
               title,
               snippet,
@@ -365,9 +366,9 @@ export class PipelineIntegration {
       evidence.sort((a, b) => b.credibilityScore - a.credibilityScore);
       
       console.log(`✅ Evidence aggregation complete: ${evidence.length} items`);
-      console.log(`   - High score (>=80): ${evidence.filter(e => e.credibilityScore >= 80).length}`);
-      console.log(`   - Medium score (60-79): ${evidence.filter(e => e.credibilityScore >= 60 && e.credibilityScore < 80).length}`);
-      console.log(`   - Low score (<60): ${evidence.filter(e => e.credibilityScore < 60).length}`);
+      console.log(`    - High score (>=80): ${evidence.filter(e => e.credibilityScore >= 80).length}`);
+      console.log(`    - Medium score (60-79): ${evidence.filter(e => e.credibilityScore >= 60 && e.credibilityScore < 80).length}`);
+      console.log(`    - Low score (<60): ${evidence.filter(e => e.credibilityScore < 60).length}`);
 
       return evidence;
     }
