@@ -129,9 +129,9 @@ export class PipelineIntegration {
             : 0;
 
         console.log(`✅ Integration completed in ${totalTime}ms`);
-        console.log(`   - Queries executed: ${totalQueriesExecuted}`);
-        console.log(`   - Results returned: ${totalResultsReturned}`);
-        console.log(`   - Evidence items: ${aggregatedEvidence.length}`);
+        console.log(`    - Queries executed: ${totalQueriesExecuted}`);
+        console.log(`    - Results returned: ${totalResultsReturned}`);
+        console.log(`    - Evidence items: ${aggregatedEvidence.length}`);
 
         return {
             pipelineResult,
@@ -282,93 +282,94 @@ export class PipelineIntegration {
 
     // ⚠️ CRITICAL FIX: Complete rewrite of evidence aggregation
     private aggregateEvidence(
-        searchResults: {
-            immediate: Map<string, any[]>;
-            followUp: Map<string, any[]>;
-            deepDive: Map<string, any[]>;
-        },
-        pipelineResult: PipelineResult
+      searchResults: {
+          immediate: Map<string, any[]>;
+          followUp: Map<string, any[]>;
+          deepDive: Map<string, any[]>;
+      },
+      pipelineResult: PipelineResult
     ): EvidenceItem[] {
-        console.log('🔄 Starting evidence aggregation...');
-        
-        // Collect all results
-        const allResults = [
-            ...Array.from(searchResults.immediate.values()),
-            ...Array.from(searchResults.followUp.values()),
-            ...Array.from(searchResults.deepDive.values())
-        ].flat();
+      console.log('🔄 Starting evidence aggregation...');
+      
+      // Collect all results
+      const allResults = [
+          ...Array.from(searchResults.immediate.values()),
+          ...Array.from(searchResults.followUp.values()),
+          ...Array.from(searchResults.deepDive.values())
+      ].flat();
 
-        console.log(`📊 Raw results collected: ${allResults.length}`);
+      console.log(`📊 Raw results collected: ${allResults.length}`);
 
-        if (allResults.length === 0) {
-            console.warn('⚠️ No results to aggregate!');
-            return [];
-        }
+      if (allResults.length === 0) {
+          console.warn('⚠️ No results to aggregate!');
+          return [];
+      }
 
-        // ⚠️ FIX: Better deduplication with multiple URL formats
-        const uniqueResults = new Map<string, any>();
-        
-        allResults.forEach(result => {
-            // Extract URL with multiple fallbacks
-            const url = this.extractUrl(result);
-            
-            if (url) {
-                const normalizedUrl = this.normalizeUrl(url);
-                if (!uniqueResults.has(normalizedUrl)) {
-                    uniqueResults.set(normalizedUrl, result);
-                }
-            } else {
-                // Keep results without URLs using title as key
-                const titleKey = `no-url-${result.title || result.text || Math.random()}`;
-                if (!uniqueResults.has(titleKey)) {
-                    uniqueResults.set(titleKey, result);
-                }
-            }
-        });
+      // ⚠️ FIX: Better deduplication with multiple URL formats
+      const uniqueResults = new Map<string, any>();
+      
+      allResults.forEach(result => {
+          // Extract URL with multiple fallbacks
+          const url = this.extractUrl(result);
+          
+          if (url) {
+              const normalizedUrl = this.normalizeUrl(url);
+              if (!uniqueResults.has(normalizedUrl)) {
+                  uniqueResults.set(normalizedUrl, result);
+              }
+          } else {
+              // Keep results without URLs using title as key
+              const titleKey = `no-url-${result.title || result.text || Math.random()}`;
+              if (!uniqueResults.has(titleKey)) {
+                  uniqueResults.set(titleKey, result);
+              }
+          }
+      });
 
-        console.log(`📊 Unique results after deduplication: ${uniqueResults.size}`);
+      console.log(`📊 Unique results after deduplication: ${uniqueResults.size}`);
 
-        // ⚠️ FIX: Enhanced evidence conversion with better field mapping
-        const evidence: EvidenceItem[] = Array.from(uniqueResults.values()).map((result, index) => {
-            const url = this.extractUrl(result);
-            const publisher = this.extractPublisher(result);
-            const quote = this.extractQuote(result);
-            const score = this.calculateEvidenceScore(result);
-            const type = this.determineEvidenceType(result);
+      // ⚠️ FIX: Enhanced evidence conversion with better field mapping
+      const evidence: EvidenceItem[] = Array.from(uniqueResults.values()).map((result, index) => {
+          const url = this.extractUrl(result);
+          const publisher = this.extractPublisher(result);
+          const quote = this.extractQuote(result);
+          const score = this.calculateEvidenceScore(result);
+          const type = this.determineEvidenceType(result);
 
-            const title = result.title || quote.substring(0, 80);
-            const snippet = this.extractQuote(result);
+          const title = result.title || quote.substring(0, 80);
+          const snippet = this.extractQuote(result);
 
-            return {
-                id: `evidence-${index + 1}`,
-                publisher,
-                url,
-                quote,
-                score,
-                type,
-                title,
-                snippet,
-                source: {
-                    name: publisher,
-                    url: url,
-                    credibility: {
-                        rating: score >= 80 ? 'High' : score >= 60 ? 'Medium' : 'Low',
-                        classification: this.classifySource(result),
-                        warnings: score < 50 ? ['Lower credibility source'] : [],
-                    }
-                }
-            };
-        });
+          return {
+              id: `evidence-${index + 1}`,
+              publisher,
+              url,
+              quote,
+              credibilityScore: score,
+              relevanceScore: score,
+              type,
+              title,
+              snippet,
+              source: {
+                  name: publisher,
+                  url: url,
+                  credibility: {
+                      rating: score >= 80 ? 'High' : score >= 60 ? 'Medium' : 'Low',
+                      classification: this.classifySource(result),
+                      warnings: score < 50 ? ['Lower credibility source'] : [],
+                  }
+              }
+          };
+      });
 
-        // Sort by score (descending)
-        evidence.sort((a, b) => b.score - a.score);
-        
-        console.log(`✅ Evidence aggregation complete: ${evidence.length} items`);
-        console.log(`   - High score (>=80): ${evidence.filter(e => e.score >= 80).length}`);
-        console.log(`   - Medium score (60-79): ${evidence.filter(e => e.score >= 60 && e.score < 80).length}`);
-        console.log(`   - Low score (<60): ${evidence.filter(e => e.score < 60).length}`);
+      // Sort by score (descending)
+      evidence.sort((a, b) => b.credibilityScore - a.credibilityScore);
+      
+      console.log(`✅ Evidence aggregation complete: ${evidence.length} items`);
+      console.log(`   - High score (>=80): ${evidence.filter(e => e.credibilityScore >= 80).length}`);
+      console.log(`   - Medium score (60-79): ${evidence.filter(e => e.credibilityScore >= 60 && e.credibilityScore < 80).length}`);
+      console.log(`   - Low score (<60): ${evidence.filter(e => e.credibilityScore < 60).length}`);
 
-        return evidence;
+      return evidence;
     }
 
     // ⚠️ NEW: Helper methods for better data extraction
@@ -386,11 +387,11 @@ export class PipelineIntegration {
 
     private extractQuote(result: any): string {
         const quote = result.snippet || 
-                     result.description || 
-                     result.text || 
-                     result.quote ||
-                     result.claimReview?.[0]?.title ||
-                     '';
+                      result.description || 
+                      result.text || 
+                      result.quote ||
+                      result.claimReview?.[0]?.title ||
+                      '';
         
         // Truncate if too long
         return quote.length > 500 ? quote.substring(0, 500) + '...' : quote;
