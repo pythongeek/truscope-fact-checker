@@ -46,8 +46,11 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       const result = await tieredService.performTieredCheck(text, context);
 
       setReport(result);
-      // FIXED: Added the missing third argument (query/claimText)
-      saveReportToHistory(result, selectedMethod, text);
+      // Ensure result is not null before saving to history
+      if (result) {
+        // FIXED: Corrected the arguments passed to saveReportToHistory
+        saveReportToHistory(result, selectedMethod, text);
+      }
     } catch (error) {
       logger.error('Error running fact check from interface', error);
       setError(error instanceof Error ? error.message : 'Analysis failed');
@@ -84,7 +87,6 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
           Advanced AI-powered verification with source credibility analysis
         </p>
       </div>
-
 
       {/* Text Input */}
       <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 md:p-6">
