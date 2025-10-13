@@ -1,7 +1,7 @@
 import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '@/types/corrections';
 import { AdvancedEvidence } from '@/types/enhancedFactCheck';
 import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { parseAIJsonResponse } from '../utils/jsonParser';
 
 export class IntelligentCorrector {
