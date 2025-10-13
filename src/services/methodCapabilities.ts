@@ -103,8 +103,15 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
     id: 'tiered-verification',
     name: 'Tiered Verification',
     description: 'A cost-effective, multi-phase approach that escalates from fast, direct checks to comprehensive analysis as needed.',
-    strengths: [],
-    limitations: [],
+    strengths: [
+      'Cost-effective approach',
+      'Adaptive processing',
+      'Balanced speed and accuracy'
+    ],
+    limitations: [
+      'May require escalation for complex claims',
+      'Processing time varies by complexity'
+    ],
     processingTime: 'medium',
     accuracyLevel: 'high',
     requiresInternet: true,
@@ -120,8 +127,15 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
     id: 'CITATION',
     name: 'Citation Analysis',
     description: 'Analyzes the citations and sources within a text to determine its credibility.',
-    strengths: [],
-    limitations: [],
+    strengths: [
+      'Evaluates source quality',
+      'Fast citation verification',
+      'Identifies credible references'
+    ],
+    limitations: [
+      'Depends on citation availability',
+      'Limited to cited sources'
+    ],
     processingTime: 'fast',
     accuracyLevel: 'high',
     requiresInternet: true,
@@ -201,12 +215,19 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
       expertValidation: false,
     },
   },
-  'evidence-retrieval': {
-    id: 'evidence-retrieval',
-    name: 'Evidence Retrieval',
-    description: 'Retrieves evidence from a variety of sources to support or refute a claim.',
-    strengths: ['Can help to ensure that a fact-checking investigation is based on the best available evidence', 'Can be used to automate the process of collecting evidence'],
-    limitations: ['May not be able to find all relevant evidence', 'May not be able to distinguish between reliable and unreliable evidence'],
+  'citation-augmented': {
+    id: 'citation-augmented',
+    name: 'Citation-Augmented Analysis',
+    description: 'Enhanced fact-checking that retrieves and verifies evidence from multiple sources to support comprehensive analysis.',
+    strengths: [
+      'Can help to ensure that a fact-checking investigation is based on the best available evidence', 
+      'Can be used to automate the process of collecting evidence',
+      'Combines multiple source types for comprehensive coverage'
+    ],
+    limitations: [
+      'May not be able to find all relevant evidence', 
+      'May not be able to distinguish between reliable and unreliable evidence'
+    ],
     processingTime: 'medium',
     accuracyLevel: 'high',
     requiresInternet: true,
@@ -218,18 +239,76 @@ export const METHOD_CAPABILITIES: Record<FactCheckMethod, MethodCapability> = {
       expertValidation: false,
     },
   },
-    'multi-source': {
-    id: 'multi-source',
-    name: 'Multi-Source',
-    description: 'Analyzes evidence from multiple sources to evaluate a claim.',
-    strengths: ['Can help to reduce bias', 'Can help to ensure that a fact-checking investigation is comprehensive'],
-    limitations: ['Can be time-consuming', 'May not be possible to find multiple sources for all claims'],
-    processingTime: 'medium',
+  'statistical-fallback': {
+    id: 'statistical-fallback',
+    name: 'Statistical Fallback',
+    description: 'A fallback method that uses statistical analysis when AI synthesis is unavailable.',
+    strengths: [
+      'Reliable when AI services are unavailable',
+      'Transparent statistical methodology',
+      'No dependency on external AI services'
+    ],
+    limitations: [
+      'Less nuanced than AI-powered analysis',
+      'Cannot provide contextual reasoning',
+      'Limited to quantitative metrics'
+    ],
+    processingTime: 'fast',
     accuracyLevel: 'high',
     requiresInternet: true,
     features: {
       sourceVerification: true,
       temporalAnalysis: false,
+      mediaVerification: false,
+      biasDetection: false,
+      expertValidation: false,
+    },
+  },
+  'tiered-verification-synthesis': {
+    id: 'tiered-verification-synthesis',
+    name: 'Tiered Verification with AI Synthesis',
+    description: 'Multi-phase verification approach enhanced with AI-powered synthesis of findings.',
+    strengths: [
+      'Combines tiered efficiency with AI insights',
+      'Adaptive processing based on complexity',
+      'Comprehensive synthesis of multiple sources'
+    ],
+    limitations: [
+      'Requires AI API access',
+      'Processing time varies by claim complexity',
+      'Higher resource usage than basic methods'
+    ],
+    processingTime: 'medium',
+    accuracyLevel: 'very-high',
+    requiresInternet: true,
+    features: {
+      sourceVerification: true,
+      temporalAnalysis: true,
+      mediaVerification: false,
+      biasDetection: true,
+      expertValidation: false,
+    },
+  },
+  'tiered-statistical-fallback': {
+    id: 'tiered-statistical-fallback',
+    name: 'Tiered Verification with Statistical Fallback',
+    description: 'Multi-phase verification approach using statistical analysis when AI synthesis is unavailable.',
+    strengths: [
+      'Reliable operation without AI dependencies',
+      'Cost-effective tiered approach',
+      'Transparent statistical methodology'
+    ],
+    limitations: [
+      'Less contextual reasoning than AI-powered methods',
+      'Cannot provide nuanced explanations',
+      'Limited to quantitative analysis'
+    ],
+    processingTime: 'medium',
+    accuracyLevel: 'high',
+    requiresInternet: true,
+    features: {
+      sourceVerification: true,
+      temporalAnalysis: true,
       mediaVerification: false,
       biasDetection: false,
       expertValidation: false,
