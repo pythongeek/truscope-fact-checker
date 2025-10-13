@@ -15,6 +15,8 @@ declare module '@google/genai' {
     topP?: number;
     topK?: number;
     stopSequences?: string[];
+    responseMimeType?: string; // Added for JSON mode support
+    responseSchema?: Schema; // Added for structured output
   }
 
   export interface GenerateContentRequest {
@@ -40,7 +42,10 @@ declare module '@google/genai' {
   }
 
   // Alias for GoogleGenerativeAI (used in some files)
-  export class GoogleGenAI extends GoogleGenerativeAI {}
+  export class GoogleGenAI {
+    constructor(apiKey: string);
+    getGenerativeModel(config: { model: string; generationConfig?: GenerationConfig }): GenerativeModel;
+  }
 
   export class GenerativeModel {
     generateContent(request: GenerateContentRequest | string): Promise<GenerateContentResponse>;
@@ -50,6 +55,8 @@ declare module '@google/genai' {
     type: string;
     properties?: Record<string, any>;
     required?: string[];
+    items?: Schema;
+    description?: string;
   }
 
   export const SchemaType: {
@@ -80,6 +87,8 @@ declare module '@google/generative-ai' {
     topP?: number;
     topK?: number;
     stopSequences?: string[];
+    responseMimeType?: string; // Added for JSON mode support
+    responseSchema?: Schema; // Added for structured output
   }
 
   export interface GenerateContentRequest {
@@ -112,6 +121,8 @@ declare module '@google/generative-ai' {
     type: string;
     properties?: Record<string, any>;
     required?: string[];
+    items?: Schema;
+    description?: string;
   }
 
   // Export SchemaType for the official package
