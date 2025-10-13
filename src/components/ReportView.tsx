@@ -17,16 +17,16 @@ const ReportView: React.FC<ReportViewProps> = ({ report, activeTab }) => {
         case 'Overview':
             return (
                 <div className="space-y-6">
-                  <ScoreBreakdown breakdown={report.score_breakdown} reasoning={report.reasoning} />
-                  {/* Only show Enhanced Claim Analysis if enhanced_claim_text exists and is not empty */}
-                  {report.claimVerifications && report.claimVerifications.length > 0 && (
-                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
-                      <h3 className="text-lg font-semibold text-slate-100 mb-3">Enhanced Claim Analysis</h3>
-                      <EnhancedClaimAnalysis claim={report.claimVerifications[0]} />
-                    </div>
-                  )}
+                    <ScoreBreakdown breakdown={report.score_breakdown} reasoning={report.reasoning} />
+                    {/* Only show Enhanced Claim Analysis if enhanced_claim_text exists and is not empty */}
+                    {report.claimVerifications && report.claimVerifications.length > 0 && (
+                        <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                            <h3 className="text-lg font-semibold text-slate-100 mb-3">Enhanced Claim Analysis</h3>
+                            <EnhancedClaimAnalysis claim={report.claimVerifications[0]} />
+                        </div>
+                    )}
                 </div>
-              );
+            );
         case 'Evidence':
             return <EvidenceTable evidence={report.evidence} />;
         case 'Breakdown':
@@ -34,7 +34,17 @@ const ReportView: React.FC<ReportViewProps> = ({ report, activeTab }) => {
         case 'Methodology':
             return <MethodologyView metadata={report.metadata} />;
         case 'Search Results':
-            return <SearchResults searchEvidence={report.searchEvidence} />;
+            return (
+                <div className="space-y-4">
+                    {report.searchEvidence && report.searchEvidence.length > 0 ? (
+                        report.searchEvidence.map((evidence, index) => (
+                            <SearchResults key={index} searchEvidence={evidence} />
+                        ))
+                    ) : (
+                        <div className="text-slate-400">No search results available.</div>
+                    )}
+                </div>
+            );
         case 'Original Text Analysis':
             return <ColorCodedText segments={report.originalTextSegments} />;
         default:
