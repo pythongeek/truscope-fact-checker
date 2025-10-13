@@ -1,4 +1,4 @@
-// api/fact-check.ts - OPTIMIZED FOR VERCEL SERVERLESS
+// api/fact-check.ts - FIXED VERSION
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Vercel timeout configuration
@@ -13,7 +13,8 @@ const SERPER_API_URL = 'https://google.serper.dev/search';
 const WEBZ_API_URL = 'https://api.webz.io/newsApiLite';
 
 // Timeout for individual API calls (in milliseconds)
-const API_TIMEOUT = 3000; // 3 seconds per API call
+const API_TIMEOUT = 4000; // Increased to 4 seconds
+const PHASE_TIMEOUT = 8000; // 8 seconds per phase max
 
 // --- INLINE TYPE DEFINITIONS ---
 type FactVerdict = 'TRUE' | 'FALSE' | 'MIXED' | 'UNVERIFIED' | 'MISLEADING';
@@ -89,15 +90,14 @@ interface FactCheckReport {
   };
 }
 
-// --- INLINE SERVICES ---
-
+// --- LOGGER ---
 const logger = {
   info: (msg: string, meta?: any) => console.log(JSON.stringify({ level: 'INFO', message: msg, ...meta })),
   warn: (msg: string, meta?: any) => console.warn(JSON.stringify({ level: 'WARN', message: msg, ...meta })),
   error: (msg: string, meta?: any) => console.error(JSON.stringify({ level: 'ERROR', message: msg, ...meta }))
 };
 
-// Fetch with timeout wrapper
+// --- FETCH WITH TIMEOUT ---
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -118,6 +118,7 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
+// --- GEMINI API ---
 async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'gemini-2.0-flash-exp'): Promise<string> {
   try {
     const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
@@ -175,25 +176,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   logger.info('Starting Tiered Fact-Check', { textLength: text.length, context: publishingContext });
 
   try {
-    // Run phases in parallel with Promise.allSettled to handle failures gracefully
-    const phasePromises = await Promise.allSettled([
-      runPhase1(text, config),
-      runPhase2Direct(text, config),
-      runPhase3Direct(text, config)
-    ]);
-
-    // Extract results, treating rejected promises as failed phases
-    const phase1Result = phasePromises[0].status === 'fulfilled' 
-      ? phasePromises[0].value 
-      : createFailedPhase('direct-verification', (phasePromises[0] as PromiseRejectedResult).reason);
-    
-    const phase2Result = phasePromises[1].status === 'fulfilled' 
-      ? phasePromises[1].value 
-      : createFailedPhase('web-search', (phasePromises[1] as PromiseRejectedResult).reason);
-    
-    const phase3Result = phasePromises[2].status === 'fulfilled' 
-      ? phasePromises[2].value 
-      : createFailedPhase('news-analysis', (phasePromises[2] as PromiseRejectedResult).reason);
+    // Run phases sequentially with timeouts to prevent hanging
+    const phase1Result = await runWithTimeout(() => runPhase1(text, config), PHASE_TIMEOUT, 'Phase 1');
+    const phase2Result = await runWithTimeout(() => runPhase2Direct(text, config), PHASE_TIMEOUT, 'Phase 2');
+    const phase3Result = await runWithTimeout(() => runPhase3Direct(text, config), PHASE_TIMEOUT, 'Phase 3');
 
     const tierResults = [phase1Result, phase2Result, phase3Result];
     const allEvidence = deduplicateEvidence([
@@ -227,6 +213,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+// --- TIMEOUT WRAPPER ---
+async function runWithTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+  phaseName: string
+): Promise<T> {
+  return Promise.race([
+    fn(),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${phaseName} timeout after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]).catch(error => {
+    logger.warn(`${phaseName} failed or timed out`, { error: error.message });
+    // Return a failed phase result
+    return createFailedPhase(phaseName.toLowerCase().replace(' ', '-'), error) as T;
+  });
+}
+
 // Helper to create failed phase result
 function createFailedPhase(tier: string, reason: any): TierBreakdown {
   return {
@@ -239,8 +243,7 @@ function createFailedPhase(tier: string, reason: any): TierBreakdown {
   };
 }
 
-// --- VERIFICATION PHASES ---
-
+// --- PHASE 1: GOOGLE FACT CHECK ---
 async function runPhase1(text: string, config: any): Promise<TierBreakdown> {
   const startTime = Date.now();
   try {
@@ -315,7 +318,7 @@ async function runPhase1(text: string, config: any): Promise<TierBreakdown> {
   }
 }
 
-// Direct SERP API call (no internal routing)
+// --- PHASE 2: SERPER SEARCH ---
 async function runPhase2Direct(text: string, config: any): Promise<TierBreakdown> {
   const startTime = Date.now();
   try {
@@ -367,7 +370,7 @@ async function runPhase2Direct(text: string, config: any): Promise<TierBreakdown
   }
 }
 
-// Direct Webz API call (no internal routing)
+// --- PHASE 3: WEBZ NEWS ---
 async function runPhase3Direct(text: string, config: any): Promise<TierBreakdown> {
   const startTime = Date.now();
   try {
@@ -434,7 +437,7 @@ async function runPhase3Direct(text: string, config: any): Promise<TierBreakdown
   }
 }
 
-// --- Mappers for Phase 2 & 3 ---
+// --- EVIDENCE MAPPERS ---
 function mapSerpResultsToEvidence(results: any[] = []): Evidence[] {
   return results.slice(0, 10).map((result: any, index: number): Evidence | null => {
     if (!result.link) return null;
@@ -497,8 +500,7 @@ function mapNewsResultsToEvidence(posts: any[] = []): Evidence[] {
   }).filter((e): e is Evidence => e !== null);
 }
 
-// --- SYNTHESIS AND REPORTING ---
-
+// --- PHASE 4: SYNTHESIS ---
 async function runPhase4Synthesis(
   text: string,
   evidence: Evidence[],
@@ -573,6 +575,7 @@ async function runPhase4Synthesis(
   }
 }
 
+// --- STATISTICAL FALLBACK ---
 function createStatisticalReport(
   text: string,
   evidence: Evidence[],
@@ -628,8 +631,7 @@ function createStatisticalReport(
   };
 }
 
-// --- HELPER & UTILITY FUNCTIONS ---
-
+// --- HELPER FUNCTIONS ---
 async function validateCitations(evidence: Evidence[]): Promise<Evidence[]> {
   return evidence.map(item => ({
     ...item,
