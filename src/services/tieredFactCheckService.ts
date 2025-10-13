@@ -455,6 +455,7 @@ export class TieredFactCheckService {
           const url = new URL(r.link);
           const sourceName = url.hostname.replace(/^www\./, '');
           const rating: "High" | "Medium" | "Low" = "Medium";
+          // FIXED: Use 'date' property instead of non-existent 'publishedDate'
           return {
             id: `news_serp_${i}`,
             publisher: r.source || 'News Source',
@@ -466,7 +467,7 @@ export class TieredFactCheckService {
             type: 'news' as const,
             title: r.title,
             snippet: r.snippet || '',
-            publishedDate: r.publishedDate,
+            publishedDate: r.date, // FIXED: Changed from r.publishedDate to r.date
             source: {
               name: sourceName,
               url: url.origin,
@@ -781,7 +782,7 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
           quote: r.snippet || '',
           score: this.calculateSourceScore(r.source) + 10,
           type: 'search_result' as const,
-          publishedDate: r.publishedDate
+          publishedDate: r.date // FIXED: Changed from r.publishedDate to r.date
         };
       });
       return { evidence, query: searchQuery };
@@ -819,7 +820,7 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
           quote: r.snippet || '',
           score: this.calculateSourceScore(r.source),
           type: 'search_result' as const,
-          publishedDate: r.publishedDate
+          publishedDate: r.date // FIXED: Changed from r.publishedDate to r.date
         };
       });
 
