@@ -1,15 +1,15 @@
 // src/components/TruScopeJournalismPlatform.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { getApiKeys, hasApiKeys, saveApiKeys } from '../services/apiKeyService';
+import { getApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
 import { ApiKeys, FactCheckReport } from '@/types';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
-import { 
-  FileText, CheckCircle, AlertTriangle, Link as LinkIcon, 
-  Download, Copy, Check, X, Search, Edit3, BookOpen, Globe, 
-  Calendar, Award, Shield, ExternalLink, Info, RefreshCw, 
-  Settings, TrendingUp, Database 
+import {
+  FileText, CheckCircle, AlertTriangle, Link as LinkIcon,
+  Download, Copy, Check, X, Search, Edit3, BookOpen, Globe,
+  Calendar, Award, Shield, ExternalLink, Info, RefreshCw,
+  Settings, TrendingUp, Database
 } from 'lucide-react';
 import HistoryView from './HistoryView';
 import TrendingMisinformation from './TrendingMisinformation';
@@ -42,6 +42,7 @@ export default function TruScopeJournalismPlatform() {
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [schemaData, setSchemaData] = useState<any>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -147,69 +148,114 @@ export default function TruScopeJournalismPlatform() {
 
     setIsAnalyzing(true);
     setActiveTab('analyze');
+    setAnalysisError(null);
 
     console.log('🚀 Starting fact-check analysis');
     console.log('📝 Content length:', content.length, 'characters');
     console.log('📋 Publishing context:', publishingContext);
 
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
     try {
       const modelToUse = apiKeys.geminiModel || 'gemini-2.0-flash-exp';
       console.log('🔑 Using Gemini model:', modelToUse);
 
+      const requestBody = {
+        text: content,
+        publishingContext,
+        config: {
+          gemini: apiKeys.gemini,
+          geminiModel: modelToUse,
+          factCheck: apiKeys.factCheck || undefined,
+          search: apiKeys.search || undefined,
+          searchId: apiKeys.searchId || undefined
+        }
+      };
+
+      console.log('📤 Sending request to /api/fact-check');
+
       const response = await fetch('/api/fact-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: content,
-          publishingContext,
-          config: {
-            gemini: apiKeys.gemini,
-            geminiModel: modelToUse,
-            factCheck: apiKeys.factCheck,
-            search: apiKeys.search,
-            searchId: apiKeys.searchId
-          }
-        })
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
+      clearTimeout(timeoutId);
 
+      console.log('📥 Response status:', response.status);
+
+      if (!response.ok) {
+        let errorMessage = `Server error: ${response.status}`;
+        
         try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          throw new Error(`Server error: ${response.status} - ${errorText.substring(0, 200)}`);
+          const errorText = await response.text();
+          console.error('❌ Error response body:', errorText);
+          
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorData.details || errorMessage;
+          } catch {
+            errorMessage = errorText.substring(0, 200) || errorMessage;
+          }
+        } catch (e) {
+          console.error('❌ Could not read error response');
         }
 
-        throw new Error(errorData.error || errorData.details || 'Fact-check request failed');
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
+      console.log('📦 Received result:', result);
+
+      // Normalize field names (backend uses camelCase, ensure consistency)
+      const normalizedResult = {
+        ...result,
+        final_score: result.finalScore || result.final_score || 0,
+        final_verdict: result.finalVerdict || result.final_verdict || 'UNVERIFIED',
+        // Keep original fields for backward compatibility
+        finalScore: result.finalScore || result.final_score || 0,
+        finalVerdict: result.finalVerdict || result.final_verdict || 'UNVERIFIED',
+      };
 
       console.log('✅ Fact-check completed successfully');
-      console.log('📊 Final Score:', result.final_score);
-      console.log('⚖️ Verdict:', result.final_verdict);
-      console.log('📋 Evidence Sources:', result.evidence?.length || 0);
-      console.log('⏱️ Processing Time:', result.metadata?.processing_time_ms, 'ms');
+      console.log('📊 Final Score:', normalizedResult.finalScore);
+      console.log('⚖️ Verdict:', normalizedResult.finalVerdict);
+      console.log('📋 Evidence Sources:', normalizedResult.evidence?.length || 0);
+      console.log('⏱️ Processing Time:', normalizedResult.metadata?.processingTimeMs, 'ms');
 
-      if (result.metadata?.tier_breakdown) {
+      if (normalizedResult.metadata?.tierBreakdown) {
         console.log('🎯 Verification Tiers:');
-        result.metadata.tier_breakdown.forEach((tier: any) => {
+        normalizedResult.metadata.tierBreakdown.forEach((tier: any) => {
           console.log(`  - ${tier.tier}: ${tier.success ? '✓' : '→'} (${tier.confidence.toFixed(1)}%)`);
         });
       }
 
-      if (result.final_score < 50) {
-        console.warn('❌ Low confidence result:', result.final_score);
+      if (normalizedResult.finalScore < 50) {
+        console.warn('⚠️ Low confidence result:', normalizedResult.finalScore);
       }
 
-      setFactCheckResult(result);
+      setFactCheckResult(normalizedResult);
       setActiveTab('report');
 
     } catch (error: any) {
+      clearTimeout(timeoutId);
+      
       console.error('❌ Analysis failed:', error);
-      alert(`Analysis failed: ${error.message}`);
+      
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout - The analysis is taking longer than expected. Please try with shorter content or check your API keys.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      setAnalysisError(errorMessage);
+      alert(`❌ Analysis failed:\n\n${errorMessage}\n\nPlease check:\n• Your Gemini API key is valid\n• Your internet connection\n• The content length is reasonable\n• Server logs for more details`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -331,6 +377,24 @@ export default function TruScopeJournalismPlatform() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-8">
+          {analysisError && (
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-red-900 mb-1">Analysis Error</h3>
+                  <p className="text-sm text-red-700">{analysisError}</p>
+                  <button
+                    onClick={() => setAnalysisError(null)}
+                    className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {currentView === 'checker' && (
             <div>
               <TabNavigation
@@ -555,8 +619,9 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
     return 'text-red-700 bg-red-100 border-red-300';
   };
 
-  const displayScore = result.final_score || result.overallAuthenticityScore || 0;
-  const displayVerdict = result.final_verdict || result.claimVerifications?.[0]?.status || 'UNVERIFIED';
+  // Use normalized field names with fallbacks
+  const displayScore = result.finalScore || result.final_score || result.overallAuthenticityScore || 0;
+  const displayVerdict = result.finalVerdict || result.final_verdict || result.claimVerifications?.[0]?.status || 'UNVERIFIED';
 
   return (
     <div className="space-y-6">
@@ -593,7 +658,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
               <Award className="w-6 h-6 text-purple-600" />
               <span className="text-sm font-semibold text-purple-900">Method</span>
             </div>
-            <p className="text-lg font-bold text-purple-700">{result.metadata?.method_used || 'Tiered'}</p>
+            <p className="text-lg font-bold text-purple-700">{result.metadata?.methodUsed || result.metadata?.method_used || 'Tiered'}</p>
           </div>
         </div>
 
@@ -605,11 +670,11 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
         )}
       </div>
 
-      {result.metadata?.tier_breakdown && (
+      {(result.metadata?.tierBreakdown || result.metadata?.tier_breakdown) && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Verification Tiers</h3>
           <div className="space-y-3">
-            {result.metadata.tier_breakdown.map((tier: any, idx: number) => (
+            {(result.metadata.tierBreakdown || result.metadata.tier_breakdown).map((tier: any, idx: number) => (
               <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-gray-900 capitalize">{tier.tier.replace('-', ' ')}</span>
@@ -626,11 +691,11 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
                   </div>
                   <div>
                     <p className="text-gray-600">Evidence</p>
-                    <p className="font-semibold text-gray-900">{tier.evidence?.length || 0} sources</p>
+                    <p className="font-semibold text-gray-900">{tier.evidenceCount || tier.evidence?.length || 0} sources</p>
                   </div>
                   <div>
                     <p className="text-gray-600">Time</p>
-                    <p className="font-semibold text-gray-900">{(tier.processingTime / 1000).toFixed(2)}s</p>
+                    <p className="font-semibold text-gray-900">{((tier.processingTimeMs || tier.processingTime || 0) / 1000).toFixed(2)}s</p>
                   </div>
                 </div>
               </div>
@@ -733,7 +798,7 @@ function EditorialPanel({ originalContent, result, editorResult, onContentUpdate
           <>
             <div className="p-4 bg-green-50 rounded-lg border border-green-200 mb-6">
               <h3 className="font-semibold text-green-900 mb-2">Corrected Content</h3>
-              <p className="text-gray-700 whitespace-pre-wrap">{editorResult.correctedText || 'No corrections available'}</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{editorResult.editedText || editorResult.correctedText || 'No corrections available'}</p>
             </div>
 
             {editorResult.changesApplied && editorResult.changesApplied.length > 0 && (
@@ -742,7 +807,7 @@ function EditorialPanel({ originalContent, result, editorResult, onContentUpdate
                 <ul className="space-y-2">
                   {editorResult.changesApplied.map((change: any, idx: number) => (
                     <li key={idx} className="text-sm text-gray-700">
-                      <span className="font-semibold">{idx + 1}.</span> {change.description || change}
+                      <span className="font-semibold">{idx + 1}.</span> {change.reason || change.description || change}
                     </li>
                   ))}
                 </ul>
