@@ -46,7 +46,8 @@ export const FactCheckInterface: React.FC<FactCheckInterfaceProps> = ({ initialR
       const result = await tieredService.performTieredCheck(text, context);
 
       setReport(result);
-      saveReportToHistory(result, selectedMethod);
+      // FIXED: Added the missing third argument (query/claimText)
+      saveReportToHistory(result, selectedMethod, text);
     } catch (error) {
       logger.error('Error running fact check from interface', error);
       setError(error instanceof Error ? error.message : 'Analysis failed');
