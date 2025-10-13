@@ -3,7 +3,7 @@
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
-import { FactCheckReport, EvidenceItem } from '@/types';
+import { FactCheckReport, EvidenceItem, FactCheckMetadata } from '@/types';
 
 export interface GoogleFactCheckResult {
   text: string;
@@ -289,25 +289,30 @@ export class GoogleFactCheckService {
       return null;
     }
 
-    const evidenceItems: EvidenceItem[] = results.map((result, index) => ({
-      id: `gfc-${index}`,
-      publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
-      url: result.claimReview[0]?.url || '',
-      quote: result.text,
-      score: this.convertRatingToScore(result.claimReview[0]?.reviewRating),
-      type: 'claim',
-      title: result.claimReview[0]?.title || '',
-      snippet: result.text || '',
-      source: {
-        name: result.claimReview[0]?.publisher || 'Unknown Publisher',
-        url: result.claimReview[0]?.url || '',
-        credibility: {
-            rating: 'Medium',
-            classification: 'Fact-Checker',
-            warnings: [],
-        },
-      }
-    }));
+    const evidenceItems: EvidenceItem[] = results.map((result, index) => {
+        const score = this.convertRatingToScore(result.claimReview[0]?.reviewRating);
+        return {
+            id: `gfc-${index}`,
+            publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
+            url: result.claimReview[0]?.url || '',
+            quote: result.text,
+            score: score,
+            credibilityScore: score,
+            relevanceScore: score,
+            type: 'claim',
+            title: result.claimReview[0]?.title || '',
+            snippet: result.text || '',
+            source: {
+                name: result.claimReview[0]?.publisher || 'Unknown Publisher',
+                url: result.claimReview[0]?.url || '',
+                credibility: {
+                    rating: 'Medium',
+                    classification: 'Fact-Checker',
+                    warnings: [],
+                },
+            }
+        };
+    });
 
     const averageScore =
       evidenceItems.reduce((acc, item) => acc + item.score, 0) / evidenceItems.length;
@@ -332,21 +337,21 @@ export class GoogleFactCheckService {
           },
         ],
         confidence_intervals: {
-            lower_bound: averageScore - 10,
-            upper_bound: averageScore + 10,
+            lowerBound: averageScore - 10,
+            upperBound: averageScore + 10,
         },
       },
       metadata: {
-        method_used: 'google-fact-check',
-        processing_time_ms: 0,
+        methodUsed: 'google-fact-check',
+        processingTimeMs: 0,
         apisUsed: ['google-fact-check-api'],
-        sources_consulted: {
+        sourcesConsulted: {
           total: evidenceItems.length,
           high_credibility: evidenceItems.filter(e => e.score >= 75).length,
           conflicting: 0,
         },
         warnings: [],
-      },
+      } as FactCheckMetadata,
       enhanced_claim_text: claimText,
       reasoning: '',
       source_credibility_report: {
