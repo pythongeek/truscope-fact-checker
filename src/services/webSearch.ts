@@ -4,15 +4,15 @@ import { getSearchApiKey, getSearchId } from './apiKeyService';
 // --- Source Credibility Assessment ---
 
 const HIGH_CREDIBILITY_DOMAINS = [
-    'apnews.com', 'reuters.com', 'bbc.com', 'nytimes.com', 'wsj.com', 
-    'washingtonpost.com', 'theguardian.com', 'npr.org', 'pbs.org', 
+    'apnews.com', 'reuters.com', 'bbc.com', 'nytimes.com', 'wsj.com',
+    'washingtonpost.com', 'theguardian.com', 'npr.org', 'pbs.org',
     'factcheck.org', 'politifact.com', 'snopes.com', 'c-span.org',
     'nature.com', 'science.org', 'thelancet.com', 'nejm.org'
 ];
 
 const LOW_CREDIBILITY_DOMAINS = [
     // Example list, would be populated with known disinformation sources
-    'infowars.com', 'breitbart.com', 'dailycaller.com' 
+    'infowars.com', 'breitbart.com', 'dailycaller.com'
 ];
 
 /**
@@ -47,13 +47,13 @@ export const assessSourceCredibility = (url: string): number => {
 const MOCK_SEARCH_DATA: GoogleSearchResult[] = [
     {
         title: "Mock Dev Result: FactCheck.org",
-        link: "https://www.factcheck.org/mock-entry/",
+        url: "https://www.factcheck.org/mock-entry/",
         snippet: "This is a mock result for development. The web search API failed or was not called.",
         source: "factcheck.org"
     },
     {
         title: "Mock Dev Result: Reputable News Source",
-        link: "https://www.reuters.com/mock-article/",
+        url: "https://www.reuters.com/mock-article/",
         snippet: "This mock snippet simulates a result from a high-credibility news outlet for testing purposes.",
         source: "reuters.com"
     },
@@ -77,14 +77,14 @@ export async function search(query: string, maxResults: number): Promise<GoogleS
             throw new Error(`Google Search API error (${response.status}): ${errorData.error.message}`);
         }
         const data = await response.json();
-        
+
         if (!data.items) {
             return [];
         }
 
         return data.items.map((item: any): GoogleSearchResult => ({
             title: item.title,
-            link: item.link,
+            url: item.link,
             snippet: item.snippet,
             source: item.displayLink,
         }));
@@ -144,11 +144,11 @@ export async function executeMultiStrategySearch(claim: string, keywords: string
         // Deduplicate results based on the link to avoid redundancy
         const uniqueResults = new Map<string, GoogleSearchResult>();
         for (const result of allResults) {
-            if (result && result.link && !uniqueResults.has(result.link)) {
-                uniqueResults.set(result.link, result);
+            if (result && result.url && !uniqueResults.has(result.url)) {
+                uniqueResults.set(result.url, result);
             }
         }
-        
+
         return Array.from(uniqueResults.values());
     } catch (error) {
         console.error("Multi-strategy search failed.", error);
