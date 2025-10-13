@@ -213,13 +213,14 @@ export class CitationAugmentedService {
       }
     };
     
-    const claimVerifications: ClaimVerification[] = segmentAnalyses.map(analysis => ({
-        claim: analysis.claimSegment,
-        confidence: analysis.confidence,
-        verificationStatus: analysis.verificationStatus,
+    const claimVerifications: ClaimVerification[] = await Promise.all(segmentAnalyses.map(async (analysis) => ({
+        id: await generateSHA256(analysis.claimSegment),
+        claimText: analysis.claimSegment,
+        confidenceScore: analysis.confidence,
+        status: analysis.verificationStatus,
         supportingEvidence: analysis.supportingEvidence,
         contradictingEvidence: analysis.contradictingEvidence,
-    }));
+    })));
 
     return {
       id: `report-${Date.now()}`,
