@@ -1,5 +1,5 @@
 // src/types/google-genai.d.ts
-// Type declarations for @google/genai module
+// Type declarations for @google/genai and @google/generative-ai modules
 
 declare module '@google/genai' {
   export interface GenerativeModelConfig {
@@ -9,6 +9,14 @@ declare module '@google/genai' {
     maxOutputTokens?: number;
   }
 
+  export interface GenerationConfig {
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+  }
+
   export interface GenerateContentRequest {
     contents: Array<{
       role?: string;
@@ -16,6 +24,7 @@ declare module '@google/genai' {
         text: string;
       }>;
     }>;
+    generationConfig?: GenerationConfig;
   }
 
   export interface GenerateContentResponse {
@@ -27,7 +36,7 @@ declare module '@google/genai' {
 
   export class GoogleGenerativeAI {
     constructor(apiKey: string);
-    getGenerativeModel(config: { model: string }): GenerativeModel;
+    getGenerativeModel(config: { model: string; generationConfig?: GenerationConfig }): GenerativeModel;
   }
 
   // Alias for GoogleGenerativeAI (used in some files)
@@ -65,6 +74,14 @@ declare module '@google/generative-ai' {
     maxOutputTokens?: number;
   }
 
+  export interface GenerationConfig {
+    temperature?: number;
+    maxOutputTokens?: number;
+    topP?: number;
+    topK?: number;
+    stopSequences?: string[];
+  }
+
   export interface GenerateContentRequest {
     contents: Array<{
       role?: string;
@@ -72,6 +89,7 @@ declare module '@google/generative-ai' {
         text: string;
       }>;
     }>;
+    generationConfig?: GenerationConfig;
   }
 
   export interface GenerateContentResponse {
@@ -83,7 +101,7 @@ declare module '@google/generative-ai' {
 
   export class GoogleGenerativeAI {
     constructor(apiKey: string);
-    getGenerativeModel(config: { model: string }): GenerativeModel;
+    getGenerativeModel(config: { model: string; generationConfig?: GenerationConfig }): GenerativeModel;
   }
 
   export class GenerativeModel {
