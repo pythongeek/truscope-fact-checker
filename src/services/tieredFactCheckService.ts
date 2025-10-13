@@ -111,7 +111,6 @@ export class TieredFactCheckService {
         finalSynthesizedReport.finalVerdict = 'UNVERIFIED';
       }
 
-      // FIX: Use proper camelCase properties
       const finalScore = finalSynthesizedReport?.finalScore ?? 0;
       const finalVerdict = finalSynthesizedReport?.finalVerdict ?? 'UNVERIFIED';
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
@@ -191,7 +190,6 @@ export class TieredFactCheckService {
         }];
       }
 
-      // FIX: Properly construct scoreBreakdown with camelCase properties
       const scoreBreakdown: ScoreBreakdown = {
         finalScoreFormula: finalSynthesizedReport?.scoreBreakdown?.finalScoreFormula || 'Default scoring',
         metrics: (finalSynthesizedReport?.scoreBreakdown?.metrics || []).map(m => ({
@@ -207,7 +205,6 @@ export class TieredFactCheckService {
         }
       };
 
-      // FIX: Properly construct metadata with camelCase properties
       const metadata: FactCheckMetadata = {
         methodUsed: finalSynthesizedReport?.metadata?.methodUsed || 'tiered-verification',
         processingTimeMs: Date.now() - startTime,
@@ -469,7 +466,7 @@ export class TieredFactCheckService {
             type: 'news' as const,
             title: r.title,
             snippet: r.snippet || '',
-            publishedDate: r.date,
+            publishedDate: r.publishedDate,
             source: {
               name: sourceName,
               url: url.origin,
@@ -585,7 +582,6 @@ export class TieredFactCheckService {
     }
   }
 
-  // FIX: Use proper camelCase structure for ScoreBreakdown
   private createStatisticalSynthesis(
     text: string,
     evidence: EvidenceItem[],
@@ -785,7 +781,7 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
           quote: r.snippet || '',
           score: this.calculateSourceScore(r.source) + 10,
           type: 'search_result' as const,
-          publishedDate: r.date
+          publishedDate: r.publishedDate
         };
       });
       return { evidence, query: searchQuery };
@@ -823,7 +819,7 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
           quote: r.snippet || '',
           score: this.calculateSourceScore(r.source),
           type: 'search_result' as const,
-          publishedDate: r.date
+          publishedDate: r.publishedDate
         };
       });
 
