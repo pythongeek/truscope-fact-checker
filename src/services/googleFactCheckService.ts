@@ -3,7 +3,7 @@
 import { RobustHttpClient } from './httpClient';
 import { AdvancedCacheService } from './advancedCacheService';
 import { generateSHA256 } from '../utils/hashUtils';
-import { FactCheckReport, EvidenceItem, FactCheckMetadata } from '@/types';
+import { FactCheckReport, EvidenceItem, FactCheckMetadata, ScoreBreakdown } from '@/types';
 
 export interface GoogleFactCheckResult {
   text: string;
@@ -74,7 +74,7 @@ export class GoogleFactCheckService {
 
       if (report) {
         await this.cache.set(cacheKey, report);
-        console.log(`✅ Fact-check search returned a report with score: ${report.final_score}`);
+        console.log(`✅ Fact-check search returned a report with score: ${report.finalScore}`);
       }
 
       return report;
@@ -290,73 +290,77 @@ export class GoogleFactCheckService {
     }
 
     const evidenceItems: EvidenceItem[] = results.map((result, index) => {
-        const score = this.convertRatingToScore(result.claimReview[0]?.reviewRating);
-        return {
-            id: `gfc-${index}`,
-            publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
-            url: result.claimReview[0]?.url || '',
-            quote: result.text,
-            score: score,
-            credibilityScore: score,
-            relevanceScore: score,
-            type: 'claim',
-            title: result.claimReview[0]?.title || '',
-            snippet: result.text || '',
-            source: {
-                name: result.claimReview[0]?.publisher || 'Unknown Publisher',
-                url: result.claimReview[0]?.url || '',
-                credibility: {
-                    rating: 'Medium',
-                    classification: 'Fact-Checker',
-                    warnings: [],
-                },
-            }
-        };
+      const score = this.convertRatingToScore(result.claimReview[0]?.reviewRating);
+      return {
+        id: `gfc-${index}`,
+        publisher: result.claimReview[0]?.publisher || 'Unknown Publisher',
+        url: result.claimReview[0]?.url || '',
+        quote: result.text,
+        score: score,
+        credibilityScore: score,
+        relevanceScore: score,
+        type: 'claim',
+        title: result.claimReview[0]?.title || '',
+        snippet: result.text || '',
+        source: {
+          name: result.claimReview[0]?.publisher || 'Unknown Publisher',
+          url: result.claimReview[0]?.url || '',
+          credibility: {
+            rating: 'Medium',
+            classification: 'Fact-Checker',
+            warnings: [],
+          },
+        }
+      };
     });
 
     const averageScore =
       evidenceItems.reduce((acc, item) => acc + item.score, 0) / evidenceItems.length;
 
+    const scoreBreakdown: ScoreBreakdown = {
+      finalScoreFormula: 'Average of Google Fact Check ratings',
+      metrics: [
+        {
+          name: 'Corroboration',
+          score: averageScore,
+          description: `${evidenceItems.length} sources found via Google Fact Check API.`,
+          reasoning: `The score is based on the average rating provided by the fact-checking organizations.`,
+        },
+      ],
+      confidence_intervals: {
+        lowerBound: averageScore - 10,
+        upperBound: averageScore + 10,
+      },
+    };
+    
+    const metadata: FactCheckMetadata = {
+      methodUsed: 'google-fact-check',
+      processingTimeMs: 0,
+      apisUsed: ['google-fact-check-api'],
+      sourcesConsulted: {
+        total: evidenceItems.length,
+        highCredibility: evidenceItems.filter(e => e.score >= 75).length,
+        conflicting: 0,
+      },
+      warnings: [],
+    };
+    
     const report: FactCheckReport = {
       id: `gfc-report-${new Date().getTime()}`,
       originalText: claimText,
+      finalVerdict: this.generateVerdict(averageScore) as any,
+      finalScore: averageScore,
+      evidence: evidenceItems,
+      scoreBreakdown,
+      metadata,
+      claimVerifications: [],
+      reasoning: '',
+      enhanced_claim_text: '',
       summary: '',
       overallAuthenticityScore: 0,
-      claimVerifications: [],
-      final_verdict: this.generateVerdict(averageScore) as any,
-      final_score: averageScore,
-      evidence: evidenceItems,
-      score_breakdown: {
-        final_score_formula: 'Average of Google Fact Check ratings',
-        metrics: [
-          {
-            name: 'Corroboration',
-            score: averageScore,
-            description: `${evidenceItems.length} sources found via Google Fact Check API.`,
-            reasoning: `The score is based on the average rating provided by the fact-checking organizations.`,
-          },
-        ],
-        confidence_intervals: {
-            lowerBound: averageScore - 10,
-            upperBound: averageScore + 10,
-        },
-      },
-      metadata: {
-        methodUsed: 'google-fact-check',
-        processingTimeMs: 0,
-        apisUsed: ['google-fact-check-api'],
-        sourcesConsulted: {
-          total: evidenceItems.length,
-          high_credibility: evidenceItems.filter(e => e.score >= 75).length,
-          conflicting: 0,
-        },
-        warnings: [],
-      } as FactCheckMetadata,
-      enhanced_claim_text: claimText,
-      reasoning: '',
       source_credibility_report: {
-        overallScore: averageScore,
-        highCredibilitySources: evidenceItems.filter(e => e.score >= 75).length,
+        overallScore: 0,
+        highCredibilitySources: 0,
         flaggedSources: 0,
         biasWarnings: [],
         credibilityBreakdown: {
@@ -369,7 +373,7 @@ export class GoogleFactCheckService {
       temporal_verification: {
         hasTemporalClaims: false,
         validations: [],
-        overallTemporalScore: 100,
+        overallTemporalScore: 0,
         temporalWarnings: [],
       },
     };
@@ -394,7 +398,7 @@ export class GoogleFactCheckService {
     return 50;
   }
 
-    private generateVerdict(score: number): any {
+  private generateVerdict(score: number): any {
     if (score >= 85) return 'TRUE';
     if (score >= 70) return 'MOSTLY TRUE';
     if (score >= 50) return 'MIXED';
