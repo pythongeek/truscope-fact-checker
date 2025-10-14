@@ -36,14 +36,15 @@ const triggerDownload = (data: string, filename: string, mimeType: string): void
  * @returns A simplified summary object.
  */
 const createReportSummary = (report: FactCheckReport) => {
+    // FIXED: Use camelCase properties and handle possibly undefined values
     return {
-        final_verdict: report.final_verdict,
-        final_score: report.final_score,
-        method: report.metadata.method_used,
-        processing_time_ms: report.metadata.processing_time_ms,
-        evidence_count: report.evidence.length,
-        sources_consulted: report.metadata.sources_consulted.total,
-        warnings: report.metadata.warnings,
+        finalVerdict: report.finalVerdict || 'UNVERIFIED',
+        finalScore: report.finalScore || 0,
+        method: report.metadata?.methodUsed || 'unknown',
+        processingTimeMs: report.metadata?.processingTimeMs || 0,
+        evidenceCount: report.evidence?.length || 0,
+        sourcesConsulted: report.metadata?.sourcesConsulted?.total || 0,
+        warnings: report.metadata?.warnings || [],
     };
 };
 
@@ -55,10 +56,11 @@ const createReportSummary = (report: FactCheckReport) => {
  */
 const convertEvidenceToCsv = (evidence: EvidenceItem[]): string => {
     if (evidence.length === 0) {
-        return 'id,publisher,url,quote,score,type\n';
+        return 'id,publisher,url,quote,score,type,title,snippet,publishedDate\n';
     }
 
-    const headers: (keyof EvidenceItem)[] = ['id', 'publisher', 'url', 'quote', 'score', 'type'];
+    // FIXED: Include more detailed fields
+    const headers = ['id', 'publisher', 'url', 'quote', 'score', 'type', 'title', 'snippet', 'publishedDate'];
     
     // Helper to escape CSV fields
     const escapeCsvField = (field: any): string => {
@@ -70,9 +72,19 @@ const convertEvidenceToCsv = (evidence: EvidenceItem[]): string => {
     };
 
     const headerRow = headers.join(',');
-    const dataRows = evidence.map(item => 
-        headers.map(header => escapeCsvField(item[header])).join(',')
-    );
+    const dataRows = evidence.map(item => {
+        return [
+            escapeCsvField(item.id),
+            escapeCsvField(item.publisher),
+            escapeCsvField(item.url || ''),
+            escapeCsvField(item.quote || ''),
+            escapeCsvField(item.score),
+            escapeCsvField(item.type),
+            escapeCsvField(item.title || ''),
+            escapeCsvField(item.snippet || ''),
+            escapeCsvField(item.publishedDate || '')
+        ].join(',');
+    });
 
     return [headerRow, ...dataRows].join('\n');
 };
@@ -85,23 +97,26 @@ export type ExportFormat = 'json-full' | 'json-summary' | 'csv-evidence';
  * @param format - The desired export format.
  */
 export const handleExport = (report: FactCheckReport, format: ExportFormat): void => {
+    // FIXED: Use camelCase property names consistently
+    const verdict = report.finalVerdict || 'UNVERIFIED';
+    
     switch (format) {
         case 'json-full': {
-            const filename = generateFilename(report.final_verdict, 'json');
+            const filename = generateFilename(verdict, 'json');
             const jsonData = JSON.stringify(report, null, 2);
             triggerDownload(jsonData, filename, 'application/json');
             break;
         }
         case 'json-summary': {
-            const filename = generateFilename(report.final_verdict, 'json');
+            const filename = generateFilename(verdict, 'json');
             const summary = createReportSummary(report);
             const jsonData = JSON.stringify(summary, null, 2);
             triggerDownload(jsonData, filename, 'application/json');
             break;
         }
         case 'csv-evidence': {
-            const filename = generateFilename(report.final_verdict, 'csv');
-            const csvData = convertEvidenceToCsv(report.evidence);
+            const filename = generateFilename(verdict, 'csv');
+            const csvData = convertEvidenceToCsv(report.evidence || []);
             triggerDownload(csvData, filename, 'text/csv;charset=utf-8;');
             break;
         }
