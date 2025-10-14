@@ -8,19 +8,23 @@ interface HistoryViewProps {
     onSelectReport: (report: FactCheckReport, claimText: string) => void;
 }
 
-const ScoreBadge: React.FC<{ score: number; verdict: string }> = ({ score, verdict }) => {
+const ScoreBadge: React.FC<{ score: number | undefined; verdict: string | undefined }> = ({ score, verdict }) => {
+    // FIX: Default the score to 0 if it's undefined to prevent runtime errors.
+    const numericScore = score ?? 0;
+
     const getVerdictStyle = (s: number) => {
         if (s > 75) return { Icon: CheckCircleIcon, color: 'text-green-400' };
         if (s >= 40) return { Icon: ExclamationCircleIcon, color: 'text-yellow-400' };
         return { Icon: XCircleIcon, color: 'text-red-400' };
     };
 
-    const { Icon, color } = getVerdictStyle(score);
+    const { Icon, color } = getVerdictStyle(numericScore);
 
     return (
         <div className={`flex items-center gap-2 font-semibold ${color}`}>
             <Icon className="w-5 h-5" />
-            <span>{verdict} ({score})</span>
+            {/* FIX: Provide a fallback for the verdict text. */}
+            <span>{verdict || 'N/A'} ({numericScore})</span>
         </div>
     );
 };
@@ -36,8 +40,12 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectReport }) => {
         clearHistory();
         setHistory([]);
     };
-
-    const reportsToExport = history.map(entry => entry.report);
+    
+    // FIX: Filter out any history entries where the report might be missing or undefined.
+    // This resolves the TS2322 error by ensuring the array only contains valid FactCheckReport objects.
+    const reportsToExport: FactCheckReport[] = history
+        .map(entry => entry.report)
+        .filter((report): report is FactCheckReport => report !== undefined);
 
     if (history.length === 0) {
         return (
@@ -69,23 +77,30 @@ const HistoryView: React.FC<HistoryViewProps> = ({ onSelectReport }) => {
             <ExportResults results={reportsToExport} />
 
             <div className="bg-slate-800/50 p-4 rounded-2xl space-y-3">
-                {history.map(entry => (
-                    <div key={entry.id} className="bg-slate-900/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="flex-1">
-                            <p className="text-xs text-slate-300">{new Date(entry.timestamp).toLocaleString()}</p>
-                            <p className="font-medium text-slate-200 mt-1 line-clamp-2">"{entry.claimText}"</p>
-                            <div className="mt-2">
-                                <ScoreBadge score={entry.report.overallAuthenticityScore} verdict={entry.report.claimVerifications?.[0]?.status || 'N/A'} />
+                {history.map(entry => {
+                    // FIX: Ensure entry.report is not undefined before rendering the component part that uses it.
+                    if (!entry.report) return null;
+
+                    return (
+                        <div key={entry.id} className="bg-slate-900/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div className="flex-1">
+                                <p className="text-xs text-slate-300">{new Date(entry.timestamp).toLocaleString()}</p>
+                                <p className="font-medium text-slate-200 mt-1 line-clamp-2">"{entry.claimText}"</p>
+                                <div className="mt-2">
+                                    {/* FIX: Safely access nested properties on entry.report. */}
+                                    <ScoreBadge score={entry.report.overallAuthenticityScore} verdict={entry.report.claimVerifications?.[0]?.status} />
+                                </div>
                             </div>
+                            <button
+                                // FIX: Pass entry.report directly, which is now guaranteed to be defined here.
+                                onClick={() => onSelectReport(entry.report!, entry.claimText)}
+                                className="px-4 py-2 font-semibold text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors w-full sm:w-auto"
+                            >
+                                View Report
+                            </button>
                         </div>
-                        <button
-                            onClick={() => onSelectReport(entry.report, entry.claimText)}
-                            className="px-4 py-2 font-semibold text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors w-full sm:w-auto"
-                        >
-                            View Report
-                        </button>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
