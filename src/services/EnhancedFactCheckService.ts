@@ -1,4 +1,4 @@
-import { FactCheckReport, FactCheckMethod, EvidenceItem } from '@/types';
+import { FactCheckReport, FactCheckMethod, EvidenceItem, ScoreBreakdown } from '@/types';
 import { SourceCredibilityReport, MediaVerificationReport, TimelineEvent, TemporalValidation, CategoryRating } from '@/types/enhancedFactCheck';
 import { CitationAugmentedService } from './analysis/CitationAugmentedService';
 import { TemporalContextService } from './core/TemporalContextService';
@@ -464,8 +464,9 @@ export class EnhancedFactCheckService {
         sources_consulted: { total: 0, high_credibility: 0, highCredibility: 0, conflicting: 0 },
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
-      scoreBreakdown: undefined,
-      score_breakdown: undefined,
+      // FIX: Changed scoreBreakdown from undefined to an empty object to satisfy the ScoreBreakdown type.
+      scoreBreakdown: {},
+      score_breakdown: {},
     };
   }
 }
