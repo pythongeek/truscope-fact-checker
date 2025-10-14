@@ -23,7 +23,11 @@ export const EnhancedFactCheckReport: React.FC<EnhancedFactCheckReportProps> = (
         <p className="text-gray-600 mt-1">{report.summary}</p>
         <div className="mt-3 text-lg font-bold">
           Overall Authenticity Score:
-          <span className="ml-2 text-blue-600">{report.overallAuthenticityScore.toFixed(0)}%</span>
+          <span className="ml-2 text-blue-600">
+            {typeof report.overallAuthenticityScore === 'number'
+              ? `${report.overallAuthenticityScore.toFixed(0)}%`
+              : 'N/A'}
+          </span>
         </div>
       </div>
 
