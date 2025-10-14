@@ -13,7 +13,7 @@ import { ExportIcon } from './icons';
  */
 const generateFilename = (count: number, type: string, extension: string): string => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    return `truescope-report-batch-${count}-items-${type}-${timestamp}.${extension}`;
+    return `truscope-report-batch-${count}-items-${type}-${timestamp}.${extension}`;
 };
 
 /**
@@ -56,7 +56,7 @@ const exportToCSV = (results: FactCheckReport[]): void => {
     if (!results || results.length === 0) return;
 
     const escapeCsvField = (field: any): string => {
-        const str = String(field ?? '');
+        const str = String(field ?? ''); // Use nullish coalescing for safety
         if (/[",\n]/.test(str)) {
             return `"${str.replace(/"/g, '""')}"`;
         }
@@ -73,16 +73,18 @@ const exportToCSV = (results: FactCheckReport[]): void => {
     const headerRow = headers.join(',');
 
     const dataRows = results.map(report => {
+        // FIX: Safely access nested properties using optional chaining (?.) and nullish coalescing (??)
+        const sources = report.metadata?.sources_consulted;
         const row = [
             escapeCsvField(report.overallAuthenticityScore),
-            escapeCsvField(report.claimVerifications?.[0]?.status || 'N/A'),
-            escapeCsvField(report.metadata.method_used),
-            escapeCsvField(report.metadata.processing_time_ms),
-            escapeCsvField(report.metadata.sources_consulted.total),
-            escapeCsvField(report.metadata.sources_consulted.high_credibility),
-            escapeCsvField(report.metadata.sources_consulted.conflicting),
-            escapeCsvField(report.evidence.length),
-            escapeCsvField(report.metadata.warnings.join('; ')),
+            escapeCsvField(report.claimVerifications?.[0]?.status ?? 'N/A'),
+            escapeCsvField(report.metadata?.method_used),
+            escapeCsvField(report.metadata?.processing_time_ms),
+            escapeCsvField(sources?.total ?? 0),
+            escapeCsvField(sources?.high_credibility ?? 0),
+            escapeCsvField(sources?.conflicting ?? 0),
+            escapeCsvField(report.evidence?.length ?? 0),
+            escapeCsvField(report.metadata?.warnings?.join('; ') ?? ''),
         ];
         return row.join(',');
     });
@@ -105,15 +107,17 @@ const generateReport = (results: FactCheckReport[]): void => {
     markdownContent += `**Total Reports:** ${results.length}\n\n---\n\n`;
 
     results.forEach((report, index) => {
-        markdownContent += `## Report ${index + 1}: Verdict "${report.claimVerifications?.[0]?.status || 'N/A'}" (Score: ${report.overallAuthenticityScore}/100)\n\n`;
+        // FIX: Safely access nested properties to avoid runtime errors.
+        const sources = report.metadata?.sources_consulted;
+        markdownContent += `## Report ${index + 1}: Verdict "${report.claimVerifications?.[0]?.status ?? 'N/A'}" (Score: ${report.overallAuthenticityScore ?? 'N/A'}/100)\n\n`;
         markdownContent += `*This is a summary of an automated analysis. The original claim text is not included in this export format.*\n\n`;
         
         markdownContent += `### Analysis Details\n`;
-        markdownContent += `- **Method:** ${report.metadata.method_used}\n`;
-        markdownContent += `- **Processing Time:** ${report.metadata.processing_time_ms} ms\n`;
-        markdownContent += `- **Sources Consulted:** ${report.metadata.sources_consulted.total} (High Credibility: ${report.metadata.sources_consulted.high_credibility}, Conflicting: ${report.metadata.sources_consulted.conflicting})\n\n`;
+        markdownContent += `- **Method:** ${report.metadata?.method_used ?? 'Unknown'}\n`;
+        markdownContent += `- **Processing Time:** ${report.metadata?.processing_time_ms ?? 'N/A'} ms\n`;
+        markdownContent += `- **Sources Consulted:** ${sources?.total ?? 0} (High Credibility: ${sources?.high_credibility ?? 0}, Conflicting: ${sources?.conflicting ?? 0})\n\n`;
         
-        if (report.metadata.warnings.length > 0) {
+        if (report.metadata?.warnings && report.metadata.warnings.length > 0) {
             markdownContent += `### Warnings\n`;
             report.metadata.warnings.forEach(w => {
                 markdownContent += `- ${w}\n`;
@@ -122,12 +126,13 @@ const generateReport = (results: FactCheckReport[]): void => {
         }
 
         markdownContent += `### Top 5 Evidence Items\n`;
-        if (report.evidence.length > 0) {
+        if (report.evidence && report.evidence.length > 0) {
             markdownContent += `| Publisher | Reliability Score | Quote Snippet |\n`;
             markdownContent += `|:---|:---:|:---|\n`;
             report.evidence.slice(0, 5).forEach(e => {
-                const quote = e.quote.replace(/\n/g, ' ').trim().slice(0, 100);
-                markdownContent += `| ${e.publisher} | ${e.score} | ${quote}${e.quote.length > 100 ? '...' : ''} |\n`;
+                // FIX: Safely handle potentially undefined quote property.
+                const quote = (e.quote ?? '').replace(/\n/g, ' ').trim().slice(0, 100);
+                markdownContent += `| ${e.publisher ?? 'N/A'} | ${e.score ?? 'N/A'} | ${quote}${(e.quote?.length ?? 0) > 100 ? '...' : ''} |\n`;
             });
         } else {
             markdownContent += `No evidence was cited in this report.\n`;
@@ -156,8 +161,8 @@ const ExportResults: React.FC<ExportResultsProps> = ({ results }) => {
             <h3 className="text-lg font-semibold text-slate-100 mb-3">Export All History</h3>
             <div className="flex flex-col sm:flex-row gap-3">
                  <button
-                    onClick={() => exportToJSON(results)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 font-semibold text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500"
+                   onClick={() => exportToJSON(results)}
+                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 font-semibold text-slate-300 bg-slate-700/50 rounded-lg hover:bg-slate-600/50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-indigo-500"
                 >
                     <ExportIcon className="w-5 h-5" />
                     <span>Export as JSON</span>
