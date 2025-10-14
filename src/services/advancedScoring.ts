@@ -49,8 +49,11 @@ export class AdvancedEvidenceScorer {
       ...evidence,
       sourceCredibility: sourceInfo?.reliabilityScore || 50,
       authorCredibility: this.estimateAuthorCredibility(domain, sourceInfo?.category),
-      recency: calculateRecency(evidence.publishedDate),
-      relevanceScore: this.calculateRelevance(evidence.quote),
+      // FIX: Added a check for publishedDate to ensure it's not undefined before calculating recency.
+      recency: calculateRecency(evidence.publishedDate ?? new Date().toISOString()),
+      // FIX: Added a nullish coalescing operator to provide a default empty string,
+      // which resolves the 'is not assignable to type string' error.
+      relevanceScore: this.calculateRelevance(evidence.quote ?? ''),
       contradictsClaim: false, // Will be determined by AI analysis
       supportsClaim: true, // Will be determined by AI analysis
       factCheckVerdict: 'unknown',
@@ -71,6 +74,7 @@ export class AdvancedEvidenceScorer {
 
   private calculateRelevance(quote: string): number {
     // Simple relevance calculation based on quote length and content
+    if (!quote) return 0; // Return 0 if quote is empty
     const wordCount = quote.split(' ').length;
     if (wordCount > 20 && wordCount < 200) return 85;
     if (wordCount > 10) return 70;
