@@ -10,6 +10,10 @@ const InfoCard: React.FC<{ title: string, children: React.ReactNode, className?:
 );
 
 const MethodologyView: React.FC<{ metadata: FactCheckMetadata }> = ({ metadata }) => {
+    // FIX: Added a nullish coalescing operator to safely handle cases where sources_consulted might be undefined.
+    // This provides a default value to prevent runtime errors.
+    const sourcesConsulted = metadata.sources_consulted ?? { total: 0, high_credibility: 0, conflicting: 0 };
+
     return (
         <div className="bg-slate-800/50 p-6 rounded-2xl space-y-6">
             <div>
@@ -21,34 +25,34 @@ const MethodologyView: React.FC<{ metadata: FactCheckMetadata }> = ({ metadata }
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                 <InfoCard title="Analysis Method">
-                    <p className="text-slate-100 font-medium">{metadata.method_used}</p>
+                    <p className="text-slate-100 font-medium">{metadata.method_used || 'N/A'}</p>
                 </InfoCard>
                 <InfoCard title="Processing Time">
                      <p className="text-slate-100 font-medium">{metadata.processing_time_ms} ms</p>
                 </InfoCard>
                 <InfoCard title="APIs Used">
-                     <p className="text-slate-100 font-medium">{metadata.apisUsed?.join(', ')}</p>
+                     <p className="text-slate-100 font-medium">{metadata.apisUsed?.join(', ') || 'None'}</p>
                 </InfoCard>
             </div>
             
             <InfoCard title="Sources Consulted">
                  <div className="flex justify-around">
                     <div className="text-center">
-                        <p className="text-2xl font-bold text-slate-100">{metadata.sources_consulted.total}</p>
+                        <p className="text-2xl font-bold text-slate-100">{sourcesConsulted.total}</p>
                         <p className="text-xs text-slate-300">Total Sources</p>
                     </div>
                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-400">{metadata.sources_consulted.high_credibility}</p>
+                        <p className="text-2xl font-bold text-green-400">{sourcesConsulted.high_credibility}</p>
                         <p className="text-xs text-slate-300">High-Credibility</p>
                     </div>
                      <div className="text-center">
-                        <p className="text-2xl font-bold text-red-400">{metadata.sources_consulted.conflicting}</p>
+                        <p className="text-2xl font-bold text-red-400">{sourcesConsulted.conflicting}</p>
                         <p className="text-xs text-slate-300">Conflicting</p>
                     </div>
                 </div>
             </InfoCard>
 
-            {metadata.warnings.length > 0 && (
+            {metadata.warnings && metadata.warnings.length > 0 && (
                 <InfoCard title="Warnings" className="!bg-yellow-500/10">
                     <div className="space-y-2">
                         {metadata.warnings.map((warning, index) => (
