@@ -110,15 +110,15 @@ export class RealTimeFactDBService {
       id: this.generateId(),
       statement,
       normalizedStatement: this.normalizeStatement(statement),
-      verdict: this.mapScoreToVerdict(report.final_score),
-      confidence: report.final_score / 100,
+      verdict: this.mapScoreToVerdict(report.final_score ?? 0),
+      confidence: (report.final_score ?? 0) / 100,
       sources: report.evidence.map(evidence => ({
         url: evidence.url || '',
         publisher: evidence.publisher,
         credibilityScore: evidence.score,
         publicationDate: new Date(), // Would need to extract from evidence
         relevanceScore: 0.8, // Default relevance
-        quote: evidence.quote,
+        quote: evidence.quote ?? '',
         sourceType: this.determineSourceType(evidence.publisher)
       })),
       metadata: {
@@ -134,8 +134,8 @@ export class RealTimeFactDBService {
         nextVerificationDue: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         verificationHistory: [{
           date: new Date(),
-          method: report.metadata.method_used,
-          confidence: report.final_score / 100,
+          method: report.metadata.method_used ?? 'unknown',
+          confidence: (report.final_score ?? 0) / 100,
           source: 'AI Analysis'
         }]
       },

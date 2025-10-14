@@ -24,7 +24,7 @@ export class IntelligentCorrector {
       Original Text: "${originalText}"
 
       Supporting Evidence:
-      ${evidence.map(e => `- ${e.publisher}: "${e.quote}" (Reliability: ${e.sourceCredibility}/100)`).join('\n')}
+      ${evidence.map(e => e.quote ? `- ${e.publisher}: "${e.quote}" (Reliability: ${e.sourceCredibility}/100)` : '').join('\n')}
 
       Identify and categorize all issues. For each issue, provide:
       1. Type (factual_error, misleading_context, outdated_info, missing_context, unsupported_claim)
@@ -97,8 +97,8 @@ export class IntelligentCorrector {
     const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
 
     const relevantEvidence = evidence.filter(e =>
-      e.quote.toLowerCase().includes(issue.originalText.toLowerCase()) ||
-      issue.originalText.toLowerCase().includes(e.quote.toLowerCase())
+      e.quote && (e.quote.toLowerCase().includes(issue.originalText.toLowerCase()) ||
+      issue.originalText.toLowerCase().includes(e.quote.toLowerCase()))
     );
 
     const prompt = `
@@ -110,7 +110,7 @@ export class IntelligentCorrector {
       Issue Description: ${issue.description}
 
       Relevant Evidence:
-      ${relevantEvidence.map(e => `- ${e.publisher}: "${e.quote}"`).join('\n')}
+      ${relevantEvidence.map(e => e.quote ? `- ${e.publisher}: "${e.quote}"` : '').join('\n')}
 
       Provide:
       1. A corrected version of the problematic text
@@ -150,7 +150,7 @@ export class IntelligentCorrector {
     }
   }
 
-  private categorizeByType(issues: any[]): Record<DetectedIssue['type'], number> {
+  private categorizeByType(issues: DetectedIssue[]): Record<DetectedIssue['type'], number> {
     const categories: Record<DetectedIssue['type'], number> = {
       factual_error: 0,
       misleading_context: 0,
@@ -168,7 +168,7 @@ export class IntelligentCorrector {
     return categories;
   }
 
-  private categorizeBySeverity(issues: any[]): Record<DetectedIssue['severity'], number> {
+  private categorizeBySeverity(issues: DetectedIssue[]): Record<DetectedIssue['severity'], number> {
     const categories: Record<DetectedIssue['severity'], number> = {
       low: 0,
       medium: 0,

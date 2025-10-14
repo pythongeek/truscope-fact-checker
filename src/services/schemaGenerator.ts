@@ -24,7 +24,7 @@ function generate(factCheckResult: TieredFactCheckResult): ClaimReview {
   const score = factCheckResult.overallAuthenticityScore;
 
   // Aggregate evidence from all claim verifications
-  const allEvidence = factCheckResult.claimVerifications.flatMap(v => v.evidence);
+  const allEvidence = (factCheckResult.claimVerifications || []).flatMap(v => v.evidence);
   
   // Use the most relevant piece of evidence for the 'itemReviewed' field
   const primarySource = allEvidence.length > 0 ? allEvidence[0] : null;
@@ -43,10 +43,10 @@ function generate(factCheckResult: TieredFactCheckResult): ClaimReview {
     },
     reviewRating: {
       '@type': 'Rating',
-      ratingValue: score.toString(),
+      ratingValue: (score ?? 0).toString(),
       bestRating: '100',
       worstRating: '0',
-      alternateName: getAlternateName(score),
+      alternateName: getAlternateName(score ?? 0),
     },
     itemReviewed: {
       '@type': 'CreativeWork',

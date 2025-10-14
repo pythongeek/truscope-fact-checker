@@ -127,11 +127,13 @@ export const generateBatchReport = (batchResults: BatchResult[]): BatchReportSum
     for (const result of batchResults) {
         if (result.report) {
             summary.successful++;
-            totalProcessingTime += result.processingTimeMs ?? result.report.metadata.processing_time_ms;
-            totalScore += result.report.final_score;
+            totalProcessingTime += result.processingTimeMs ?? result.report.metadata.processing_time_ms ?? 0;
+            totalScore += result.report.final_score ?? 0;
 
             const verdict = result.report.final_verdict;
-            summary.verdictDistribution[verdict] = (summary.verdictDistribution[verdict] || 0) + 1;
+            if (verdict) {
+                summary.verdictDistribution[verdict] = (summary.verdictDistribution[verdict] || 0) + 1;
+            }
         } else {
             summary.failed++;
         }

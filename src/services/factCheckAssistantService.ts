@@ -15,9 +15,9 @@ export const factCheckAssistantService = {
       Fact-Check Report Summary:
       - Overall Score: ${report.overallAuthenticityScore}/100
       - Main Conclusion: ${report.summary}
-      - Claims Analyzed: ${report.claimVerifications.map(c =>
+      - Claims Analyzed: ${(report.claimVerifications || []).map(c =>
         `Claim: "${c.claimText}" -> Verdict: ${c.status} (Confidence: ${Math.round(c.confidenceScore * 100)}%). Explanation: ${c.explanation}`
-      ).join('\n')}
+      ).join('\n') || 'No claims analyzed.'}
     `;
 
     const prompt = `
