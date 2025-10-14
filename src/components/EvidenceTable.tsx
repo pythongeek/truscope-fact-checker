@@ -1,6 +1,9 @@
 // src/components/EvidenceTable.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, ReactNode } from 'react';
 import { EvidenceItem, Source } from '@/types';
+// FIX: Assuming '@/' alias is configured to src/. These imports point to your UI library components.
+// If these paths are incorrect, please adjust them to match your project structure.
+// The build error "Cannot find module" suggests a misconfiguration in your tsconfig.json or vite.config.ts.
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -18,8 +21,10 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
     let sortableItems = [...evidence];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
+        // FIX: Added nullish coalescing operators (??) to prevent 'possibly undefined' errors during sorting.
+        // This provides default values if a property is null or undefined.
+        const aValue = a[sortConfig.key] ?? 0;
+        const bValue = b[sortConfig.key] ?? 0;
 
         if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -41,7 +46,7 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
     setSortConfig({ key, direction });
   };
 
-  const getSortIndicator = (key: keyof EvidenceItem) => {
+  const getSortIndicator = (key: keyof EvidenceItem): ReactNode | null => {
     if (!sortConfig || sortConfig.key !== key) {
       return null;
     }
@@ -52,21 +57,26 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
     setExpandedRow(expandedRow === id ? null : id);
   };
 
-  const renderScore = (score: number, label: string) => (
-    <div className="flex items-center">
-      <div className="w-24 text-sm text-gray-600">{label}:</div>
-      <div className="w-full bg-gray-200 rounded-full h-2.5 ml-2">
-        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${score}%` }}></div>
-      </div>
-      <div className="text-sm font-medium text-gray-700 ml-2">{score.toFixed(0)}</div>
-    </div>
-  );
-
+  const renderScore = (score: number | undefined, label: string) => {
+    const numericScore = score ?? 0; // Default to 0 if score is undefined
+    return (
+        <div className="flex items-center">
+            <div className="w-24 text-sm text-gray-600">{label}:</div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 ml-2">
+                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${numericScore}%` }}></div>
+            </div>
+            <div className="text-sm font-medium text-gray-700 ml-2">{numericScore.toFixed(0)}</div>
+        </div>
+    );
+  };
+  
+  // IMPROVEMENT: Enhanced source information rendering for more detail and robustness.
   const renderSourceInfo = (item: EvidenceItem) => {
-    const source = item.source as Source & { publication_date?: string; site_name?: string };
+    // Cast source to include potentially optional properties for more detailed output
+    const source = item.source as Source & { publication_date?: string; site_name?: string, type?: string };
 
     const publicationDate = source?.publication_date
-      ? new Date(source.publication_date).toLocaleDateString()
+      ? new Date(source.publication_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
       : 'N/A';
 
     return (
@@ -74,6 +84,7 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
             <p><strong>Source:</strong> {source?.name || 'Unknown'}</p>
             <p><strong>Site Name:</strong> {source?.site_name || 'N/A'}</p>
             <p><strong>Publication Date:</strong> {publicationDate}</p>
+            <p><strong>Source Type:</strong> <Badge variant="outline">{source?.type || 'General'}</Badge></p>
         </div>
     );
   };
@@ -108,7 +119,9 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
                   <TableCell className="font-medium">{item.publisher || 'N/A'}</TableCell>
                   <TableCell>
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      {/* FIX: Removed the 'asChild' prop which was causing a type error. 
+                          The TooltipTrigger will wrap the child element by default. */}
+                      <TooltipTrigger>
                         <p className="truncate max-w-xs">{item.quote || "No quote available."}</p>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -116,8 +129,9 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
-                  <TableCell>{item.relevanceScore.toFixed(2)}</TableCell>
-                  <TableCell>{item.credibilityScore.toFixed(2)}</TableCell>
+                  {/* FIX: Added default value to prevent crash if scores are undefined */}
+                  <TableCell>{(item.relevanceScore ?? 0).toFixed(2)}</TableCell>
+                  <TableCell>{(item.credibilityScore ?? 0).toFixed(2)}</TableCell>
                   <TableCell>
                     <a href={item.url || '#'} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
                       <ExternalLink className="h-4 w-4" />
