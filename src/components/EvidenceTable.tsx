@@ -1,17 +1,62 @@
-// src/components/EvidenceTable.tsx
 import React, { useState, useMemo, ReactNode } from 'react';
 import { EvidenceItem, Source } from '@/types';
-// FIX: Assuming '@/' alias is configured to src/. These imports point to your UI library components.
-// If these paths are incorrect, please adjust them to match your project structure.
-// The build error "Cannot find module" suggests a misconfiguration in your tsconfig.json or vite.config.ts.
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface EvidenceTableProps {
   evidence: EvidenceItem[];
 }
+
+// --- Self-Contained UI Components to Fix Build Errors ---
+
+// FIX: Replaced all custom UI component imports with standard HTML elements
+// styled with Tailwind CSS to resolve the "Cannot find module" build errors.
+// This ensures the component works without needing external UI component files.
+
+const Badge = ({ children, variant }: { children: React.ReactNode, variant?: string }) => (
+  <span className={`border rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${variant === 'outline' ? 'text-foreground' : ''}`}>
+    {children}
+  </span>
+);
+
+const Table: React.FC<React.TableHTMLAttributes<HTMLTableElement>> = ({ className, ...props }) => (
+  <div className="relative w-full overflow-auto">
+    <table className={`w-full caption-bottom text-sm ${className}`} {...props} />
+  </div>
+);
+
+const TableHeader: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ className, ...props }) => (
+  <thead className={`[&_tr]:border-b ${className}`} {...props} />
+);
+
+const TableBody: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ className, ...props }) => (
+  <tbody className={`[&_tr:last-child]:border-0 ${className}`} {...props} />
+);
+
+const TableRow: React.FC<React.HTMLAttributes<HTMLTableRowElement>> = ({ className, ...props }) => (
+  <tr className={`border-b transition-colors hover:bg-gray-100/50 data-[state=selected]:bg-gray-100 ${className}`} {...props} />
+);
+
+const TableHead: React.FC<React.ThHTMLAttributes<HTMLTableCellElement>> = ({ className, ...props }) => (
+  <th className={`h-12 px-4 text-left align-middle font-medium text-gray-500 [&:has([role=checkbox])]:pr-0 ${className}`} {...props} />
+);
+
+const TableCell: React.FC<React.TdHTMLAttributes<HTMLTableCellElement>> = ({ className, ...props }) => (
+  <td className={`p-4 align-middle [&:has([role=checkbox])]:pr-0 ${className}`} {...props} />
+);
+
+// Simple, self-contained Tooltip implementation using Tailwind's group-hover.
+const TooltipProvider = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+const Tooltip = ({ children }: { children: React.ReactNode }) => <div className="group relative inline-flex">{children}</div>;
+const TooltipTrigger = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+const TooltipContent = ({ children }: { children: React.ReactNode }) => (
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs scale-0 group-hover:scale-100 transition-transform duration-100 ease-in-out origin-bottom bg-gray-800 text-white text-sm rounded-md px-3 py-1.5 z-10">
+        {children}
+        <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-800"></div>
+    </div>
+);
+
+
+// --- Main EvidenceTable Component ---
 
 const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -21,8 +66,6 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
     let sortableItems = [...evidence];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        // FIX: Added nullish coalescing operators (??) to prevent 'possibly undefined' errors during sorting.
-        // This provides default values if a property is null or undefined.
         const aValue = a[sortConfig.key] ?? 0;
         const bValue = b[sortConfig.key] ?? 0;
 
@@ -58,7 +101,7 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
   };
 
   const renderScore = (score: number | undefined, label: string) => {
-    const numericScore = score ?? 0; // Default to 0 if score is undefined
+    const numericScore = score ?? 0;
     return (
         <div className="flex items-center">
             <div className="w-24 text-sm text-gray-600">{label}:</div>
@@ -70,9 +113,7 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
     );
   };
   
-  // IMPROVEMENT: Enhanced source information rendering for more detail and robustness.
   const renderSourceInfo = (item: EvidenceItem) => {
-    // Cast source to include potentially optional properties for more detailed output
     const source = item.source as Source & { publication_date?: string; site_name?: string, type?: string };
 
     const publicationDate = source?.publication_date
@@ -119,8 +160,6 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
                   <TableCell className="font-medium">{item.publisher || 'N/A'}</TableCell>
                   <TableCell>
                     <Tooltip>
-                      {/* FIX: Removed the 'asChild' prop which was causing a type error. 
-                          The TooltipTrigger will wrap the child element by default. */}
                       <TooltipTrigger>
                         <p className="truncate max-w-xs">{item.quote || "No quote available."}</p>
                       </TooltipTrigger>
@@ -129,7 +168,6 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
-                  {/* FIX: Added default value to prevent crash if scores are undefined */}
                   <TableCell>{(item.relevanceScore ?? 0).toFixed(2)}</TableCell>
                   <TableCell>{(item.credibilityScore ?? 0).toFixed(2)}</TableCell>
                   <TableCell>
@@ -165,3 +203,4 @@ const EvidenceTable: React.FC<EvidenceTableProps> = ({ evidence }) => {
 };
 
 export default EvidenceTable;
+
