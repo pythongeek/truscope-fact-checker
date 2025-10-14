@@ -80,8 +80,6 @@ export class EnhancedFactCheckService {
         ...processedReport,
         metadata: {
           ...processedReport.metadata,
-          // FIX: Added nullish coalescing operators to prevent the 'must have a [Symbol.iterator]()' error.
-          // This ensures that we spread an empty array if the original properties are undefined.
           apisUsed: [
             ...(processedReport.metadata.apisUsed ?? []),
             'advanced-query-pipeline',
@@ -93,7 +91,6 @@ export class EnhancedFactCheckService {
             ...(processedReport.metadata.warnings ?? []),
             ...this.generatePipelineWarnings(pipelineResult, executionMetrics)
           ],
-          // Add custom pipeline metadata
           pipelineMetadata: {
             complexity: pipelineResult.textAnalysis.complexity,
             suggestedSearchDepth: pipelineResult.textAnalysis.suggestedSearchDepth,
@@ -106,7 +103,6 @@ export class EnhancedFactCheckService {
             processingTime: pipelineResult.metadata.totalProcessingTime
           }
         },
-        // Add detailed claim breakdown to report
         claimBreakdown: pipelineResult.textAnalysis.atomicClaims.map(claim => ({
           id: claim.id,
           text: claim.claimText,
@@ -114,7 +110,6 @@ export class EnhancedFactCheckService {
           verifiability: claim.verifiability,
           priority: claim.priority
         })),
-        // Add extracted entities to report
         extractedEntities: pipelineResult.textAnalysis.namedEntities.map(entity => ({
           name: entity.text,
           type: entity.type,
@@ -128,100 +123,61 @@ export class EnhancedFactCheckService {
 
     } catch (error) {
       console.error('❌ Enhanced search with pipeline failed:', error);
-
-      // Fallback to basic search if pipeline fails
       console.warn('⚠️  Falling back to basic search method...');
       return await this.fallbackBasicSearch(text);
     }
   }
 
-  /**
-  * Generate warnings based on pipeline analysis
-  */
   private generatePipelineWarnings(
     pipelineResult: any,
     executionMetrics: any
   ): string[] {
     const warnings: string[] = [];
-
-    // Complexity warnings
     if (pipelineResult.textAnalysis.complexity === 'complex') {
       warnings.push('Complex claim structure detected - verification may require multiple sources');
     }
-
-    // Temporal warnings
-    if (pipelineResult.textAnalysis.temporalContext.hasDateReference) {
-      if (pipelineResult.textAnalysis.temporalContext.recency === 'breaking') {
-        warnings.push('Recent claim - information may still be developing');
-      }
+    if (pipelineResult.textAnalysis.temporalContext.hasDateReference && pipelineResult.textAnalysis.temporalContext.recency === 'breaking') {
+      warnings.push('Recent claim - information may still be developing');
     }
-
-    // Search effectiveness warnings
     if (executionMetrics.totalResultsReturned < 5) {
       warnings.push('Limited search results found - claim may be obscure or very recent');
     }
-
-    // Bias warnings
     if (pipelineResult.textAnalysis.biasIndicators.overallBiasScore > 70) {
       warnings.push('High bias indicators detected in original text');
     }
-
-    // Entity warnings
     if (pipelineResult.textAnalysis.namedEntities.length === 0) {
       warnings.push('No named entities extracted - verification may be challenging');
     }
-
     return warnings;
   }
 
-  /**
-  * Fallback method when advanced pipeline fails
-  */
   private async fallbackBasicSearch(text: string): Promise<FactCheckReport> {
     const { search } = await import('./webSearch');
-
-    // Generate basic search queries
     const basicQueries = [
       `fact check "${text.substring(0, 50)}"`,
       `${text.substring(0, 30)} verification`,
       `is "${text.substring(0, 40)}" true`
     ];
-
     const searchResults = await Promise.all(
       basicQueries.map(query => search(query, 5))
     );
-
     const allResults = searchResults.flat();
-
-    // Process with citation service
     return await this.citationService.processSearchResults(text, allResults);
   }
 
   private async runComprehensiveAnalysis(text: string): Promise<FactCheckReport> {
     console.log('🔍 Running Comprehensive Analysis with Web Search...');
-
-    // 1. Base analysis using web search
     const baseReport = await this._fetchAndAugmentWithSearch(text);
-
-    // 2. Enhanced source credibility analysis
     const sourceCredibilityReport = await this.generateSourceCredibilityReport(baseReport.evidence);
-
-    // 3. Temporal verification (integrated)
     const temporalValidations = this.temporalService.evaluateTemporalClaims(text);
     const temporalScore = temporalValidations.filter(v => v.isValid).length / Math.max(temporalValidations.length, 1) * 100;
-
-    // 4. Media verification (placeholder for future implementation)
     const mediaVerificationReport = await this.generateMediaVerificationReport(text);
-
-    // 5. Calculate final weighted score
     const finalScore = this.calculateComprehensiveScore(
       baseReport.final_score ?? 0,
       sourceCredibilityReport.overallScore,
       temporalScore,
       mediaVerificationReport
     );
-
-    // 6. Generate category rating
     const categoryRating = this.ratingService.convertScoreToCategory(
       finalScore,
       sourceCredibilityReport.overallScore,
@@ -268,23 +224,12 @@ export class EnhancedFactCheckService {
 
   private async runTemporalVerification(text: string): Promise<FactCheckReport> {
     console.log('⏰ Running Temporal Verification...');
-
-    // 1. Enhanced temporal analysis
     const temporalValidations = this.temporalService.evaluateTemporalClaims(text);
-
-    // 2. Base analysis with temporal focus
     const baseReport = await this.citationService.performCitationAugmentedAnalysis(text);
-
-    // 3. Recent news integration (focus on temporal sources)
     const recentNewsScore = await this.calculateRecentNewsScore(text, temporalValidations);
-
-    // 4. Calculate temporal-weighted score
     const temporalScore = temporalValidations.filter(v => v.isValid).length / Math.max(temporalValidations.length, 1) * 100;
     const finalScore = Math.round(((baseReport.final_score ?? 0) * 0.4) + (temporalScore * 0.4) + (recentNewsScore * 0.2));
-
-    // 5. Basic source credibility (lighter than comprehensive)
     const sourceCredibilityReport = await this.generateBasicSourceCredibilityReport(baseReport.evidence);
-
     const categoryRating = this.ratingService.convertScoreToCategory(
       finalScore,
       sourceCredibilityReport.overallScore,
@@ -328,23 +273,19 @@ export class EnhancedFactCheckService {
     };
   }
 
-  // Helper methods implementation...
   private async generateSourceCredibilityReport(evidence: EvidenceItem[]): Promise<SourceCredibilityReport> {
     const sourceAnalyses = await Promise.all(
       evidence.map(e => e.url ? this.credibilityService.analyzeSource(e.url) : null)
     );
-
     const validSources = sourceAnalyses.filter((s): s is NonNullable<typeof s> => s !== null);
     const overallScore = this.credibilityService.calculateWeightedScore(evidence);
     const biasWarnings = this.credibilityService.getBiasWarnings(evidence.map(e => ({ url: e.url })));
-
     const credibilityBreakdown = {
       academic: validSources.filter(s => s.category === 'academic').length,
       news: validSources.filter(s => s.category === 'news').length,
       government: validSources.filter(s => s.category === 'government').length,
       social: validSources.filter(s => s.category === 'social').length
     };
-
     return {
       overallScore,
       highCredibilitySources: validSources.filter(s => s.credibilityScore >= 85).length,
@@ -355,52 +296,32 @@ export class EnhancedFactCheckService {
   }
 
   private async generateBasicSourceCredibilityReport(evidence: EvidenceItem[]): Promise<SourceCredibilityReport> {
-    // Lighter version for temporal verification
     const overallScore = this.credibilityService.calculateWeightedScore(evidence);
-
     return {
       overallScore,
       highCredibilitySources: evidence.filter(e => (e.score ?? 0) >= 85).length,
-      flaggedSources: 0, // Skip detailed flagging for speed
+      flaggedSources: 0,
       biasWarnings: [],
-      credibilityBreakdown: {
-        academic: 0,
-        news: evidence.length,
-        government: 0,
-        social: 0
-      }
+      credibilityBreakdown: { academic: 0, news: evidence.length, government: 0, social: 0 }
     };
   }
 
   private async generateMediaVerificationReport(text: string): Promise<MediaVerificationReport> {
-    // Placeholder - will be implemented when media verification APIs are integrated
-    return {
-      hasVisualContent: false,
-      reverseImageResults: []
-    };
+    return { hasVisualContent: false, reverseImageResults: [] };
   }
 
-  private calculateComprehensiveScore(
-    baseScore: number,
-    credibilityScore: number,
-    temporalScore: number,
-    mediaReport: MediaVerificationReport
-  ): number {
-    // Weighted scoring: Base(50%) + Credibility(30%) + Temporal(20%)
+  private calculateComprehensiveScore(baseScore: number, credibilityScore: number, temporalScore: number, mediaReport: MediaVerificationReport): number {
     return Math.round((baseScore * 0.5) + (credibilityScore * 0.3) + (temporalScore * 0.2));
   }
 
   private async calculateRecentNewsScore(text: string, temporalValidations: TemporalValidation[]): Promise<number> {
-    // Score based on how well the claim aligns with recent news
-    if (temporalValidations.length === 0) return 70; // Neutral for non-temporal claims
-
+    if (temporalValidations.length === 0) return 70;
     const recentValidations = temporalValidations.filter(v => v.dateType === 'present' || v.dateType === 'near_future');
     return recentValidations.length > 0 ? 85 : 60;
   }
 
   private generateTemporalVerdict(score: number, validations: TemporalValidation[]): string {
     const invalidCount = validations.filter(v => !v.isValid).length;
-
     if (invalidCount === 0 && score >= 80) return 'Temporally consistent and factually sound';
     if (invalidCount === 0) return 'Temporally consistent with mixed factual accuracy';
     if (invalidCount === 1) return 'Minor temporal inconsistency detected';
@@ -408,7 +329,6 @@ export class EnhancedFactCheckService {
   }
 
   private async generateTimelineAnalysis(text: string, validations: TemporalValidation[]): Promise<{ events: TimelineEvent[], consistency: number }> {
-    // Placeholder for timeline analysis
     return {
       events: [],
       consistency: validations.filter(v => v.isValid).length / Math.max(validations.length, 1) * 100
@@ -416,6 +336,11 @@ export class EnhancedFactCheckService {
   }
 
   private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
+    const defaultScoreBreakdown: ScoreBreakdown = {
+        metrics: {},
+        finalScoreFormula: ""
+    };
+
     return {
       id: `error-${Date.now()}`,
       originalText: text,
@@ -464,9 +389,8 @@ export class EnhancedFactCheckService {
         sources_consulted: { total: 0, high_credibility: 0, highCredibility: 0, conflicting: 0 },
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
-      // FIX: Changed scoreBreakdown from undefined to an empty object to satisfy the ScoreBreakdown type.
-      scoreBreakdown: {},
-      score_breakdown: {},
+      scoreBreakdown: defaultScoreBreakdown,
+      score_breakdown: defaultScoreBreakdown,
     };
   }
 }
@@ -478,7 +402,5 @@ export const enhancedFactCheck = (
   method: FactCheckMethod = 'comprehensive',
   geminiModel?: string
 ): Promise<FactCheckReport> => {
-  // Although geminiModel is passed, the service doesn't use it directly yet.
-  // This is a placeholder for future integration if needed.
   return enhancedFactCheckService.orchestrateFactCheck(text, method);
 };
