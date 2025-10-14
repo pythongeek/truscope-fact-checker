@@ -30,7 +30,7 @@ export class RobustHttpClient {
     const { timeout = 30000, retryConfig = {}, ...fetchConfig } = config;
     const finalRetryConfig = { ...this.defaultRetryConfig, ...retryConfig };
 
-    let lastError: Error;
+    let lastError: Error = new Error('Request failed without a specific error');
 
     for (let attempt = 0; attempt <= finalRetryConfig.maxRetries; attempt++) {
       try {

@@ -309,8 +309,6 @@ export class PipelineIntegration {
                 source: {
                     name: publisher,
                     url: url,
-                    publicationDate: publicationDate,
-                    author: author,
                     credibility: {
                         rating: score >= 80 ? 'High' : score >= 60 ? 'Medium' : 'Low',
                         classification: this.classifySource(result),
@@ -339,7 +337,7 @@ export class PipelineIntegration {
     }
 
     // NEW: Helper to extract publication date
-    private extractPublicationDate(result: any): string | null {
+    private extractPublicationDate(result: any): string | undefined {
         const dateString = result.date || result.publication_date || result.claimReview?.[0]?.reviewDate || result.published;
         if (dateString) {
             try {
@@ -348,7 +346,7 @@ export class PipelineIntegration {
                 return dateString; // Return original string if it's not a valid date
             }
         }
-        return null;
+        return undefined;
     }
 
     // NEW: Helper to extract author

@@ -337,7 +337,7 @@ export class EnhancedFactCheckService {
 
   private generateErrorReport(text: string, method: FactCheckMethod, error: any, processingTime: number): FactCheckReport {
     const defaultScoreBreakdown: ScoreBreakdown = {
-        metrics: {},
+        metrics: [],
         finalScoreFormula: ""
     };
 

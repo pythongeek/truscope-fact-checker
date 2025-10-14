@@ -10,7 +10,7 @@ export const trackFactCheckUsage = (report: FactCheckReport): void => {
     console.log('[Analytics] Tracking Fact-Check:', {
         method: metadata.method_used,
         processingTime: metadata.processing_time_ms,
-        totalSources: metadata.sources_consulted.total,
+        totalSources: (metadata.sources_consulted ?? { total: 0 }).total,
         verdict: report.final_verdict,
         score: report.final_score,
     });

@@ -670,6 +670,9 @@ Provide ONLY the corrected text. Do not include any explanations, comments, or f
   async generateSuggestions(
     factCheckResult: TieredFactCheckResult
   ): Promise<CorrectionSuggestion[]> {
+    if (!factCheckResult.claimVerifications) {
+      return [];
+    }
     const inaccurateClaims = factCheckResult.claimVerifications.filter(
       (v) => v.status === 'Unverified' || v.status === 'Disputed'
     );

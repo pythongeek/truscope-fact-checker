@@ -15,7 +15,7 @@ interface ReportViewProps {
 const ReportView: React.FC<ReportViewProps> = ({ report, activeTab }) => {
     // FIX: Correctly handle the possibility of score_breakdown being undefined.
     // Providing an empty object as a default is a cleaner way to satisfy the type contract.
-    const scoreBreakdown: ScoreBreakdownType = report.score_breakdown ?? {};
+    const scoreBreakdown: ScoreBreakdownType = report.score_breakdown ?? { finalScoreFormula: '', metrics: [] };
 
     switch (activeTab) {
         case 'Overview':

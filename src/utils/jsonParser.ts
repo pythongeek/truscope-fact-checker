@@ -63,7 +63,8 @@ export function parseAIJsonResponse(response: string): any {
       const fixedCommas = cleanedResponse.replace(/,(\s*[}\]])/g, '$1');
       return JSON.parse(fixedCommas);
     } catch (secondError) {
-      throw new Error(`Failed to parse AI response as JSON. Original error: ${parseError.message}`);
+      const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`Failed to parse AI response as JSON. Original error: ${errorMessage}`);
     }
   }
 }

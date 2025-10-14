@@ -115,6 +115,7 @@ export class TieredFactCheckService {
       const finalVerdict = finalSynthesizedReport?.finalVerdict ?? 'UNVERIFIED';
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
+      // FIX #1: Ensure publicationDate is undefined, not null (matches Evidence type)
       const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
         const reliability = getSourceReliability(e.publisher);
         const quoteText = e.quote ?? e.snippet ?? '';
@@ -124,14 +125,16 @@ export class TieredFactCheckService {
           title: e.title || quoteText.substring(0, 50),
           snippet: e.snippet || quoteText,
           publisher: e.publisher,
-          publicationDate: e.publishedDate,
+          // FIX: Convert null to undefined to match Evidence type
+          publicationDate: e.publishedDate || undefined,
           credibilityScore: reliability ? reliability.reliabilityScore : 50,
           relevanceScore: 0,
           type: e.type,
           source: e.source,
           quote: quoteText,
           score: e.score,
-          publishedDate: e.publishedDate
+          // FIX: Convert null to undefined
+          publishedDate: e.publishedDate || undefined
         };
       });
 
@@ -157,7 +160,9 @@ export class TieredFactCheckService {
 
       let claimVerifications: ClaimVerificationResult[];
       try {
-        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey: process.env.GEMINI_API_KEY, maxOutputTokens: 2048 });
+        // FIX #2: Provide default empty string for apiKey to avoid passing undefined
+        const apiKey = process.env.GEMINI_API_KEY || '';
+        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey, maxOutputTokens: 2048 });
         if (!analysisResultJson) {
           throw new Error('Gemini returned null response');
         }
@@ -358,7 +363,7 @@ export class TieredFactCheckService {
             const articleText = article.text || '';
             const articleTitle = article.title || 'Untitled';
             const articlePublished = article.published || new Date().toISOString();
-            const articleAuthor = article.author || 'News Source';
+            const articleAuthor = article.author || sourceName;
             
             return {
               id: `news_${i}`,
@@ -469,7 +474,7 @@ export class TieredFactCheckService {
           
           return {
             id: `news_serp_${i}`,
-            publisher: r.source || 'News Source',
+            publisher: r.source || sourceName,
             url: r.link,
             quote: snippet,
             score: 65,
@@ -675,7 +680,8 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 }
 `;
 
-    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey: process.env.GEMINI_API_KEY || '' });
+    const apiKey = process.env.GEMINI_API_KEY || '';
+    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey });
     if (!jsonString) {
       throw new Error('Gemini returned null response');
     }
@@ -709,8 +715,6 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 
     return unique;
   }
-
-  // MISSING HELPER METHODS - NOW ADDED:
 
   private shouldEscalate(phase: number, result: TierResult): boolean {
     if (phase === 1) {
@@ -952,9 +956,19 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
     }
   }
 
+  // FIX #3: Match StoredReport interface - it expects id, originalText, report, corrections, timestamp
   private async uploadReportToBlob(report: FactCheckReport): Promise<void> {
     try {
-      await this.blobStorage.saveReport(report);
+      const storedReport: StoredReport = {
+        id: report.id,
+        originalText: report.originalText,
+        report: report,
+        corrections: [], // Empty corrections array as required by StoredReport
+        timestamp: new Date().toISOString(),
+        userId: undefined // Optional field
+      };
+
+      await this.blobStorage.saveReport(storedReport);
       logger.info(`Report ${report.id} saved to blob storage`);
     } catch (error) {
       logger.error('Failed to upload report to blob storage:', error);

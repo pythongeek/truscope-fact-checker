@@ -26,18 +26,16 @@ export class FactCheckScoring {
         let totalWeight = 0;
         let contradictionScore = 0;
 
-        for (const metricName in breakdown) {
-            if (Object.prototype.hasOwnProperty.call(breakdown, metricName)) {
-                const metric = breakdown[metricName];
-                const weight = METRIC_WEIGHTS[metricName];
-                if (weight !== undefined) {
-                    if (metricName === 'Contradiction') {
-                        // A higher contradiction score indicates more contradictions, which should lower the overall score.
-                        contradictionScore = metric.score;
-                    } else {
-                        weightedTotal += metric.score * weight;
-                        totalWeight += weight;
-                    }
+        for (const metric of breakdown.metrics) {
+            const metricName = metric.name;
+            const weight = METRIC_WEIGHTS[metricName];
+            if (weight !== undefined) {
+                if (metricName === 'Contradiction') {
+                    // A higher contradiction score indicates more contradictions, which should lower the overall score.
+                    contradictionScore = metric.score;
+                } else {
+                    weightedTotal += metric.score * weight;
+                    totalWeight += weight;
                 }
             }
         }
