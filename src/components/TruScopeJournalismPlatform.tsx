@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { fetchAvailableModels } from '../services/geminiService';
+import { GoogleFactCheckService } from '../services/googleFactCheckService';
 import { ApiKeys, FactCheckReport } from '@/types';
 import Sidebar from './Sidebar';
 import SchemaInputForm from './SchemaInputForm';
@@ -162,13 +163,32 @@ export default function TruScopeJournalismPlatform() {
       const modelToUse = apiKeys.geminiModel || 'gemini-2.0-flash-exp';
       console.log('🔑 Using Gemini model:', modelToUse);
 
+      let clientSideResults: { phase1?: any } = {};
+      if (apiKeys.factCheck) {
+          console.log('🚀 Running client-side Google Fact Check...');
+          const googleFactCheck = new GoogleFactCheckService();
+          const phase1Report = await googleFactCheck.searchClaims(content, 5);
+          if (phase1Report) {
+              console.log('✅ Client-side Google Fact Check complete:', phase1Report);
+              clientSideResults.phase1 = {
+                  tier: 'direct-verification',
+                  success: true,
+                  confidence: phase1Report.finalScore,
+                  evidence: phase1Report.evidence,
+                  processingTime: phase1Report.metadata?.processingTimeMs || 0,
+              };
+          } else {
+              console.log('ℹ️ No results from client-side Google Fact Check.');
+          }
+      }
+
       const requestBody = {
         text: content,
         publishingContext,
+        clientSideResults,
         config: {
           gemini: apiKeys.gemini,
           geminiModel: modelToUse,
-          factCheck: apiKeys.factCheck || undefined,
           search: apiKeys.search || undefined,
           searchId: apiKeys.searchId || undefined
         }

@@ -166,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const startTime = Date.now();
-  const { text, publishingContext = 'journalism', config = {} } = req.body;
+  const { text, publishingContext = 'journalism', config = {}, clientSideResults = {} } = req.body;
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     logger.warn('Validation failed: Text is required');
@@ -177,8 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Run phases sequentially with timeouts
-    // NOTE: Phase 1 (Google Fact Check) is CLIENT-SIDE, so we skip it on server
-    const phase1Result = await runWithTimeout(() => runPhase1ClientSide(text, config), PHASE_TIMEOUT, 'Phase 1');
+    const phase1Result = await runWithTimeout(() => runPhase1ClientSide(text, config, clientSideResults.phase1), PHASE_TIMEOUT, 'Phase 1');
     const phase2Result = await runWithTimeout(() => runPhase2Direct(text, config), PHASE_TIMEOUT, 'Phase 2');
     const phase3Result = await runWithTimeout(() => runPhase3Direct(text, config), PHASE_TIMEOUT, 'Phase 3');
 
@@ -250,21 +249,28 @@ function createFailedPhase(tier: string, reason: any): TierBreakdown {
 
 // --- PHASE 1: GOOGLE FACT CHECK (CLIENT-SIDE ONLY) ---
 // This phase is handled client-side, so we skip it on the server
-async function runPhase1ClientSide(text: string, config: any): Promise<TierBreakdown> {
-  const startTime = Date.now();
-  
-  // Google Fact Check API is client-facing (user provides their own key)
-  // We don't call it from the server
-  logger.info('Phase 1: Google Fact Check is client-side only, skipping server-side execution');
-  
-  return {
-    tier: 'direct-verification',
-    success: false,
-    confidence: 0,
-    evidence: [],
-    processingTime: Date.now() - startTime,
-    escalationReason: 'Google Fact Check API is client-side only (user must provide API key)'
-  };
+async function runPhase1ClientSide(text: string, config: any, clientResult?: TierBreakdown): Promise<TierBreakdown> {
+    const startTime = Date.now();
+
+    if (clientResult && clientResult.success) {
+        logger.info('Phase 1: Using client-side Google Fact Check results');
+        return {
+            ...clientResult,
+            tier: 'direct-verification',
+            processingTime: (Date.now() - startTime) + (clientResult.processingTime || 0),
+        };
+    }
+
+    logger.info('Phase 1: No client-side results provided, skipping server-side execution');
+
+    return {
+        tier: 'direct-verification',
+        success: false,
+        confidence: 0,
+        evidence: [],
+        processingTime: Date.now() - startTime,
+        escalationReason: 'Google Fact Check API is client-side only and no results were provided'
+    };
 }
 
 // --- PHASE 2: SERPER SEARCH ---
@@ -881,16 +887,17 @@ EVIDENCE (${evidence.length} sources):
 ${evidenceSummary}
 
 ANALYSIS REQUIREMENTS:
-- Assess the overall credibility based on source quality and consistency
-- Consider publication recency and source reputation
-- Note any contradictions or gaps in coverage
-- Be appropriately skeptical with low-credibility sources
+- Assess the overall credibility based on source quality and consistency.
+- If the verdict is MIXED, provide a detailed breakdown of the evidence. Explain which parts of the claim are supported and which are not, citing specific sources.
+- Consider publication recency and source reputation.
+- Note any contradictions or gaps in coverage.
+- Be appropriately skeptical with low-credibility sources.
 
 Provide your analysis in this EXACT format:
 
 VERDICT: [TRUE, FALSE, MIXED, UNVERIFIED, MISLEADING]
 SCORE: [0-100]
-REASONING: [2-3 sentences explaining your verdict based on the evidence quality, consistency, and credibility of sources]
+REASONING: [2-3 sentences explaining your verdict. If MIXED, provide a detailed explanation of the conflicting evidence and how it supports different aspects of the claim.]
 WARNINGS: [Note any concerns about source quality, contradictions, or limitations. If none, write "None"]`;
 }
 
