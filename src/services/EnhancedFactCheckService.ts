@@ -61,13 +61,13 @@ export class EnhancedFactCheckService {
 
       // ========== STEP 2: Log Pipeline Insights ==========
       console.log('\n📊 Pipeline Analysis Results:');
-      console.log(`   - Entities Extracted: ${pipelineResult.textAnalysis.namedEntities.length}`);
-      console.log(`   - Atomic Claims: ${pipelineResult.textAnalysis.atomicClaims.length}`);
-      console.log(`   - Primary Keywords: ${pipelineResult.semanticExtraction.primaryKeywords.length}`);
-      console.log(`   - Queries Generated: ${pipelineResult.rankedQueries.length}`);
-      console.log(`   - Queries Executed: ${executionMetrics.totalQueriesExecuted}`);
-      console.log(`   - Results Retrieved: ${executionMetrics.totalResultsReturned}`);
-      console.log(`   - Evidence Items: ${aggregatedEvidence.length}\n`);
+      console.log(`    - Entities Extracted: ${pipelineResult.textAnalysis.namedEntities.length}`);
+      console.log(`    - Atomic Claims: ${pipelineResult.textAnalysis.atomicClaims.length}`);
+      console.log(`    - Primary Keywords: ${pipelineResult.semanticExtraction.primaryKeywords.length}`);
+      console.log(`    - Queries Generated: ${pipelineResult.rankedQueries.length}`);
+      console.log(`    - Queries Executed: ${executionMetrics.totalQueriesExecuted}`);
+      console.log(`    - Results Retrieved: ${executionMetrics.totalResultsReturned}`);
+      console.log(`    - Evidence Items: ${aggregatedEvidence.length}\n`);
 
       // ========== STEP 3: Process Evidence with Citation Service ==========
       const processedReport = await this.citationService.processSearchResults(
@@ -80,15 +80,17 @@ export class EnhancedFactCheckService {
         ...processedReport,
         metadata: {
           ...processedReport.metadata,
+          // FIX: Added nullish coalescing operators to prevent the 'must have a [Symbol.iterator]()' error.
+          // This ensures that we spread an empty array if the original properties are undefined.
           apisUsed: [
-            ...processedReport.metadata.apisUsed,
+            ...(processedReport.metadata.apisUsed ?? []),
             'advanced-query-pipeline',
             'deep-text-analysis',
             'semantic-extraction',
             'intelligent-query-synthesis'
           ],
           warnings: [
-            ...processedReport.metadata.warnings,
+            ...(processedReport.metadata.warnings ?? []),
             ...this.generatePipelineWarnings(pipelineResult, executionMetrics)
           ],
           // Add custom pipeline metadata
@@ -213,7 +215,7 @@ export class EnhancedFactCheckService {
 
     // 5. Calculate final weighted score
     const finalScore = this.calculateComprehensiveScore(
-      baseReport.finalScore,
+      baseReport.final_score ?? 0,
       sourceCredibilityReport.overallScore,
       temporalScore,
       mediaVerificationReport
@@ -278,7 +280,7 @@ export class EnhancedFactCheckService {
 
     // 4. Calculate temporal-weighted score
     const temporalScore = temporalValidations.filter(v => v.isValid).length / Math.max(temporalValidations.length, 1) * 100;
-    const finalScore = Math.round((baseReport.finalScore * 0.4) + (temporalScore * 0.4) + (recentNewsScore * 0.2));
+    const finalScore = Math.round(((baseReport.final_score ?? 0) * 0.4) + (temporalScore * 0.4) + (recentNewsScore * 0.2));
 
     // 5. Basic source credibility (lighter than comprehensive)
     const sourceCredibilityReport = await this.generateBasicSourceCredibilityReport(baseReport.evidence);
@@ -358,7 +360,7 @@ export class EnhancedFactCheckService {
 
     return {
       overallScore,
-      highCredibilitySources: evidence.filter(e => e.score >= 85).length,
+      highCredibilitySources: evidence.filter(e => (e.score ?? 0) >= 85).length,
       flaggedSources: 0, // Skip detailed flagging for speed
       biasWarnings: [],
       credibilityBreakdown: {
@@ -462,40 +464,8 @@ export class EnhancedFactCheckService {
         sources_consulted: { total: 0, high_credibility: 0, highCredibility: 0, conflicting: 0 },
         warnings: [`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`]
       },
-      scoreBreakdown: {
-        finalScoreFormula: 'Error',
-        final_score_formula: 'Error',
-        metrics: [],
-        confidenceIntervals: {
-          lowerBound: 0,
-          upperBound: 0,
-          lower_bound: 0,
-          upper_bound: 0
-        },
-        confidence_intervals: {
-          lowerBound: 0,
-          upperBound: 0,
-          lower_bound: 0,
-          upper_bound: 0
-        }
-      },
-      score_breakdown: {
-        finalScoreFormula: 'Error',
-        final_score_formula: 'Error',
-        metrics: [],
-        confidenceIntervals: {
-          lowerBound: 0,
-          upperBound: 0,
-          lower_bound: 0,
-          upper_bound: 0
-        },
-        confidence_intervals: {
-          lowerBound: 0,
-          upperBound: 0,
-          lower_bound: 0,
-          upper_bound: 0
-        }
-      }
+      scoreBreakdown: undefined,
+      score_breakdown: undefined,
     };
   }
 }
