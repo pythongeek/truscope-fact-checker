@@ -13,14 +13,9 @@ interface ReportViewProps {
 }
 
 const ReportView: React.FC<ReportViewProps> = ({ report, activeTab }) => {
-    // FIX: Provided a default empty object for score_breakdown to prevent passing `undefined`,
-    // which resolves the TS2322 type error.
-    const scoreBreakdown: ScoreBreakdownType = report.score_breakdown ?? {
-        accuracy: { score: 0, reasoning: '' },
-        neutrality: { score: 0, reasoning: '' },
-        clarity: { score: 0, reasoning: '' },
-        relevance: { score: 0, reasoning: '' },
-    };
+    // FIX: Correctly handle the possibility of score_breakdown being undefined.
+    // Providing an empty object as a default is a cleaner way to satisfy the type contract.
+    const scoreBreakdown: ScoreBreakdownType = report.score_breakdown ?? {};
 
     switch (activeTab) {
         case 'Overview':
