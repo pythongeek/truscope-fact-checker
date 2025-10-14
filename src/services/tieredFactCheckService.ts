@@ -117,18 +117,20 @@ export class TieredFactCheckService {
 
       const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
         const reliability = getSourceReliability(e.publisher);
+        // FIXED: Handle possibly undefined quote with fallback
+        const quoteText = e.quote ?? e.snippet ?? '';
         return {
           id: e.id,
           url: e.url || '',
-          title: e.title || e.quote.substring(0, 50),
-          snippet: e.snippet || e.quote,
+          title: e.title || quoteText.substring(0, 50),
+          snippet: e.snippet || quoteText,
           publisher: e.publisher,
           publicationDate: e.publishedDate,
           credibilityScore: reliability ? reliability.reliabilityScore : 50,
           relevanceScore: 0,
           type: e.type,
           source: e.source,
-          quote: e.quote,
+          quote: quoteText,
           score: e.score,
           publishedDate: e.publishedDate
         };
@@ -156,7 +158,12 @@ export class TieredFactCheckService {
 
       let claimVerifications: ClaimVerificationResult[];
       try {
+        // FIXED: Handle possibly null return value
         const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey: process.env.GEMINI_API_KEY, maxOutputTokens: 2048 });
+        if (!analysisResultJson) {
+          throw new Error('Gemini returned null response');
+        }
+        // FIXED: Ensure analysisResultJson is not null before using it
         const cleanedJson = analysisResultJson.replace(/```json|```/g, '').trim();
         const analysisResult = JSON.parse(cleanedJson);
 
@@ -347,22 +354,28 @@ export class TieredFactCheckService {
         queryUsed = keywordQuery;
         const newsResults = await this.newsService.searchNews({ query: keywordQuery, fromDate: this.extractRecentDate(text) });
         if (newsResults?.posts?.length > 0) {
-          evidence.push(...newsResults.posts.slice(0, 5).map((article, i) => {
+          // FIXED: Explicit types for article and i parameters
+          evidence.push(...newsResults.posts.slice(0, 5).map((article: any, i: number) => {
             const url = new URL(article.url);
             const sourceName = url.hostname.replace(/^www\./, '');
             const rating: "High" | "Medium" | "Low" = "Medium";
+            const articleText = article.text || '';
+            const articleTitle = article.title || 'Untitled';
+            const articlePublished = article.published || new Date().toISOString();
+            const articleAuthor = article.author || 'News Source';
+            
             return {
               id: `news_${i}`,
-              publisher: article.author || 'News Source',
+              publisher: articleAuthor,
               url: article.url,
-              quote: article.text.substring(0, 300) + '...',
+              quote: articleText.substring(0, 300) + (articleText.length > 300 ? '...' : ''),
               score: 70,
               credibilityScore: 70,
               relevanceScore: 75,
               type: 'news' as const,
-              publishedDate: article.published,
-              title: article.title,
-              snippet: article.text.substring(0, 150) + '...',
+              publishedDate: articlePublished,
+              title: articleTitle,
+              snippet: articleText.substring(0, 150) + (articleText.length > 150 ? '...' : ''),
               source: {
                 name: sourceName,
                 url: url.origin,
@@ -451,23 +464,25 @@ export class TieredFactCheckService {
             url.includes('apnews') ||
             url.includes('bbc');
         })
-        .map((r: SerpApiResult, i) => {
+        .map((r: SerpApiResult, i: number) => {
           const url = new URL(r.link);
           const sourceName = url.hostname.replace(/^www\./, '');
           const rating: "High" | "Medium" | "Low" = "Medium";
-          // FIXED: Use 'date' property instead of non-existent 'publishedDate'
+          const snippet = r.snippet || 'No description available';
+          const publishedDate = r.date || new Date().toISOString();
+          
           return {
             id: `news_serp_${i}`,
             publisher: r.source || 'News Source',
             url: r.link,
-            quote: r.snippet || '',
+            quote: snippet,
             score: 65,
             credibilityScore: 65,
             relevanceScore: 70,
             type: 'news' as const,
             title: r.title,
-            snippet: r.snippet || '',
-            publishedDate: r.date, // FIXED: Changed from r.publishedDate to r.date
+            snippet: snippet,
+            publishedDate: publishedDate,
             source: {
               name: sourceName,
               url: url.origin,
@@ -640,7 +655,7 @@ export class TieredFactCheckService {
     const evidenceSummary = JSON.stringify(evidence.map(e => ({
       source: e.publisher,
       url: e.url,
-      quote: e.quote,
+      quote: e.quote || e.snippet || '',
       score: e.score
     })).slice(0, 15), null, 2);
 
@@ -664,7 +679,11 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 }
 `;
 
+    // FIXED: Handle possibly null return value
     const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey: process.env.GEMINI_API_KEY || '' });
+    if (!jsonString) {
+      throw new Error('Gemini returned null response');
+    }
     const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanedJson);
 
@@ -683,7 +702,9 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
     const unique: EvidenceItem[] = [];
 
     evidence.forEach(item => {
-      const key = item.url || `${item.publisher}-${item.quote.substring(0, 50)}`;
+      // FIXED: Handle possibly undefined quote
+      const quoteText = item.quote ?? item.snippet ?? '';
+      const key = item.url || `${item.publisher}-${quoteText.substring(0, 50)}`;
       const normalizedKey = key.toLowerCase().replace(/\/$/, '');
 
       if (!seen.has(normalizedKey)) {
@@ -694,236 +715,3 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 
     return unique;
   }
-
-  private shouldEscalate(phase: 1 | 2, result: TierResult): boolean {
-    if (phase === 1) {
-      return result.confidence < THRESHOLDS.phase1ToPhase2.minConfidence || result.evidence.length < THRESHOLDS.phase1ToPhase2.minEvidence;
-    } else {
-      const avgScore = result.evidence.length > 0
-        ? result.evidence.reduce((sum, e) => sum + e.score, 0) / result.evidence.length
-        : 0;
-
-      return result.confidence < THRESHOLDS.phase2ToPhase3.minConfidence ||
-        result.evidence.length < THRESHOLDS.phase2ToPhase3.minEvidence ||
-        avgScore < THRESHOLDS.phase2ToPhase3.minAvgScore;
-    }
-  }
-
-  private extractSmartQuery(text: string, maxLength: number): string {
-    const firstSentence = text.match(/^[^.!?]+[.!?]/)?.[0] || text;
-
-    if (firstSentence.length <= maxLength) {
-      return firstSentence.trim();
-    }
-
-    const truncated = firstSentence.substring(0, maxLength);
-    const lastSpace = truncated.lastIndexOf(' ');
-    return lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated;
-  }
-
-  private extractRecentDate(text: string): string {
-    const yearMatch = text.match(/\b20(2[0-9])\b/);
-    if (yearMatch) {
-      return `${yearMatch[0]}-01-01`;
-    }
-
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    return ninetyDaysAgo.toISOString().split('T')[0];
-  }
-
-  private detectClaimType(text: string): 'medical' | 'political' | 'scientific' | 'financial' | 'general' {
-    const lower = text.toLowerCase();
-
-    if (/vaccine|covid|virus|disease|treatment|medicine|health|cdc|who/i.test(lower)) return 'medical';
-    if (/president|election|vote|government|policy|congress|senate/i.test(lower)) return 'political';
-    if (/research|study|scientist|climate|global warming|experiment/i.test(lower)) return 'scientific';
-    if (/stock|economy|inflation|market|financial|investment|gdp/i.test(lower)) return 'financial';
-
-    return 'general';
-  }
-
-  private async performSpecializedSearch(text: string, claimType: string): Promise<{ evidence: EvidenceItem[], query: string }> {
-    const query = this.extractSmartQuery(text, 80);
-    const siteOperators = {
-      medical: 'site:cdc.gov OR site:who.int OR site:nih.gov',
-      political: 'site:factcheck.org OR site:politifact.com',
-      scientific: 'site:nature.com OR site:science.org OR site:arxiv.org',
-      financial: 'site:sec.gov OR site:federalreserve.gov',
-      general: ''
-    };
-
-    const searchQuery = `${query} ${siteOperators[claimType as keyof typeof siteOperators] || ''}`.trim();
-
-    try {
-      const results = await this.serpApi.search(searchQuery, 5);
-
-      const evidence = results.results.map((r: SerpApiResult, i) => {
-        const url = new URL(r.link);
-        const sourceName = url.hostname.replace(/^www\./, '');
-        const rating: "High" | "Medium" | "Low" = "Medium";
-        return {
-          id: `specialized_${i}`,
-          publisher: r.source || 'Unknown',
-          url: r.link,
-          title: r.title,
-          snippet: r.snippet || '',
-          credibilityScore: this.calculateSourceScore(r.source) + 10,
-          relevanceScore: 75,
-          source: {
-            name: sourceName,
-            url: url.origin,
-            credibility: {
-              rating: rating,
-              classification: 'Web Source',
-              warnings: [],
-            },
-          },
-          quote: r.snippet || '',
-          score: this.calculateSourceScore(r.source) + 10,
-          type: 'search_result' as const,
-          publishedDate: r.date // FIXED: Changed from r.publishedDate to r.date
-        };
-      });
-      return { evidence, query: searchQuery };
-    } catch (error) {
-      console.error('Specialized search failed:', error);
-      return { evidence: [], query: searchQuery };
-    }
-  }
-
-  private async fallbackBasicSearch(text: string): Promise<FactCheckReport> {
-    const query = this.extractSmartQuery(text, 100);
-    try {
-      const results = await this.serpApi.search(query, 10);
-      const evidence = results.results.slice(0, 8).map((r: SerpApiResult, i) => {
-        const url = new URL(r.link);
-        const sourceName = url.hostname.replace(/^www\./, '');
-        const rating: "High" | "Medium" | "Low" = "Medium";
-        return {
-          id: `fallback_${i}`,
-          publisher: r.source || 'Unknown',
-          url: r.link,
-          title: r.title,
-          snippet: r.snippet || '',
-          credibilityScore: this.calculateSourceScore(r.source),
-          relevanceScore: 65,
-          source: {
-            name: sourceName,
-            url: url.origin,
-            credibility: {
-              rating: rating,
-              classification: 'Web Source',
-              warnings: [],
-            },
-          },
-          quote: r.snippet || '',
-          score: this.calculateSourceScore(r.source),
-          type: 'search_result' as const,
-          publishedDate: r.date // FIXED: Changed from r.publishedDate to r.date
-        };
-      });
-
-      const avgScore = evidence.length > 0
-        ? Math.round(evidence.reduce((sum, e) => sum + e.score, 0) / evidence.length)
-        : 0;
-
-      const scoreBreakdown: ScoreBreakdown = {
-        finalScoreFormula: `${evidence.length} sources analyzed`,
-        metrics: [
-          {
-            name: 'Source Reliability',
-            score: avgScore,
-            weight: 1.0,
-            description: `${evidence.length} sources analyzed`,
-            reasoning: 'The reliability score is the average of all sources found in the fallback search.'
-          }
-        ],
-        confidenceIntervals: {
-          lowerBound: Math.max(0, avgScore - 15),
-          upperBound: Math.min(100, avgScore + 15)
-        }
-      };
-
-      return completeFactCheckReport({
-        id: `fallback_${Date.now()}`,
-        originalText: text,
-        finalVerdict: this.generateVerdict(avgScore),
-        finalScore: avgScore,
-        reasoning: `Fallback search found ${evidence.length} sources with average credibility of ${avgScore}%.`,
-        evidence,
-        enhancedClaimText: text,
-        scoreBreakdown: scoreBreakdown,
-        metadata: {
-          methodUsed: 'fallback-search',
-          processingTimeMs: 0,
-          apisUsed: ['serp-api'],
-          sourcesConsulted: {
-            total: evidence.length,
-            highCredibility: evidence.filter(e => e.score >= 75).length,
-            conflicting: 0
-          },
-          warnings: ['Pipeline failed - using fallback search']
-        }
-      });
-    } catch (error) {
-      throw new Error(`Fallback search failed: ${error instanceof Error ? error.message : 'Unknown'}`);
-    }
-  }
-
-  private calculateSourceScore(source: string): number {
-    const lower = (source || '').toLowerCase();
-    if (/reuters|ap\.org|apnews|bbc/i.test(lower)) return 85;
-    if (/factcheck|snopes|politifact/i.test(lower)) return 85;
-    if (/nytimes|washingtonpost|wsj|theguardian/i.test(lower)) return 75;
-    if (/\.gov|\.edu/i.test(lower)) return 80;
-    if (/cnn|abc|nbc|cbs/i.test(lower)) return 70;
-    if (/wikipedia/i.test(lower)) return 55;
-    if (/reddit|quora|twitter|facebook/i.test(lower)) return 30;
-
-    return 50;
-  }
-
-  private convertRatingToScore(rating: any): number {
-    if (!rating) return 50;
-
-    const textualRating = (rating.textualRating || '').toLowerCase();
-    if (textualRating.includes('true')) return 90;
-    if (textualRating.includes('mostly true')) return 75;
-    if (textualRating.includes('mixed')) return 50;
-    if (textualRating.includes('mostly false')) return 25;
-    if (textualRating.includes('false')) return 10;
-
-    if (rating.ratingValue && rating.bestRating) {
-      return Math.round((rating.ratingValue / rating.bestRating) * 100);
-    }
-
-    return 50;
-  }
-
-  private generateVerdict(score: number): FactVerdict {
-    if (score === 0) return 'UNVERIFIED';
-    if (score >= 85) return 'TRUE';
-    if (score >= 70) return 'Mostly True' as FactVerdict;
-    if (score >= 50) return 'MIXED';
-    if (score >= 30) return 'Mostly False' as FactVerdict;
-    return 'FALSE';
-  }
-
-  private async uploadReportToBlob(report: FactCheckReport): Promise<void> {
-    try {
-      const reportId = report.id || `report_${Date.now()}`;
-      const storedReport: StoredReport = {
-        id: reportId,
-        originalText: report.originalText,
-        report: report,
-        corrections: [],
-        timestamp: new Date().toISOString(),
-      };
-      await this.blobStorage.saveReport(storedReport);
-      console.log(`✅ Successfully uploaded report ${reportId} to blob storage.`);
-    } catch (error) {
-      console.error(`❌ Failed to upload report to blob storage:`, error);
-    }
-  }
-}
