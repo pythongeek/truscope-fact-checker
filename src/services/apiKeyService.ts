@@ -7,58 +7,93 @@ export interface ApiKeyConfig {
   searchId: string;            // Google Search Engine ID
 }
 
-const STORAGE_KEY = 'truscope_api_keys';
+const STORAGE_key = 'truscope_api_keys';
 
-// FIX: Encapsulated all API key functions into a single, exportable service object.
-export const apiKeyService = {
-  getApiKeys(): Partial<ApiKeyConfig> {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return {};
-      const parsed = JSON.parse(stored);
-      console.log('📥 API keys loaded from storage');
-      return parsed;
-    } catch (error) {
-      console.error('Failed to load API keys:', error);
-      return {};
-    }
-  },
+/**
+ * Get stored API keys from localStorage
+ */
+export function getApiKeys(): Partial<ApiKeyConfig> {
+  try {
+    const stored = localStorage.getItem(STORAGE_key);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored);
+    console.log('📥 API keys loaded from storage');
+    return parsed;
+  } catch (error) {
+    console.error('Failed to load API keys:', error);
+    return {};
+  }
+}
 
-  getGeminiApiKey(): string {
-    const keys = this.getApiKeys();
-    return keys.gemini || '';
-  },
+/**
+ * Save API keys to localStorage
+ */
+export function saveApiKeys(keys: Partial<ApiKeyConfig>): void {
+  try {
+    const existing = getApiKeys();
+    const updated = { ...existing, ...keys };
+    localStorage.setItem(STORAGE_key, JSON.stringify(updated));
+    console.log('💾 API keys saved to storage');
+  } catch (error) {
+    console.error('Failed to save API keys:', error);
+    throw new Error('Failed to save API keys. Please try again.');
+  }
+}
 
-  getGeminiModel(): string {
-    const keys = this.getApiKeys();
-    return keys.geminiModel || 'gemini-1.5-flash-latest';
-  },
+/**
+ * Get Gemini API key (backward compatible)
+ */
+export function getGeminiApiKey(): string {
+  const keys = getApiKeys();
+  return keys.gemini || '';
+}
 
-  saveApiKeys(keys: Partial<ApiKeyConfig>): void {
-    try {
-      const existing = this.getApiKeys();
-      const updated = { ...existing, ...keys };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      console.log('💾 API keys saved to storage');
-    } catch (error) {
-      console.error('Failed to save API keys:', error);
-      throw new Error('Failed to save API keys. Please try again.');
-    }
-  },
+/**
+ * Get Gemini model (backward compatible)
+ */
+export function getGeminiModel(): string {
+  const keys = getApiKeys();
+  return keys.geminiModel || 'gemini-1.5-flash-latest';
+}
 
-  // NOTE: All other functions from the original file are preserved here.
-  // No features have been removed.
-  clearApiKeys(): void {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      console.log('🗑️ API keys cleared from storage');
-    } catch (error) {
-      console.error('Failed to clear API keys:', error);
-    }
-  },
+/**
+ * Get Search API key (backward compatible)
+ */
+export function getSearchApiKey(): string {
+  const keys = getApiKeys();
+  return keys.search || '';
+}
 
-  hasApiKeys(): boolean {
-    const keys = this.getApiKeys();
-    return !!(keys.gemini && keys.factCheck && keys.search && keys.searchId);
-  },
+/**
+ * Get Search Engine ID (backward compatible)
+ */
+export function getSearchId(): string {
+  const keys = getApiKeys();
+  return keys.searchId || '';
+}
+
+/**
+ * Test if a Gemini API key is valid
+ */
+export const testGeminiKey = async (apiKey: string): Promise<boolean> => {
+  if (!apiKey) {
+    return false;
+  }
+  const model = 'gemini-pro';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: 'hello' }] }],
+      }),
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error validating Gemini API key:', error);
+    return false;
+  }
 };
