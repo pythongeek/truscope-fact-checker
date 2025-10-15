@@ -14,10 +14,8 @@ import {
 import HistoryView from './HistoryView';
 import TrendingMisinformation from './TrendingMisinformation';
 import SettingsModal from './SettingsModal';
-// Import the useAppState hook to connect to the global state
 import { useAppState } from '../contexts/AppStateContext';
 
-// This component remains unchanged
 const formatCitation = (source: any, style: string = 'ap', num?: number) => {
     const publisher = source.publisher || 'Unknown';
     const date = source.publishedDate || new Date().toISOString().split('T')[0];
@@ -31,9 +29,7 @@ const formatCitation = (source: any, style: string = 'ap', num?: number) => {
     return `${publisher}, ${date}`;
 };
 
-
 export default function TruScopeJournalismPlatform() {
-    // Get the setCurrentReport function from our global context
     const { setCurrentReport } = useAppState();
 
     const [activeTab, setActiveTab] = useState<'analyze' | 'report' | 'edit'>('analyze');
@@ -255,8 +251,8 @@ export default function TruScopeJournalismPlatform() {
             }
 
             setFactCheckResult(normalizedResult);
-            // *** THIS IS THE FIX: Set the report in the global state to trigger Verity ***
-            setCurrentReport(normalizedResult);
+            // ✅ CRITICAL FIX: Pass the original content to trigger Verity with full context
+            setCurrentReport(normalizedResult, content);
             setActiveTab('report');
 
         } catch (error: any) {
@@ -325,16 +321,13 @@ export default function TruScopeJournalismPlatform() {
 
     const handleSelectReport = (report: FactCheckReport, claimText: string) => {
         setFactCheckResult(report);
-        // *** ALSO TRIGGER VERITY WHEN SELECTING FROM HISTORY ***
-        setCurrentReport(report);
+        // ✅ CRITICAL FIX: Pass the claim text as the original content when selecting from history
+        setCurrentReport(report, claimText);
         setContent(claimText);
         setActiveTab('report');
         setCurrentView('checker');
     };
 
-    // ... The rest of your component's JSX remains the same
-    // I have omitted it for brevity, but it should be included here in your actual file.
-    // No changes are needed in the return (...) part of your component.
     return (
       <div className="flex min-h-screen bg-gray-50">
         <Sidebar
@@ -478,8 +471,6 @@ export default function TruScopeJournalismPlatform() {
     );
 }
 
-// All helper components like TabNavigation, AnalysisPanel, etc. remain unchanged.
-// I have omitted them for brevity, but they should be included here in your actual file.
 function TabNavigation({ activeTab, onTabChange, hasResult, correctionCount }: any) {
     const tabs = [
       { id: 'analyze', label: 'Analyze Content', icon: Search, disabled: false },
@@ -632,7 +623,6 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
       return 'text-red-700 bg-red-100 border-red-300';
     };
   
-    // Use normalized field names with fallbacks
     const displayScore = result.finalScore || result.final_score || result.overallAuthenticityScore || 0;
     const displayVerdict = result.finalVerdict || result.final_verdict || result.claimVerifications?.[0]?.status || 'UNVERIFIED';
   
@@ -725,13 +715,21 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center space-x-3">
                     <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                      evidence.score >= 75 ? 'bg-green-100' : 'bg-yellow-100'
+                      evidence.credibilityScore >= 75 ? 'bg-green-100' : 'bg-yellow-100'
                     }`}>
-                      <Award className={`w-6 h-6 ${evidence.score >= 75 ? 'text-green-600' : 'text-yellow-600'}`} />
+                      <Award className={`w-6 h-6 ${evidence.credibilityScore >= 75 ? 'text-green-600' : 'text-yellow-600'}`} />
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-900">{evidence.publisher}</h4>
-                      <p className="text-sm text-gray-600">Credibility: {evidence.score}/100</p>
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <span>Credibility: {evidence.credibilityScore}/100</span>
+                        {evidence.publicationDate && (
+                          <>
+                            <span>•</span>
+                            <span>{new Date(evidence.publicationDate).toLocaleDateString()}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {evidence.url && (
@@ -746,7 +744,18 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
                     </a>
                   )}
                 </div>
-                <p className="text-gray-700 text-sm border-l-4 border-gray-300 pl-4">"{evidence.quote.substring(0, 200)}"</p>
+                <p className="text-gray-700 text-sm border-l-4 border-gray-300 pl-4">
+                  "{(evidence.snippet || evidence.quote || '').substring(0, 200)}{(evidence.snippet || evidence.quote || '').length > 200 ? '...' : ''}"
+                </p>
+                <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+                  <span className="flex items-center space-x-1">
+                    <Info className="w-3 h-3" />
+                    <span>Type: {evidence.type}</span>
+                  </span>
+                  {evidence.relevanceScore && (
+                    <span>Relevance: {evidence.relevanceScore}/100</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
