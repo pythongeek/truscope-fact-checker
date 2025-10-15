@@ -21,16 +21,6 @@ interface AssistantContext {
   userQuery: string;
 }
 
-interface AssistantResponse {
-  text: string;
-  suggestedActions?: Array<{
-    action: string;
-    description: string;
-    data?: any;
-  }>;
-  citations?: string[];
-}
-
 export const factCheckAssistantService = {
   /**
    * Main entry point for assistant responses
@@ -166,6 +156,13 @@ Claim ${idx + 1}: "${claim.claimText || claim.claim}"
       })
       .join('\n\n');
 
+    // Safely get category rating info
+    const categoryRating = report.categoryRating || report.category_rating;
+    const categoryInfo = categoryRating ? `
+Category Rating: ${categoryRating.category || 'Not rated'}
+Rating Reasoning: ${categoryRating.reasoning || 'No reasoning provided'}
+` : 'Category Rating: Not available';
+
     // Build comprehensive context
     return `
 === ORIGINAL CONTENT ===
@@ -176,8 +173,7 @@ Overall Score: ${report.finalScore || report.final_score || 0}/100
 Verdict: ${report.finalVerdict || report.final_verdict || 'Unknown'}
 Reasoning: ${report.reasoning || report.summary || 'No reasoning provided'}
 
-Category Rating: ${report.categoryRating?.category || report.category_rating?.category || 'Not rated'}
-${report.categoryRating?.description || report.category_rating?.description || ''}
+${categoryInfo}
 
 === CLAIMS ANALYZED ===
 ${claimsAnalysis || 'No claims analyzed'}
@@ -409,7 +405,7 @@ YOUR RESPONSE:`;
    * Handle evidence explanation requests
    */
   async handleEvidenceExplanation(context: AssistantContext): Promise<string> {
-    const { userQuery, report } = context;
+    const { userQuery } = context;
     const detailedContext = this.buildDetailedContext(context);
 
     const prompt = `You are Verity, helping explain the evidence and sources used in the fact-check.
@@ -466,7 +462,7 @@ What would you like me to investigate?`;
    * Handle editorial review requests
    */
   async handleEditorialReview(context: AssistantContext): Promise<string> {
-    const { originalContent, report } = context;
+    const { originalContent } = context;
     const detailedContext = this.buildDetailedContext(context);
 
     const prompt = `You are Verity, an expert editorial reviewer with journalism expertise. Provide a comprehensive editorial assessment.
