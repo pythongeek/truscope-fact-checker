@@ -6,15 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import DashboardSkeleton from './components/DashboardSkeleton';
 import { FactCheckAssistant } from './components/FactCheckAssistant';
 
-// Lazy-load the main platform component for better initial performance
 const TruScopeJournalismPlatform = React.lazy(() => import('./components/TruScopeJournalismPlatform'));
 
-/**
- * A new component to render the main application content and the AI assistant.
- * This allows us to access the AppStateContext to control the assistant's visibility.
- */
 const AppContent: React.FC = () => {
-  const { currentReport, isAssistantOpen, closeAssistant } = useAppState();
+  const { currentReport, isAssistantOpen, closeAssistant, originalContent } = useAppState();
 
   return (
     <>
@@ -24,6 +19,7 @@ const AppContent: React.FC = () => {
           report={currentReport}
           isOpen={isAssistantOpen}
           onClose={closeAssistant}
+          originalContent={originalContent || ''}
         />
       )}
     </>
