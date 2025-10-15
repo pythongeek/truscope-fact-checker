@@ -1,3 +1,4 @@
+// src/components/FactCheckAssistant.tsx
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { FactCheckReport, ChatMessage } from '@/types';
 import { factCheckAssistantService } from '../services/factCheckAssistantService';
@@ -46,7 +47,7 @@ export const FactCheckAssistant: React.FC<FactCheckAssistantProps> = ({ report, 
         report,
         newMessages,
         currentQuery,
-        originalContent
+        originalContent // Pass the originalContent to the service
       );
 
       const modelMessage: ChatMessage = {
