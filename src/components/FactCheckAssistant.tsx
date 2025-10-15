@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { FactCheckReport, ChatMessage } from '@/types';
 import { factCheckAssistantService } from '../services/factCheckAssistantService';
-import ReactMarkdown from 'react-markdown';
 
 interface FactCheckAssistantProps {
   report: FactCheckReport;
@@ -20,6 +19,141 @@ const QUICK_ACTIONS = [
   { label: '⭐ Editorial Review', query: 'Provide an editorial review of my content' },
   { label: '🔬 Verify Claim', query: 'Help me verify a specific claim' }
 ];
+
+// Simple markdown renderer component
+const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
+  const formatMarkdown = (text: string): JSX.Element[] => {
+    const lines = text.split('\n');
+    const elements: JSX.Element[] = [];
+    let listItems: string[] = [];
+    let listType: 'ul' | 'ol' | null = null;
+    let inCodeBlock = false;
+    let codeLines: string[] = [];
+
+    const flushList = (index: number) => {
+      if (listItems.length > 0 && listType) {
+        const ListTag = listType;
+        elements.push(
+          <ListTag key={`list-${index}`} className="list-disc pl-5 space-y-1 my-2">
+            {listItems.map((item, i) => (
+              <li key={i} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
+            ))}
+          </ListTag>
+        );
+        listItems = [];
+        listType = null;
+      }
+    };
+
+    const flushCodeBlock = (index: number) => {
+      if (codeLines.length > 0) {
+        elements.push(
+          <pre key={`code-${index}`} className="bg-gray-100 p-3 rounded text-sm font-mono overflow-x-auto my-2">
+            <code>{codeLines.join('\n')}</code>
+          </pre>
+        );
+        codeLines = [];
+      }
+    };
+
+    const formatInline = (text: string): string => {
+      return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
+        .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">$1</a>');
+    };
+
+    lines.forEach((line, index) => {
+      // Handle code blocks
+      if (line.trim().startsWith('```')) {
+        if (inCodeBlock) {
+          flushCodeBlock(index);
+          inCodeBlock = false;
+        } else {
+          flushList(index);
+          inCodeBlock = true;
+        }
+        return;
+      }
+
+      if (inCodeBlock) {
+        codeLines.push(line);
+        return;
+      }
+
+      // Handle headers
+      if (line.startsWith('### ')) {
+        flushList(index);
+        elements.push(
+          <h3 key={index} className="text-md font-bold mt-3 mb-2">
+            {line.substring(4)}
+          </h3>
+        );
+        return;
+      }
+
+      if (line.startsWith('## ')) {
+        flushList(index);
+        elements.push(
+          <h2 key={index} className="text-lg font-bold mt-4 mb-2">
+            {line.substring(3)}
+          </h2>
+        );
+        return;
+      }
+
+      // Handle lists
+      const ulMatch = line.match(/^[\-\*]\s+(.+)/);
+      const olMatch = line.match(/^\d+\.\s+(.+)/);
+
+      if (ulMatch) {
+        if (listType !== 'ul') {
+          flushList(index);
+          listType = 'ul';
+        }
+        listItems.push(ulMatch[1]);
+        return;
+      }
+
+      if (olMatch) {
+        if (listType !== 'ol') {
+          flushList(index);
+          listType = 'ol';
+        }
+        listItems.push(olMatch[1]);
+        return;
+      }
+
+      // Flush list if we encounter non-list content
+      if (line.trim() !== '') {
+        flushList(index);
+      }
+
+      // Handle regular paragraphs
+      if (line.trim() !== '') {
+        elements.push(
+          <p
+            key={index}
+            className="my-2"
+            dangerouslySetInnerHTML={{ __html: formatInline(line) }}
+          />
+        );
+      } else if (elements.length > 0) {
+        // Add spacing for empty lines
+        elements.push(<div key={`space-${index}`} className="h-2" />);
+      }
+    });
+
+    // Flush any remaining lists or code blocks
+    flushList(lines.length);
+    flushCodeBlock(lines.length);
+
+    return elements;
+  };
+
+  return <div className="text-sm text-gray-800">{formatMarkdown(content)}</div>;
+};
 
 export const FactCheckAssistant: React.FC<FactCheckAssistantProps> = ({ 
   report, 
@@ -77,7 +211,7 @@ export const FactCheckAssistant: React.FC<FactCheckAssistantProps> = ({
     const currentQuery = query;
     setQuery('');
     setIsLoading(true);
-    setShowQuickActions(false); // Hide quick actions after first query
+    setShowQuickActions(false);
 
     try {
       const response = await factCheckAssistantService.getAssistantResponse(
@@ -110,7 +244,6 @@ export const FactCheckAssistant: React.FC<FactCheckAssistantProps> = ({
   const handleQuickAction = (actionQuery: string) => {
     setQuery(actionQuery);
     setShowQuickActions(false);
-    // Auto-submit after brief delay for UX
     setTimeout(() => {
       const form = document.getElementById('assistant-form') as HTMLFormElement;
       form?.requestSubmit();
@@ -209,38 +342,7 @@ export const FactCheckAssistant: React.FC<FactCheckAssistantProps> = ({
                   {msg.role === 'user' ? (
                     <p className="text-sm">{msg.content}</p>
                   ) : (
-                    <div className="prose prose-sm max-w-none">
-                      <ReactMarkdown
-                        components={{
-                          // Custom rendering for links
-                          a: ({ node, ...props }) => (
-                            <a 
-                              {...props} 
-                              className="text-blue-600 hover:text-blue-800 underline" 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                            />
-                          ),
-                          // Custom rendering for code blocks
-                          code: ({ node, inline, ...props }) => (
-                            inline ? (
-                              <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono" {...props} />
-                            ) : (
-                              <code className="block bg-gray-100 p-2 rounded text-sm font-mono overflow-x-auto" {...props} />
-                            )
-                          ),
-                          // Custom rendering for lists
-                          ul: ({ node, ...props }) => (
-                            <ul className="list-disc pl-5 space-y-1" {...props} />
-                          ),
-                          ol: ({ node, ...props }) => (
-                            <ol className="list-decimal pl-5 space-y-1" {...props} />
-                          ),
-                        }}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
+                    <MarkdownContent content={msg.content} />
                   )}
                   <p className="text-xs mt-2 opacity-60">
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
