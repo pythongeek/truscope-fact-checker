@@ -13,7 +13,9 @@ interface AppStateContextType {
   // AI Assistant ("Verity") state and functions
   isAssistantOpen: boolean;
   currentReport: FactCheckReport | null;
-  setCurrentReport: (report: FactCheckReport | null) => void;
+  originalContent: string | null; // ADDED: To store the article text for the assistant
+  // The function now accepts the report AND the original content
+  setCurrentReport: (report: FactCheckReport | null, content?: string) => void;
   openAssistant: () => void;
   closeAssistant: () => void;
 }
@@ -23,27 +25,29 @@ const AppStateContext = createContext<AppStateContextType | undefined>(undefined
 
 /**
  * Provides the global application state to all child components.
- * This now includes state for managing the main view and the AI assistant.
  */
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentView, setCurrentView] = useState<View>('checker');
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [currentReport, _setCurrentReport] = useState<FactCheckReport | null>(null);
+  const [originalContent, setOriginalContent] = useState<string | null>(null); // ADDED state for original content
 
-  // Function to open the assistant's chat window
   const openAssistant = useCallback(() => setIsAssistantOpen(true), []);
-
-  // Function to close the assistant's chat window
   const closeAssistant = useCallback(() => setIsAssistantOpen(false), []);
 
   /**
-   * Sets the current fact-check report and automatically opens the assistant.
-   * This is the key function that will make Verity appear after a check is complete.
+   * UPDATED: Sets the current fact-check report and the original content it's based on.
+   * This automatically opens the assistant with all the necessary context.
    */
-  const setCurrentReport = useCallback((report: FactCheckReport | null) => {
+  const setCurrentReport = useCallback((report: FactCheckReport | null, content?: string) => {
     _setCurrentReport(report);
     if (report) {
+      // Also store the content that was fact-checked
+      setOriginalContent(content || null);
       openAssistant();
+    } else {
+      // Clear the content when the report is cleared
+      setOriginalContent(null);
     }
   }, [openAssistant]);
 
@@ -53,6 +57,7 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setCurrentView,
     isAssistantOpen,
     currentReport,
+    originalContent, // PROVIDE originalContent in the context
     setCurrentReport,
     openAssistant,
     closeAssistant,
