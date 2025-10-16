@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getApiKeys, saveApiKeys } from '../services/apiKeyService';
-import { fetchAvailableModels } from '../services/geminiService';
 import { GoogleFactCheckService } from '../services/googleFactCheckService';
 import { ApiKeys, FactCheckReport } from '@/types';
 import Sidebar from './Sidebar';
@@ -47,8 +46,6 @@ export default function TruScopeJournalismPlatform() {
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-    const [availableModels, setAvailableModels] = useState<string[]>([]);
-    const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [settings, setSettings] = useState<{ apiKeys: ApiKeys }>({ apiKeys: {} });
 
     const handleNavigate = (view: 'checker' | 'history' | 'trending') => {
@@ -69,55 +66,11 @@ export default function TruScopeJournalismPlatform() {
         checkAPIAvailability();
     }, []);
 
-    const loadModels = useCallback(async () => {
-        const geminiKey = settings.apiKeys.gemini;
-
-        if (!geminiKey || geminiKey.trim() === '') {
-            console.log('ℹ️ No Gemini API key - using fallback models');
-            setAvailableModels([
-                'gemini-2.0-flash-exp',
-                'gemini-1.5-flash-latest',
-                'gemini-1.5-pro-latest',
-                'gemini-1.5-flash',
-                'gemini-pro'
-            ]);
-            return;
-        }
-
-        setIsLoadingModels(true);
-        console.log('🔄 Loading available Gemini models...');
-
-        try {
-            const models = await fetchAvailableModels(geminiKey);
-            setAvailableModels(models);
-            console.log(`✅ Loaded ${models.length} models`);
-        } catch (e: any) {
-            console.error('❌ Failed to load models:', e.message);
-            setAvailableModels([
-                'gemini-2.0-flash-exp',
-                'gemini-1.5-flash-latest',
-                'gemini-1.5-pro-latest',
-                'gemini-1.5-flash',
-                'gemini-pro'
-            ]);
-        } finally {
-            setIsLoadingModels(false);
-        }
-    }, [settings.apiKeys.gemini]);
-
-    useEffect(() => {
-        loadModels();
-    }, [loadModels]);
-
     const handleSettingsSave = (newKeys: any) => {
         console.log('💾 Saving API keys...');
         saveApiKeys(newKeys);
         setSettings({ apiKeys: newKeys });
         setIsSettingsModalOpen(false);
-
-        if (newKeys.gemini !== settings.apiKeys.gemini) {
-            setTimeout(() => loadModels(), 500);
-        }
     };
 
     const checkAPIAvailability = async () => {
@@ -464,8 +417,6 @@ export default function TruScopeJournalismPlatform() {
           onClose={() => setIsSettingsModalOpen(false)}
           onSave={handleSettingsSave}
           currentKeys={settings.apiKeys}
-          availableModels={availableModels}
-          isLoadingModels={isLoadingModels}
         />
       </div>
     );

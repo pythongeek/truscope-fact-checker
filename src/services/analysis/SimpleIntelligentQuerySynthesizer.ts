@@ -1,6 +1,6 @@
 // src/services/analysis/SimpleIntelligentQuerySynthesizer.ts
 
-import { geminiService } from '../geminiService';
+import { vertexAiService } from '../vertexAiService';
 
 export interface SynthesizedQueries {
   keywordQuery: string;
@@ -31,7 +31,7 @@ export const simpleIntelligentQuerySynthesizer = {
     `;
 
     try {
-      const result = await geminiService.generateText(prompt);
+      const result = await vertexAiService.generateText(prompt);
       const parsedResult: SynthesizedQueries = JSON.parse(result);
       return parsedResult;
     } catch (error) {
