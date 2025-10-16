@@ -13,7 +13,7 @@ import {
   CorrectionSuggestion
 } from '@/types/advancedEditor';
 import { getApiKeys } from './apiKeyService';
-import { EnhancedFactCheckService } from './EnhancedFactCheckService';
+import { EnhancedFactCheckService } from './EnhancedFactCheckService.js';
 
 export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;
