@@ -11,10 +11,6 @@ import {
   FactCheckSegment,
   FactCheckAnalysis,
 } from '@/types/advancedEditor';
-// FIX: Corrected the import path to match the lowercase filename.
-import { EnhancedFactCheckService } from './enhancedFactCheckService';
-import { vertexAiService } from './vertexAiService';
-import { logger } from '../utils/logger';
 
 export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;

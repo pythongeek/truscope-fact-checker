@@ -14,7 +14,6 @@ const initializeVertexAI = () => {
   if (!project || !location) {
     throw new Error('Google Cloud project ID and location must be set in environment variables.');
   }
-  
   // No need to pass credentials explicitly if the service account key JSON is set
   // via the GOOGLE_APPLICATION_CREDENTIALS_JSON env var (or GCLOUD_SERVICE_ACCOUNT_KEY_JSON).
   // The library will automatically pick it up.
@@ -50,8 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const result = await generativeModel.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
 
     return res.status(200).json({ text });
 

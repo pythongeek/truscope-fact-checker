@@ -49,25 +49,6 @@ export default function SettingsModal({
         </div>
 
         <div className="space-y-6">
-          {/* Gemini API Key */}
-          <div>
-            <label htmlFor="gemini" className="block text-sm font-medium text-gray-700 mb-1">
-              Gemini API Key
-            </label>
-            <input
-              type="password"
-              id="gemini"
-              name="gemini"
-              value={apiKeys.gemini || ''}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter your Google AI Studio Key"
-            />
-             <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1">
-              Get your API key from AI Studio
-            </a>
-          </div>
-
           {/* Google Fact Check API Key */}
           <div>
             <label htmlFor="factCheck" className="block text-sm font-medium text-gray-700 mb-1">
