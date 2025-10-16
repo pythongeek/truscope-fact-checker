@@ -21,7 +21,7 @@ import { BlobStorageService, StoredReport } from './blobStorage';
 import { EnhancedFactCheckService } from './EnhancedFactCheckService';
 import { generateSHA256 } from '../utils/hashUtils';
 import { PerformanceMonitor } from './performanceMonitor';
-import { generateTextWithFallback } from './geminiService';
+import { vertexAiService } from './vertexAiService';
 import { simpleIntelligentQuerySynthesizer } from './analysis/SimpleIntelligentQuerySynthesizer';
 import { logger } from '../utils/logger';
 
@@ -161,10 +161,9 @@ export class TieredFactCheckService {
       let claimVerifications: ClaimVerificationResult[];
       try {
         // FIX #2: Provide default empty string for apiKey to avoid passing undefined
-        const apiKey = process.env.GEMINI_API_KEY || '';
-        const analysisResultJson = await generateTextWithFallback(analysisPrompt, { apiKey, maxOutputTokens: 2048 });
+        const analysisResultJson = await vertexAiService.generateText(analysisPrompt, undefined, { maxOutputTokens: 2048 });
         if (!analysisResultJson) {
-          throw new Error('Gemini returned null response');
+          throw new Error('Vertex AI returned null response');
         }
         const cleanedJson = analysisResultJson.replace(/```json|```/g, '').trim();
         const analysisResult = JSON.parse(cleanedJson);
@@ -680,10 +679,9 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
 }
 `;
 
-    const apiKey = process.env.GEMINI_API_KEY || '';
-    const jsonString = await generateTextWithFallback(prompt, { maxOutputTokens: 1500, apiKey });
+    const jsonString = await vertexAiService.generateText(prompt, undefined, { maxOutputTokens: 1500 });
     if (!jsonString) {
-      throw new Error('Gemini returned null response');
+      throw new Error('Vertex AI returned null response');
     }
     const cleanedJson = jsonString.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(cleanedJson);

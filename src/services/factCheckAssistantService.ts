@@ -1,5 +1,5 @@
 // src/services/factCheckAssistantService.ts
-import { geminiService } from './geminiService';
+import { vertexAiService } from './vertexAiService';
 import { FactCheckReport, ChatMessage, ClaimVerification, EvidenceItem } from '@/types';
 
 // Assistant capabilities enumeration
@@ -242,7 +242,7 @@ INSTRUCTIONS:
 
 YOUR RESPONSE:`;
 
-    return await geminiService.generateText(prompt);
+    return await vertexAiService.generateText(prompt);
   },
 
   /**
@@ -283,7 +283,7 @@ If the content is already accurate, say so and suggest minor improvements for cl
 
 YOUR RESPONSE:`;
 
-    const response = await geminiService.generateText(prompt);
+    const response = await vertexAiService.generateText(prompt);
     
     return `${response}\n\n💡 **Tip:** Once you review these corrections, I can help you apply them automatically or generate a fully corrected version of your content.`;
   },
@@ -312,7 +312,7 @@ Include:
 
 YOUR RESPONSE:`;
 
-    const response = await geminiService.generateText(prompt);
+    const response = await vertexAiService.generateText(prompt);
     
     return `${response}\n\n💡 **Ready to generate?** I can create the complete Schema.org markup with proper formatting when you're ready. Just say "generate the schema" or "create schema markup".`;
   },
@@ -356,7 +356,7 @@ Format:
 
 YOUR RESPONSE:`;
 
-    return await geminiService.generateText(prompt);
+    return await vertexAiService.generateText(prompt);
   },
 
   /**
@@ -396,7 +396,7 @@ Format your response as:
 
 YOUR RESPONSE:`;
 
-    const response = await geminiService.generateText(prompt);
+    const response = await vertexAiService.generateText(prompt);
     
     return `${response}\n\n💡 **Need more evidence?** I can conduct additional research using news sources and search APIs if needed. Just ask!`;
   },
@@ -426,7 +426,7 @@ Be specific and cite source numbers [1], [2], etc.
 
 YOUR RESPONSE:`;
 
-    return await geminiService.generateText(prompt);
+    return await vertexAiService.generateText(prompt);
   },
 
   /**
@@ -503,6 +503,6 @@ Provide specific, actionable feedback with evidence citations.
 
 YOUR RESPONSE:`;
 
-    return await geminiService.generateText(prompt);
+    return await vertexAiService.generateText(prompt);
   }
 };

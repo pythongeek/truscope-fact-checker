@@ -10,8 +10,6 @@ interface SettingsModalProps {
   onClose: () => void;
   onSave: (keys: ApiKeys) => void;
   currentKeys: ApiKeys;
-  availableModels: string[];
-  isLoadingModels: boolean;
 }
 
 export default function SettingsModal({
@@ -19,8 +17,6 @@ export default function SettingsModal({
   onClose,
   onSave,
   currentKeys,
-  availableModels,
-  isLoadingModels,
 }: SettingsModalProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeys>(currentKeys);
 
@@ -70,40 +66,6 @@ export default function SettingsModal({
              <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline mt-1">
               Get your API key from AI Studio
             </a>
-          </div>
-
-          {/* Gemini Model Dropdown */}
-          <div>
-            <label htmlFor="geminiModel" className="block text-sm font-medium text-gray-700 mb-1">
-              Gemini Model
-            </label>
-            <div className="relative">
-              <select
-                id="geminiModel"
-                name="geminiModel"
-                value={apiKeys.geminiModel || ''}
-                onChange={handleInputChange}
-                disabled={isLoadingModels || !apiKeys.gemini}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 appearance-none disabled:bg-gray-100"
-              >
-                {isLoadingModels ? (
-                  <option>Loading models...</option>
-                ) : (
-                  <>
-                    {availableModels.length > 0 ? (
-                      availableModels.map(model => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))
-                    ) : (
-                      <option>Enter Gemini key to see models</option>
-                    )}
-                  </>
-                )}
-              </select>
-              {isLoadingModels && <Loader className="animate-spin absolute right-3 top-2.5 text-gray-400" size={20}/>}
-            </div>
           </div>
 
           {/* Google Fact Check API Key */}
