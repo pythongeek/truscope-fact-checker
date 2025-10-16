@@ -11,9 +11,8 @@ import {
   FactCheckSegment,
   FactCheckAnalysis,
 } from '@/types/advancedEditor';
-// FIX 1: Corrected the import path to match the actual camelCase filename.
+// FIX: Corrected the import path to match the lowercase filename.
 import { EnhancedFactCheckService } from './enhancedFactCheckService';
-// CHANGE: We now import our new, secure Vertex AI service.
 import { vertexAiService } from './vertexAiService';
 import { logger } from '../utils/logger';
 
@@ -21,7 +20,7 @@ export class AutoEditorIntegrationService {
   private static instance: AutoEditorIntegrationService;
   private factCheckService: EnhancedFactCheckService;
   private maxRetries = 3;
-  private baseDelay = 1000; // 1 second
+  private baseDelay = 1000;
 
   private constructor() {
     this.factCheckService = new EnhancedFactCheckService();
@@ -139,7 +138,7 @@ export class AutoEditorIntegrationService {
       confidence: this.calculateConfidence(analysis, changes),
     };
   }
-
+    
   private calculateOptimalTokens(originalText: string, mode: EditorMode): number {
     const baseTokens = Math.ceil(originalText.length / 3);
     const modeMultipliers: Record<EditorMode, number> = {
@@ -152,7 +151,7 @@ export class AutoEditorIntegrationService {
     };
     const multiplier = modeMultipliers[mode] || 1.5;
     const estimatedOutputTokens = Math.ceil(baseTokens * multiplier);
-    const maxTokens = Math.min(estimatedOutputTokens, 8192); // Increased limit for modern models
+    const maxTokens = Math.min(estimatedOutputTokens, 8192);
     logger.info(`💰 Token estimate - Input: ~${baseTokens}, Output: ~${estimatedOutputTokens}, Max: ${maxTokens}`);
     return maxTokens;
   }
@@ -223,7 +222,7 @@ Provide ONLY the corrected text. Do not include explanations or comments.`;
 
   private extractCorrectedText(response: string): string {
     let cleaned = response.trim();
-    cleaned = cleaned.replace(/```[\s\S]*?```/g, ''); // Remove markdown code blocks
+    cleaned = cleaned.replace(/```[\s\S]*?```/g, '');
     const prefixes = ['Corrected text:', 'Here is the corrected text:', 'Here\'s the improved version:'];
     for (const prefix of prefixes) {
       if (cleaned.toLowerCase().startsWith(prefix.toLowerCase())) {
@@ -234,7 +233,6 @@ Provide ONLY the corrected text. Do not include explanations or comments.`;
   }
 
   private analyzeChanges(original: string, corrected: string, analysis: FactCheckAnalysis): ContentChange[] {
-    // This is a simplified diff analysis. For production, a library like 'diff' would be more robust.
     const changes: ContentChange[] = [];
     if (original === corrected) return changes;
 
@@ -303,7 +301,6 @@ Your task is to return a valid JSON array of objects. Each object represents a s
       logger.error("Error generating suggestions with Vertex AI:", error);
       return [
         {
-          // FIX 2: Added the required 'id' property to satisfy the type.
           id: "ai-error-fallback",
           originalText: "AI analysis failed",
           suggestedText: "Could not generate suggestions",
