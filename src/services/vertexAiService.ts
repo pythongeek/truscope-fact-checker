@@ -1,11 +1,10 @@
 // src/services/vertexAiService.ts
 
 import axios, { AxiosError } from 'axios';
-import { logger } from '../utils/logger'; // Assuming you have a logger utility
+import { GoogleAuth } from 'google-auth-library';
+import { logger } from '../utils/logger';
 
-/**
- * Configuration options for the generative model.
- */
+// --- Interfaces remain the same ---
 export interface GenerationConfig {
   temperature?: number;
   maxOutputTokens?: number;
@@ -13,54 +12,59 @@ export interface GenerationConfig {
   topK?: number;
 }
 
-/**
- * Safety settings to filter out harmful content.
- */
 export interface SafetySetting {
-  category: string; // e.g., 'HARM_CATEGORY_HARASSMENT'
-  threshold: string; // e.g., 'BLOCK_MEDIUM_AND_ABOVE'
-}
-
-/**
- * Options required to initialize the VertexAIService.
- * These will be passed from your Vercel API endpoint for each request.
- */
-export interface VertexAIServiceOptions {
-  apiKey: string;
-  projectId: string;
-  location: string;
-  model?: string; // e.g., 'gemini-1.5-pro-001'
+  category: string;
+  threshold: string;
 }
 
 /**
  * A service class for interacting with the Google Vertex AI REST API.
- * This class is designed to be instantiated per-request with a user-provided API key.
+ * This class is now a singleton, authenticating on the server-side
+ * using environment variables instead of per-request API keys.
  */
-export class VertexAIService {
-  private readonly apiKey: string;
+class VertexAiService {
   private readonly projectId: string;
+  private readonly location: string;
   private readonly modelId: string;
   private readonly apiUrl: string;
+  private auth: GoogleAuth;
 
-  constructor(options: VertexAIServiceOptions) {
-    if (!options.apiKey || !options.projectId || !options.location) {
-      throw new Error('API Key, Project ID, and Location are required for Vertex AI Service.');
+  constructor() {
+    // --- Read configuration directly from environment variables ---
+    this.projectId = process.env.GCLOUD_PROJECT_ID || '';
+    this.location = process.env.GCLOUD_LOCATION || 'us-central1'; // Default location
+    this.modelId = 'gemini-1.5-flash-001';
+
+    if (!this.projectId) {
+      const configError = new Error('Server configuration error: Missing GCLOUD_PROJECT_ID.');
+      logger.error('GCLOUD_PROJECT_ID environment variable is not set. Vertex AI service will fail.', configError);
+      throw configError;
     }
-    this.apiKey = options.apiKey;
-    this.projectId = options.projectId;
-    this.modelId = options.model || 'gemini-1.5-flash-001';
+
+    // --- Initialize Google Auth ---
+    // This will automatically find and use your GCLOUD_SERVICE_ACCOUNT_KEY_JSON
+    this.auth = new GoogleAuth({
+      scopes: 'https://www.googleapis.com/auth/cloud-platform',
+    });
 
     // Construct the REST API endpoint URL
-    this.apiUrl = `https://${options.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${options.location}/publishers/google/models/${this.modelId}`;
+    this.apiUrl = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${this.modelId}`;
+  }
+
+  /**
+   * Private helper to get a fresh auth token.
+   */
+  private async getAuthToken(): Promise<string> {
+    const client = await this.auth.getClient();
+    const accessToken = await client.getAccessToken();
+    if (!accessToken.token) {
+        throw new Error("Failed to retrieve auth token.");
+    }
+    return accessToken.token;
   }
 
   /**
    * Generates a text response from a single prompt string.
-   * @param prompt - The text prompt to send to the model.
-   * @param systemInstruction - An optional instruction to guide the model's behavior.
-   * @param config - Optional configuration for the generation process.
-   * @param safetySettings - Optional safety settings to override defaults.
-   * @returns The generated text content as a string.
    */
   public async generateText(
     prompt: string,
@@ -69,6 +73,7 @@ export class VertexAIService {
     safetySettings?: SafetySetting[]
   ): Promise<string> {
     const endpoint = `${this.apiUrl}:generateContent`;
+    const token = await this.getAuthToken();
 
     const requestBody = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -81,12 +86,11 @@ export class VertexAIService {
       logger.info(`Sending request to Vertex AI endpoint: ${endpoint}`);
       const response = await axios.post(endpoint, requestBody, {
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${token}`, // Use the server-generated token
           'Content-Type': 'application/json',
         },
       });
 
-      // Extract text from a potentially complex response structure
       const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         logger.warn('Vertex AI response was successful but contained no text.', response.data);
@@ -95,22 +99,18 @@ export class VertexAIService {
       return text;
     } catch (error) {
       this.handleApiError(error, 'generateText');
-      throw error; // Re-throw the original error after logging
+      throw error;
     }
   }
 
-  /**
-   * Generates text as a stream for real-time UI updates.
-   * This is an advanced feature that returns an async generator.
-   * @param prompt - The text prompt to send to the model.
-   * @returns An async iterable that yields chunks of text as they are generated.
-   */
+  // Note: The stream generation logic remains largely the same, but also needs to fetch the token.
   public async *generateTextStream(
     prompt: string,
     systemInstruction?: string,
     config: GenerationConfig = { temperature: 0.5, maxOutputTokens: 4096 }
   ): AsyncGenerator<string> {
     const endpoint = `${this.apiUrl}:streamGenerateContent`;
+    const token = await this.getAuthToken();
 
     const requestBody = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -119,13 +119,13 @@ export class VertexAIService {
     };
 
     try {
-      const response = await axios.post(endpoint, requestBody, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'stream',
-      });
+        const response = await axios.post(endpoint, requestBody, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            responseType: 'stream',
+        });
 
       for await (const chunk of response.data) {
         // The raw chunk is a buffer, convert it to a string
@@ -150,10 +150,11 @@ export class VertexAIService {
         }
       }
     } catch (error) {
-      this.handleApiError(error, 'generateTextStream');
-      throw error;
+        this.handleApiError(error, 'generateTextStream');
+        throw error;
     }
   }
+
 
   /**
    * A private helper to log detailed API errors.
@@ -171,3 +172,6 @@ export class VertexAIService {
     }
   }
 }
+
+// --- Export a single instance of the service ---
+export const vertexAiService = new VertexAiService();
