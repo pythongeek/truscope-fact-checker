@@ -1,23 +1,22 @@
-import { SmartCorrection, DetectedIssue, CorrectionAnalysis } from '@/types/corrections';
+// src/services/intelligentCorrector.ts
+import {
+  SmartCorrection,
+  DetectedIssue,
+  CorrectionAnalysis,
+} from '@/types/corrections';
 import { AdvancedEvidence } from '@/types/enhancedFactCheck';
-import { getGeminiApiKey, getGeminiModel } from './apiKeyService';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// CHANGE: All old Google AI imports are removed. We now only use our secure service.
+import { vertexAiService } from './vertexAiService';
 import { parseAIJsonResponse } from '../utils/jsonParser';
+import { logger } from '../utils/logger';
 
 export class IntelligentCorrector {
-  private ai: GoogleGenerativeAI;
-
-  constructor() {
-    this.ai = new GoogleGenerativeAI(getGeminiApiKey());
-  }
+  // The constructor and direct AI initialization are no longer needed.
 
   async analyzeForCorrections(
     originalText: string,
     evidence: AdvancedEvidence[]
   ): Promise<CorrectionAnalysis> {
-
-    const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
-
     const prompt = `
       You are an expert fact-checker and editor. Analyze the following text for factual errors, misleading context, outdated information, and missing context.
 
@@ -33,7 +32,7 @@ export class IntelligentCorrector {
       4. Description of the issue
       5. Confidence in your assessment (0-100)
 
-      Respond with a JSON object matching this structure:
+      Respond with a valid JSON object matching this exact structure:
       {
         "issues": [
           {
@@ -52,21 +51,23 @@ export class IntelligentCorrector {
     `;
 
     try {
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+      // CHANGE: Instead of calling the Google AI library directly, we call our secure service.
+      const responseText = await vertexAiService.generateText(prompt);
       const response = parseAIJsonResponse(responseText);
 
+      const issues: DetectedIssue[] = response.issues || [];
+
       return {
-        totalIssues: response.issues.length,
-        issuesByType: this.categorizeByType(response.issues),
-        issuesBySeverity: this.categorizeBySeverity(response.issues),
-        overallAccuracy: response.overallAccuracy,
-        recommendedAction: response.recommendedAction,
-        issues: response.issues || []
+        totalIssues: issues.length,
+        issuesByType: this.categorizeByType(issues),
+        issuesBySeverity: this.categorizeBySeverity(issues),
+        overallAccuracy: response.overallAccuracy || 0,
+        recommendedAction: response.recommendedAction || 'no_action_needed',
+        issues: issues,
       };
     } catch (error) {
-      console.error('Error analyzing corrections:', error);
-      throw new Error('Failed to analyze text for corrections');
+      logger.error('Error analyzing for corrections with Vertex AI:', error);
+      throw new Error('Failed to analyze text for corrections via Vertex AI service.');
     }
   }
 
@@ -75,17 +76,14 @@ export class IntelligentCorrector {
     issues: DetectedIssue[],
     evidence: AdvancedEvidence[]
   ): Promise<SmartCorrection[]> {
+    // This function can now run correction generations in parallel for better performance.
+    const correctionPromises = issues.map(issue =>
+      this.generateSingleCorrection(originalText, issue, evidence)
+    );
 
-    const corrections: SmartCorrection[] = [];
-
-    for (const issue of issues) {
-      const correction = await this.generateSingleCorrection(originalText, issue, evidence);
-      if (correction) {
-        corrections.push(correction);
-      }
-    }
-
-    return corrections;
+    const corrections = await Promise.all(correctionPromises);
+    // Filter out any null results from failed individual corrections
+    return corrections.filter((c): c is SmartCorrection => c !== null);
   }
 
   private async generateSingleCorrection(
@@ -93,18 +91,14 @@ export class IntelligentCorrector {
     issue: DetectedIssue,
     evidence: AdvancedEvidence[]
   ): Promise<SmartCorrection | null> {
-
-    const model = this.ai.getGenerativeModel({ model: getGeminiModel() });
-
     const relevantEvidence = evidence.filter(e =>
-      e.quote && (e.quote.toLowerCase().includes(issue.originalText.toLowerCase()) ||
-      issue.originalText.toLowerCase().includes(e.quote.toLowerCase()))
+      e.quote && (e.quote.toLowerCase().includes(issue.originalText.toLowerCase()))
     );
 
     const prompt = `
-      Generate a correction for this specific issue:
+      Generate a correction for this specific issue found in a larger text.
 
-      Original Text: "${originalText}"
+      Original Text Context: "${originalText}"
       Problematic Part: "${issue.originalText}"
       Issue Type: ${issue.type}
       Issue Description: ${issue.description}
@@ -112,25 +106,19 @@ export class IntelligentCorrector {
       Relevant Evidence:
       ${relevantEvidence.map(e => e.quote ? `- ${e.publisher}: "${e.quote}"` : '').join('\n')}
 
-      Provide:
-      1. A corrected version of the problematic text
-      2. The correct information that should be stated
-      3. 2-3 alternative ways to phrase the correction
-      4. Explanation of why this correction is needed
-
-      Respond in JSON format:
+      Provide a detailed correction. Respond in a valid JSON format with the following structure:
       {
-        "correctedStatement": "corrected version of the text",
-        "correctInformation": "what the facts actually say",
-        "alternativePhrasings": ["option 1", "option 2", "option 3"],
-        "correctionReasoning": "detailed explanation",
-        "confidence": 85
+        "correctedStatement": "The corrected version of the problematic text.",
+        "correctInformation": "A clear statement of the actual facts.",
+        "alternativePhrasings": ["Option one for the correction", "Option two for the correction"],
+        "correctionReasoning": "A detailed explanation of why the correction is necessary.",
+        "confidence": 90
       }
     `;
 
     try {
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
+      // CHANGE: All AI calls now use the centralized vertexAiService.
+      const responseText = await vertexAiService.generateText(prompt);
       const response = parseAIJsonResponse(responseText);
 
       return {
@@ -141,15 +129,16 @@ export class IntelligentCorrector {
         correctInformation: response.correctInformation,
         supportingSources: relevantEvidence,
         confidence: response.confidence,
-        alternativePhrasings: response.alternativePhrasings,
-        correctionReasoning: response.correctionReasoning
+        alternativePhrasings: response.alternativePhrasings || [],
+        correctionReasoning: response.correctionReasoning,
       };
     } catch (error) {
-      console.error('Error generating single correction:', error);
-      return null;
+      logger.error('Error generating single correction with Vertex AI:', { issue, error });
+      return null; // Return null if a single correction fails, so others can proceed.
     }
   }
 
+  // Helper functions remain unchanged as they are pure data processors.
   private categorizeByType(issues: DetectedIssue[]): Record<DetectedIssue['type'], number> {
     const categories: Record<DetectedIssue['type'], number> = {
       factual_error: 0,
@@ -158,13 +147,11 @@ export class IntelligentCorrector {
       missing_context: 0,
       unsupported_claim: 0
     };
-
     issues.forEach(issue => {
-      if (categories.hasOwnProperty(issue.type)) {
+      if (issue.type in categories) {
         categories[issue.type]++;
       }
     });
-
     return categories;
   }
 
@@ -175,13 +162,11 @@ export class IntelligentCorrector {
       high: 0,
       critical: 0
     };
-
     issues.forEach(issue => {
-      if (categories.hasOwnProperty(issue.severity)) {
+      if (issue.severity in categories) {
         categories[issue.severity]++;
       }
     });
-
     return categories;
   }
 }
