@@ -1,4 +1,4 @@
-// api/fact-check.ts - REWRITTEN WITH HYBRID ORCHESTRATION TO RE-INCLUDE CLIENT-SIDE RESULTS
+// api/fact-check.ts - FINAL CORRECTED VERSION WITH ALL FUNCTIONS AND TYPE DEFINITIONS
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Vercel timeout configuration
@@ -14,10 +14,9 @@ const API_TIMEOUT = 4000;
 
 // --- KEY THRESHOLDS ---
 const MIN_EVIDENCE_FOR_SYNTHESIS = 3;
-const HIGH_CONFIDENCE_THRESHOLD = 85;
-const ESCALATION_CONFIDENCE_THRESHOLD = 70;
+const ESCALATION_CONFIDENCE_THRESHOLD = 75;
 
-// --- INLINE TYPE DEFINITIONS (Ensure these match your project's types) ---
+// --- INLINE TYPE DEFINITIONS (Corrected) ---
 type FactVerdict = 'TRUE' | 'FALSE' | 'MIXED' | 'UNVERIFIED' | 'MISLEADING';
 
 interface Evidence {
@@ -59,6 +58,8 @@ interface FactCheckReport {
   reasoning: string;
   evidence: Evidence[];
   metadata: {
+    // FIX: Added 'methodUsed' to the type definition
+    methodUsed: string;
     processingTimeMs: number;
     apisUsed: string[];
     sourcesConsulted: {
@@ -103,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let allEvidence: Evidence[] = [];
         let currentQuery = extractSmartQuery(text, 120);
 
-        // --- Phase 1: Ingest Client-Side Google Fact Check Results ---
+        // Phase 1: Ingest Client-Side Google Fact Check Results
         if (clientSideResults?.evidence?.length > 0) {
             const clientTier = processClientSideResults(clientSideResults);
             tierResults.push(clientTier);
@@ -113,33 +114,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
              logger.warn('Phase 1 (Client-Side) Skipped', { reason: 'No evidence provided from client.'});
         }
 
-        // --- Phase 2: Broad Web Search (SERP) ---
+        // Phase 2: Broad Web Search (SERP)
         const phase2Result = await runWebSearch(currentQuery);
         tierResults.push(phase2Result);
         allEvidence = mergeEvidence(allEvidence, phase2Result.evidence);
 
         const confidenceAfterWeb = calculateOverallConfidence(allEvidence);
 
-        // --- Dynamic Escalation to News Search ---
+        // Dynamic Escalation to News Search
         if (confidenceAfterWeb < ESCALATION_CONFIDENCE_THRESHOLD) {
-            const escalationReason = `Confidence after web search is low (${confidenceAfterWeb.toFixed(0)}%). Escalating to targeted news search.`;
+            const escalationReason = `Confidence after web search is low (${confidenceAfterWeb.toFixed(0)}%). Escalating to news search.`;
             const refinedQuery = refineQueryFromEvidence(text, allEvidence, true);
             logger.info('🧠 Dynamic Escalation', { reason: escalationReason, newQuery: refinedQuery });
 
-            const phase3Result = await runNewsSearch(refinedQuery, text); // Pass original text as fallback
+            const phase3Result = await runNewsSearch(refinedQuery, text);
             tierResults.push(phase3Result);
             allEvidence = mergeEvidence(allEvidence, phase3Result.evidence);
         }
 
-        // --- Final Phase: AI-Powered Synthesis ---
-        const finalReport = await runSynthesis(
-            text,
-            allEvidence,
-            publishingContext,
-            tierResults,
-            startTime,
-            config
-        );
+        // Final Phase: AI-Powered Synthesis
+        const finalReport = await runSynthesis(text, allEvidence, publishingContext, tierResults, startTime, config);
 
         logger.info('✅ Fact-Check Complete', {
             finalScore: finalReport.finalScore,
@@ -155,19 +149,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 }
 
-
 // --- TIER PROCESSING & SEARCH PHASES ---
-
 function processClientSideResults(clientResults: any): TierResult {
-    const evidence = clientResults.evidence || [];
+    const evidence = (clientResults.evidence || []).map((e: any) => ({...e})); // Defensive copy
     const confidence = calculateTierConfidence(evidence);
     return {
         tier: 'direct-verification',
         success: evidence.length > 0,
-        confidence: confidence,
-        evidence: evidence,
+        confidence,
+        evidence,
         query: clientResults.query || 'N/A (Client-Side)',
-        summary: `Received ${evidence.length} pre-vetted results from client-side Google Fact Check.`,
+        summary: `Received ${evidence.length} pre-vetted results from client.`,
         processingTime: clientResults.processingTime || 0,
     };
 }
@@ -176,7 +168,7 @@ async function runWebSearch(query: string): Promise<TierResult> {
     const startTime = Date.now();
     const apiKey = process.env.SERP_API_KEY;
     if (!apiKey) {
-         logger.error("SERP_API_KEY is not configured.");
+        logger.error("SERP_API_KEY is not configured.");
         return { tier: 'web-search', success: false, confidence: 0, evidence: [], query, summary: "SERP API key missing.", processingTime: Date.now() - startTime };
     }
     try {
@@ -189,7 +181,7 @@ async function runWebSearch(query: string): Promise<TierResult> {
         const data = await response.json();
         const evidence = mapSerpResultsToEvidence(data.organic || [], data.knowledgeGraph);
         const confidence = calculateTierConfidence(evidence);
-        const summary = `Found ${evidence.length} web results with an average confidence of ${confidence.toFixed(0)}%.`;
+        const summary = `Found ${evidence.length} web results with a confidence of ${confidence.toFixed(0)}%.`;
         logger.info('✅ Phase 2 (Web Search) Complete', { summary });
         return { tier: 'web-search', success: evidence.length > 0, confidence, evidence, query, summary, processingTime: Date.now() - startTime };
     } catch (error: any) {
@@ -210,15 +202,14 @@ async function runNewsSearch(query: string, fallbackQuery: string): Promise<Tier
     try {
         let evidence = await fetchNews(activeQuery, apiKey);
 
-        // ** Fallback Logic: If refined query fails, try the broader initial query **
         if (evidence.length === 0 && query !== fallbackQuery) {
-            logger.warn('Refined news query returned no results. Falling back to broader query.', { refinedQuery: query, fallbackQuery: extractSmartQuery(fallbackQuery, 120) });
+            logger.warn('Refined news query failed. Falling back to broader query.', { refinedQuery: query });
             activeQuery = extractSmartQuery(fallbackQuery, 120);
             evidence = await fetchNews(activeQuery, apiKey);
         }
 
         const confidence = calculateTierConfidence(evidence);
-        const summary = `Found ${evidence.length} news articles with an average confidence of ${confidence.toFixed(0)}%.`;
+        const summary = `Found ${evidence.length} news articles with a confidence of ${confidence.toFixed(0)}%.`;
         logger.info('✅ Phase 3 (News Search) Complete', { summary });
         return { tier: 'news-analysis', success: evidence.length > 0, confidence, evidence, query: activeQuery, summary, processingTime: Date.now() - startTime };
 
@@ -236,16 +227,8 @@ async function fetchNews(query: string, apiKey: string): Promise<Evidence[]> {
     return mapNewsResultsToEvidence(data.posts || []);
 }
 
-
-// --- AI SYNTHESIS PHASE ---
-async function runSynthesis(
-    text: string,
-    evidence: Evidence[],
-    context: string,
-    tierResults: TierResult[],
-    startTime: number,
-    config: any
-): Promise<FactCheckReport> {
+// --- AI SYNTHESIS & REPORTING ---
+async function runSynthesis(text: string, evidence: Evidence[], context: string, tierResults: TierResult[], startTime: number, config: any): Promise<FactCheckReport> {
     const geminiApiKey = config.gemini || process.env.GEMINI_API_KEY;
     const finalWeightedScore = calculateOverallConfidence(evidence);
 
@@ -256,22 +239,22 @@ async function runSynthesis(
     }
 
     try {
-        const prompt = buildSynthesisPrompt(text, evidence, context);
+        const prompt = buildSynthesisPrompt(text, evidence, context); // ERROR WAS HERE
         const geminiText = await callGeminiAPI(prompt, geminiApiKey, config.geminiModel || 'gemini-1.5-flash-latest');
         if (!geminiText) throw new Error('Empty response from Gemini');
 
         const synthesis = parseGeminiResponse(geminiText, evidence, finalWeightedScore);
-        const finalScore = Math.round((synthesis.score * 0.6) + (finalWeightedScore * 0.4)); // Blend AI score with evidence score
+        const finalScore = Math.round((synthesis.score * 0.6) + (finalWeightedScore * 0.4));
 
         return {
             id: `fact_check_${Date.now()}`,
             originalText: text,
             finalVerdict: synthesis.verdict,
-            finalScore: finalScore,
+            finalScore,
             reasoning: synthesis.reasoning,
             evidence,
             metadata: {
-                methodUsed: 'hybrid-orchestration-synthesis',
+                methodUsed: 'hybrid-orchestration-synthesis', // ERROR WAS HERE
                 processingTimeMs: Date.now() - startTime,
                 apisUsed: tierResults.filter(t => t.success).map(t => t.tier).concat(['gemini-ai']),
                 sourcesConsulted: {
@@ -288,7 +271,6 @@ async function runSynthesis(
     }
 }
 
-// --- STATISTICAL FALLBACK & HELPERS ---
 function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tierResults: TierResult[], startTime: number, score: number, customReasoning?: string): FactCheckReport {
     const highCred = evidence.filter(e => e.credibilityScore >= 80).length;
     const reasoning = customReasoning || buildStatisticalReasoning(evidence, score, highCred);
@@ -300,22 +282,37 @@ function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tie
         reasoning,
         evidence,
         metadata: {
-            methodUsed: 'statistical-fallback',
+            methodUsed: 'statistical-fallback', // ERROR WAS HERE
             processingTimeMs: Date.now() - startTime,
             apisUsed: tierResults.filter(t => t.success).map(t => t.tier),
             sourcesConsulted: { total: evidence.length, highCredibility: highCred },
-            warnings: ['AI synthesis was unavailable or skipped; this report is based on statistical analysis.'],
+            warnings: ['AI synthesis was unavailable or skipped; report is based on statistical analysis.'],
             tierBreakdown: tierResults
         }
     };
 }
 
-function buildStatisticalReasoning(evidence: Evidence[], score: number, highCred: number): string {
-    if (evidence.length === 0) return "No evidence was found to verify the claim. The final verdict is UNVERIFIED.";
-    let reasoning = `Analysis of ${evidence.length} sources produced a weighted reliability score of ${score}%. `;
-    if (highCred > 0) reasoning += `The analysis includes ${highCred} high-credibility source${highCred > 1 ? 's' : ''}. `;
-    if (score < 50) reasoning += "There is insufficient reliable evidence to support this claim.";
-    return reasoning;
+// --- HELPER FUNCTIONS ---
+// This section contains all the necessary utility, mapping, scoring, and parsing functions.
+
+function buildSynthesisPrompt(text: string, evidence: Evidence[], context: string): string {
+    const evidenceSummary = evidence.slice(0, 15).map((e, i) => {
+        const credRating = e.credibilityScore >= 80 ? 'HIGH' : e.credibilityScore >= 60 ? 'MED' : 'LOW';
+        return `${i + 1}. [${credRating}-${e.credibilityScore}%] ${e.publisher}: "${(e.snippet || '').substring(0, 200)}..."`;
+    }).join('\n');
+    return `As a professional fact-checker for a ${context} publication, analyze the claim based ONLY on the evidence.
+
+CLAIM: "${text}"
+
+EVIDENCE:
+${evidenceSummary}
+
+Your Task: Provide a concise, professional analysis in this EXACT format. Do not add any extra text.
+
+VERDICT: [TRUE, FALSE, MIXED, UNVERIFIED, MISLEADING]
+SCORE: [0-100]
+REASONING: [2-3 sentences explaining your verdict and score based on evidence quality and consistency.]
+WARNINGS: [Note concerns like source quality or contradictions. If none, write "None"]`;
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
