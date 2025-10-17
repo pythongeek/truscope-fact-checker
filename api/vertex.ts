@@ -43,14 +43,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const generativeModel = vertexAI.getGenerativeModel({
       model: options?.model || 'gemini-1.5-flash-001',
       generationConfig: {
-        maxOutputTokens: options?.maxOutputTokens ?? 2048,
+        maxOutputTokens: options?.maxOutputTokens ?? 8192, // Increased default
         temperature: options?.temperature ?? 0.3,
       },
     });
 
     const result = await generativeModel.generateContent(prompt);
 
-    return res.status(200).json({ text });
+    // *** FIX STARTS HERE ***
+    // The AI's response is nested. We need to extract the actual text content.
+    const response = result.response;
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    // Handle cases where the model might not return valid text
+    if (!text) {
+      console.error('Vertex AI response was empty or malformed:', JSON.stringify(response, null, 2));
+      return res.status(500).json({ error: 'The AI model returned an empty response.' });
+    }
+    // *** FIX ENDS HERE ***
+
+    return res.status(200).json({ text }); // Now 'text' is a defined string
 
   } catch (error: any) {
     console.error('Error calling Vertex AI API:', {
