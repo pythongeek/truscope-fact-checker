@@ -1,4 +1,7 @@
 // src/services/autoEditorIntegration.ts
+import { EnhancedFactCheckService } from './EnhancedFactCheckService';
+import { logger } from '../utils/logger';
+import { vertexAiService } from './vertexAiService';
 import {
   FactCheckReport,
   TieredFactCheckResult,
