@@ -115,7 +115,6 @@ export class TieredFactCheckService {
       const finalVerdict = finalSynthesizedReport?.finalVerdict ?? 'UNVERIFIED';
       const finalReasoning = finalSynthesizedReport?.reasoning ?? "Analysis could not be completed.";
 
-      // FIX #1: Ensure publicationDate is undefined, not null (matches Evidence type)
       const processedEvidence: Evidence[] = this.deduplicateEvidence(allEvidence).map(e => {
         const reliability = getSourceReliability(e.publisher);
         const quoteText = e.quote ?? e.snippet ?? '';
@@ -125,7 +124,6 @@ export class TieredFactCheckService {
           title: e.title || quoteText.substring(0, 50),
           snippet: e.snippet || quoteText,
           publisher: e.publisher,
-          // FIX: Convert null to undefined to match Evidence type
           publicationDate: e.publishedDate || undefined,
           credibilityScore: reliability ? reliability.reliabilityScore : 50,
           relevanceScore: 0,
@@ -133,7 +131,6 @@ export class TieredFactCheckService {
           source: e.source,
           quote: quoteText,
           score: e.score,
-          // FIX: Convert null to undefined
           publishedDate: e.publishedDate || undefined
         };
       });
@@ -160,8 +157,10 @@ export class TieredFactCheckService {
 
       let claimVerifications: ClaimVerificationResult[];
       try {
-        // FIX #2: Provide default empty string for apiKey to avoid passing undefined
-        const analysisResultJson = await vertexAiService.generateText(analysisPrompt, undefined, { maxOutputTokens: 2048 });
+        // *** FIX STARTS HERE ***
+        // Removed the extraneous 'undefined' argument from the function call.
+        const analysisResultJson = await vertexAiService.generateText(analysisPrompt, { maxOutputTokens: 2048 });
+        // *** FIX ENDS HERE ***
         if (!analysisResultJson) {
           throw new Error('Vertex AI returned null response');
         }
@@ -678,8 +677,10 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
   }
 }
 `;
-
-    const jsonString = await vertexAiService.generateText(prompt, undefined, { maxOutputTokens: 1500 });
+    // *** FIX STARTS HERE ***
+    // Removed the extraneous 'undefined' argument from the function call.
+    const jsonString = await vertexAiService.generateText(prompt, { maxOutputTokens: 1500 });
+    // *** FIX ENDS HERE ***
     if (!jsonString) {
       throw new Error('Vertex AI returned null response');
     }
@@ -954,7 +955,6 @@ Your Task: Provide a final verdict and a numerical score (0-100). Explain your r
     }
   }
 
-  // FIX #3: Match StoredReport interface - it expects id, originalText, report, corrections, timestamp
   private async uploadReportToBlob(report: FactCheckReport): Promise<void> {
     try {
       const storedReport: StoredReport = {
