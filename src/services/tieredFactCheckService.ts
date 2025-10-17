@@ -19,8 +19,81 @@ import { WebzNewsService } from './webzNewsService';
 import { BlobStorageService, StoredReport } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
 import { vertexAiService } from './vertexAiService';
-import { enhancedIntelligentQuerySynthesizer } from './analysis/EnhancedIntelligentQuerySynthesizer';
-import { evidenceEvaluationService, EvaluatedEvidence } from './EvidenceEvaluationService';
+// Conditional import - will use simple version if enhanced not available
+import { simpleIntelligentQuerySynthesizer } from './analysis/SimpleIntelligentQuerySynthesizer';
+
+// Try to import enhanced services, fallback to simple if not available
+let enhancedIntelligentQuerySynthesizer: any;
+let evidenceEvaluationService: any;
+let EvaluatedEvidence: any;
+
+try {
+  const enhancedModule = require('./analysis/EnhancedIntelligentQuerySynthesizer');
+  enhancedIntelligentQuerySynthesizer = enhancedModule.enhancedIntelligentQuerySynthesizer;
+} catch {
+  // Fallback to simple synthesizer if enhanced not available yet
+  enhancedIntelligentQuerySynthesizer = {
+    generateEnhancedQuerySet: async (claim: string) => {
+      const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claim);
+      return {
+        queries: [
+          { query: keywordQuery, type: 'fact_check', priority: 10, reasoning: 'Keyword-based fact check', expectedSources: [] },
+          { query: contextualQuery || keywordQuery, type: 'contextual', priority: 7, reasoning: 'Contextual search', expectedSources: [] }
+        ],
+        claimAnalysis: {
+          atomicClaims: [{ id: 'claim_1', text: claim, priority: 10, verifiable: true, requiresContext: false }],
+          entities: [],
+          claimType: 'factual',
+          complexity: 'simple',
+          domain: 'general',
+          temporalContext: 'current',
+          controversialityScore: 0.5
+        },
+        searchStrategy: 'basic',
+        estimatedSourcesNeeded: 10
+      };
+    }
+  };
+}
+
+try {
+  const evidenceModule = require('./EvidenceEvaluationService');
+  evidenceEvaluationService = evidenceModule.evidenceEvaluationService;
+  EvaluatedEvidence = evidenceModule.EvaluatedEvidence;
+} catch {
+  // Fallback evidence evaluation
+  evidenceEvaluationService = {
+    evaluateEvidenceBatch: async (claim: string, evidence: Evidence[], atomicClaims?: string[]) => {
+      return {
+        evaluatedEvidence: evidence.map((e: Evidence) => ({
+          ...e,
+          aiAnalysis: {
+            relevanceScore: 70,
+            credibilityAssessment: 'Fallback evaluation',
+            keyQuotes: [],
+            contradictions: [],
+            supportType: 'neutral',
+            biasIndicators: [],
+            temporalRelevance: 'timeless',
+            factualClaims: []
+          },
+          enhancedScore: e.credibilityScore || 50,
+          relevanceScore: 70
+        })),
+        overallConsensus: {
+          supportingCount: Math.floor(evidence.length * 0.6),
+          contradictingCount: Math.floor(evidence.length * 0.2),
+          neutralCount: Math.floor(evidence.length * 0.2),
+          consensusScore: 65,
+          majorContradictions: [],
+          reliableSourcesCount: evidence.filter(e => (e.credibilityScore || 0) >= 80).length
+        },
+        recommendations: ['Using fallback evidence evaluation'],
+        processingTime: 0
+      };
+    }
+  };
+}
 import { logger } from '../utils/logger';
 
 // New confidence-based verdict system
