@@ -1,4 +1,4 @@
-// src/services/tieredFactCheckService.ts - INDUSTRY-STANDARD REWRITE
+// src/services/tieredFactCheckService.ts - FIXED BUILD ERRORS
 // Complete AI-powered fact-checking with NO "UNVERIFIED" verdicts
 
 import {
@@ -19,82 +19,44 @@ import { WebzNewsService } from './webzNewsService';
 import { BlobStorageService, StoredReport } from './blobStorage';
 import { generateSHA256 } from '../utils/hashUtils';
 import { vertexAiService } from './vertexAiService';
-// Conditional import - will use simple version if enhanced not available
 import { simpleIntelligentQuerySynthesizer } from './analysis/SimpleIntelligentQuerySynthesizer';
-
-// Try to import enhanced services, fallback to simple if not available
-let enhancedIntelligentQuerySynthesizer: any;
-let evidenceEvaluationService: any;
-let EvaluatedEvidence: any;
-
-try {
-  const enhancedModule = require('./analysis/EnhancedIntelligentQuerySynthesizer');
-  enhancedIntelligentQuerySynthesizer = enhancedModule.enhancedIntelligentQuerySynthesizer;
-} catch {
-  // Fallback to simple synthesizer if enhanced not available yet
-  enhancedIntelligentQuerySynthesizer = {
-    generateEnhancedQuerySet: async (claim: string) => {
-      const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claim);
-      return {
-        queries: [
-          { query: keywordQuery, type: 'fact_check', priority: 10, reasoning: 'Keyword-based fact check', expectedSources: [] },
-          { query: contextualQuery || keywordQuery, type: 'contextual', priority: 7, reasoning: 'Contextual search', expectedSources: [] }
-        ],
-        claimAnalysis: {
-          atomicClaims: [{ id: 'claim_1', text: claim, priority: 10, verifiable: true, requiresContext: false }],
-          entities: [],
-          claimType: 'factual',
-          complexity: 'simple',
-          domain: 'general',
-          temporalContext: 'current',
-          controversialityScore: 0.5
-        },
-        searchStrategy: 'basic',
-        estimatedSourcesNeeded: 10
-      };
-    }
-  };
-}
-
-try {
-  const evidenceModule = require('./EvidenceEvaluationService');
-  evidenceEvaluationService = evidenceModule.evidenceEvaluationService;
-  EvaluatedEvidence = evidenceModule.EvaluatedEvidence;
-} catch {
-  // Fallback evidence evaluation
-  evidenceEvaluationService = {
-    evaluateEvidenceBatch: async (claim: string, evidence: Evidence[], atomicClaims?: string[]) => {
-      return {
-        evaluatedEvidence: evidence.map((e: Evidence) => ({
-          ...e,
-          aiAnalysis: {
-            relevanceScore: 70,
-            credibilityAssessment: 'Fallback evaluation',
-            keyQuotes: [],
-            contradictions: [],
-            supportType: 'neutral',
-            biasIndicators: [],
-            temporalRelevance: 'timeless',
-            factualClaims: []
-          },
-          enhancedScore: e.credibilityScore || 50,
-          relevanceScore: 70
-        })),
-        overallConsensus: {
-          supportingCount: Math.floor(evidence.length * 0.6),
-          contradictingCount: Math.floor(evidence.length * 0.2),
-          neutralCount: Math.floor(evidence.length * 0.2),
-          consensusScore: 65,
-          majorContradictions: [],
-          reliableSourcesCount: evidence.filter(e => (e.credibilityScore || 0) >= 80).length
-        },
-        recommendations: ['Using fallback evidence evaluation'],
-        processingTime: 0
-      };
-    }
-  };
-}
 import { logger } from '../utils/logger';
+
+// ===== TYPE DEFINITIONS =====
+
+// Enhanced evidence with AI analysis
+interface EvaluatedEvidence extends Evidence {
+  aiAnalysis: {
+    relevanceScore: number;
+    credibilityAssessment: string;
+    keyQuotes: string[];
+    contradictions: string[];
+    supportType: 'supporting' | 'contradicting' | 'neutral';
+    biasIndicators: string[];
+    temporalRelevance: string;
+    factualClaims: string[];
+  };
+  enhancedScore: number;
+  relevanceScore: number;
+}
+
+// Evidence evaluation result
+interface EvidenceEvaluationResult {
+  evaluatedEvidence: EvaluatedEvidence[];
+  overallConsensus: {
+    supportingCount: number;
+    contradictingCount: number;
+    neutralCount: number;
+    consensusScore: number;
+    majorContradictions: string[];
+    reliableSourcesCount: number;
+  };
+  recommendations: string[];
+  processingTime: number;
+}
+
+// Status type that matches ClaimVerificationResult
+type VerificationStatus = "Verified" | "Unverified" | "Disputed" | "Retracted" | "Error";
 
 // New confidence-based verdict system
 export type ConfidenceVerdict = 
@@ -123,6 +85,80 @@ export interface ConfidenceInterval {
   lowerBound: number;
   upperBound: number;
   description: string;
+}
+
+// ===== SERVICE INITIALIZATION WITH FALLBACKS =====
+
+let enhancedIntelligentQuerySynthesizer: any;
+let evidenceEvaluationService: any;
+
+try {
+  const enhancedModule = require('./analysis/EnhancedIntelligentQuerySynthesizer');
+  enhancedIntelligentQuerySynthesizer = enhancedModule.enhancedIntelligentQuerySynthesizer;
+  logger.info('✅ Enhanced query synthesizer loaded');
+} catch {
+  logger.warn('⚠️ Enhanced query synthesizer not available, using simple version');
+  enhancedIntelligentQuerySynthesizer = {
+    generateEnhancedQuerySet: async (claim: string) => {
+      const { keywordQuery, contextualQuery } = await simpleIntelligentQuerySynthesizer.generateQueries(claim);
+      return {
+        queries: [
+          { query: keywordQuery, type: 'fact_check', priority: 10, reasoning: 'Keyword-based fact check', expectedSources: [] },
+          { query: contextualQuery || keywordQuery, type: 'contextual', priority: 7, reasoning: 'Contextual search', expectedSources: [] }
+        ],
+        claimAnalysis: {
+          atomicClaims: [{ id: 'claim_1', text: claim, priority: 10, verifiable: true, requiresContext: false }],
+          entities: [],
+          claimType: 'factual',
+          complexity: 'simple',
+          domain: 'general',
+          temporalContext: 'current',
+          controversialityScore: 0.5
+        },
+        searchStrategy: 'basic',
+        estimatedSourcesNeeded: 10
+      };
+    }
+  };
+}
+
+try {
+  const evidenceModule = require('./EvidenceEvaluationService');
+  evidenceEvaluationService = evidenceModule.evidenceEvaluationService;
+  logger.info('✅ Evidence evaluation service loaded');
+} catch {
+  logger.warn('⚠️ Evidence evaluation service not available, using fallback');
+  evidenceEvaluationService = {
+    evaluateEvidenceBatch: async (claim: string, evidence: Evidence[], atomicClaims?: string[]): Promise<EvidenceEvaluationResult> => {
+      return {
+        evaluatedEvidence: evidence.map((e: Evidence): EvaluatedEvidence => ({
+          ...e,
+          aiAnalysis: {
+            relevanceScore: 70,
+            credibilityAssessment: 'Fallback evaluation',
+            keyQuotes: [],
+            contradictions: [],
+            supportType: 'neutral' as const,
+            biasIndicators: [],
+            temporalRelevance: 'timeless',
+            factualClaims: []
+          },
+          enhancedScore: e.credibilityScore || 50,
+          relevanceScore: 70
+        })),
+        overallConsensus: {
+          supportingCount: Math.floor(evidence.length * 0.6),
+          contradictingCount: Math.floor(evidence.length * 0.2),
+          neutralCount: Math.floor(evidence.length * 0.2),
+          consensusScore: 65,
+          majorContradictions: [],
+          reliableSourcesCount: evidence.filter(e => (e.credibilityScore || 0) >= 80).length
+        },
+        recommendations: ['Using fallback evidence evaluation'],
+        processingTime: 0
+      };
+    }
+  };
 }
 
 /**
@@ -172,7 +208,7 @@ export class TieredFactCheckService {
 
       logger.info('✅ Claim analysis complete', {
         atomicClaims: claimAnalysis.atomicClaims.length,
-        entities: claimAnalysis.entities.length,
+        entities: claimAnalysis.entities?.length || 0,
         complexity: claimAnalysis.complexity,
         domain: claimAnalysis.domain,
         queriesGenerated: queries.length
@@ -197,7 +233,7 @@ export class TieredFactCheckService {
       const evaluation = await evidenceEvaluationService.evaluateEvidenceBatch(
         claimText,
         allEvidence,
-        claimAnalysis.atomicClaims.map(c => c.text)
+        claimAnalysis.atomicClaims.map((c: any) => c.text)
       );
 
       logger.info('✅ Evidence evaluation complete', {
@@ -261,7 +297,6 @@ export class TieredFactCheckService {
     queries: any[],
     domain: string
   ): Promise<Evidence[]> {
-    // Group queries by priority and type
     const highPriorityQueries = queries.filter(q => q.priority >= 8).slice(0, 8);
     const mediumPriorityQueries = queries.filter(q => q.priority >= 5 && q.priority < 8).slice(0, 5);
 
@@ -270,7 +305,6 @@ export class TieredFactCheckService {
       mediumPriority: mediumPriorityQueries.length
     });
 
-    // Execute all queries in parallel
     const allQueryPromises = [
       ...highPriorityQueries.map(q => this.executeQuery(q, domain)),
       ...mediumPriorityQueries.map(q => this.executeQuery(q, domain))
@@ -278,7 +312,6 @@ export class TieredFactCheckService {
 
     const results = await Promise.allSettled(allQueryPromises);
 
-    // Collect all successful results
     const allEvidence: Evidence[] = [];
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
@@ -291,7 +324,6 @@ export class TieredFactCheckService {
       }
     });
 
-    // Deduplicate
     return this.deduplicateEvidence(allEvidence);
   }
 
@@ -304,7 +336,6 @@ export class TieredFactCheckService {
     try {
       switch (query.type) {
         case 'fact_check':
-          // Use Google Fact Check API
           const factCheckReport = await this.googleFactCheck.searchClaims(query.query, 5);
           if (factCheckReport) {
             evidence.push(...factCheckReport.evidence);
@@ -314,13 +345,11 @@ export class TieredFactCheckService {
         case 'academic':
         case 'expert':
         case 'primary_source':
-          // Use SERP API with domain optimization
           const academicResults = await this.serpApi.search(query.query, 8);
           evidence.push(...this.convertSerpToEvidence(academicResults.results, query.type));
           break;
 
         case 'news':
-          // Use News API
           const newsResults = await this.newsService.searchNews({ query: query.query });
           if (newsResults?.posts) {
             evidence.push(...this.convertNewsToEvidence(newsResults.posts));
@@ -328,14 +357,12 @@ export class TieredFactCheckService {
           break;
 
         case 'government':
-          // Government sources via SERP
           const govQuery = `${query.query} site:.gov`;
           const govResults = await this.serpApi.search(govQuery, 5);
           evidence.push(...this.convertSerpToEvidence(govResults.results, 'government'));
           break;
 
         default:
-          // Generic web search
           const webResults = await this.serpApi.search(query.query, 5);
           evidence.push(...this.convertSerpToEvidence(webResults.results, 'contextual'));
       }
@@ -361,28 +388,50 @@ export class TieredFactCheckService {
 
     const verifications = await Promise.all(
       atomicClaims.map(async (claim) => {
-        // Find evidence relevant to this specific claim
         const relevantEvidence = evaluatedEvidence.filter(e => 
           e.aiAnalysis.relevanceScore >= 60 &&
           e.enhancedScore >= 50
         );
 
-        // Use AI to verify this specific claim
         const verification = await this.verifyAtomicClaim(claim.text, relevantEvidence);
+
+        // Convert AI status to ClaimVerificationResult status
+        const status = this.convertToVerificationStatus(verification.status);
 
         return {
           id: claim.id,
           claimText: claim.text,
-          status: verification.status,
+          status,
           confidenceScore: verification.confidence,
           explanation: verification.explanation,
           reasoning: verification.reasoning,
-          evidence: relevantEvidence.slice(0, 5) // Top 5 relevant sources
+          evidence: relevantEvidence.slice(0, 5)
         };
       })
     );
 
     return verifications;
+  }
+
+  /**
+   * Convert AI verification status to ClaimVerificationResult status
+   */
+  private convertToVerificationStatus(aiStatus: string): VerificationStatus {
+    const normalized = aiStatus.toLowerCase().replace(/\s+/g, '');
+    
+    if (normalized.includes('verified') || normalized.includes('true')) {
+      return 'Verified';
+    }
+    if (normalized.includes('disputed') || normalized.includes('mixed')) {
+      return 'Disputed';
+    }
+    if (normalized.includes('false') || normalized.includes('debunked')) {
+      return 'Retracted';
+    }
+    if (normalized.includes('error')) {
+      return 'Error';
+    }
+    return 'Unverified';
   }
 
   /**
@@ -448,7 +497,7 @@ Respond with ONLY valid JSON:
   private async performIntelligentSynthesis(
     originalClaim: string,
     claimAnalysis: any,
-    evaluation: any,
+    evaluation: EvidenceEvaluationResult,
     atomicVerifications: ClaimVerificationResult[],
     publishingContext: PublishingContext
   ): Promise<{
@@ -549,14 +598,13 @@ Guidelines:
 
     try {
       const response = await vertexAiService.generateText(prompt, {
-        temperature: 0.2, // Low but not zero to allow nuanced reasoning
+        temperature: 0.2,
         maxOutputTokens: 3000
       });
 
       const cleaned = response.replace(/```json|```/g, '').trim();
       const synthesis = JSON.parse(cleaned);
 
-      // Validate and return
       return {
         confidenceVerdict: synthesis.confidenceVerdict as ConfidenceVerdict,
         finalScore: synthesis.finalScore,
@@ -579,7 +627,7 @@ Guidelines:
     operationId: string,
     originalClaim: string,
     claimAnalysis: any,
-    evaluation: any,
+    evaluation: EvidenceEvaluationResult,
     atomicVerifications: ClaimVerificationResult[],
     synthesis: any,
     startTime: number
@@ -600,7 +648,6 @@ Guidelines:
       ]
     };
 
-    // Convert ConfidenceVerdict to FactVerdict for backward compatibility
     const factVerdict = this.convertToFactVerdict(synthesis.confidenceVerdict, synthesis.finalScore);
 
     return {
@@ -616,7 +663,6 @@ Guidelines:
       summary: `${synthesis.confidenceVerdict}: ${synthesis.reasoning.substring(0, 200)}...`,
       overallAuthenticityScore: synthesis.finalScore,
       enhancedClaimText: originalClaim,
-      // Add new fields
       confidenceVerdict: synthesis.confidenceVerdict,
       confidenceInterval: synthesis.confidenceInterval,
       atomicClaimsAnalysis: {
@@ -628,7 +674,7 @@ Guidelines:
   }
 
   /**
-   * Create intelligent error report with partial results if available
+   * Create intelligent error report
    */
   private createIntelligentErrorReport(
     claim: string,
@@ -676,13 +722,16 @@ Guidelines:
       case 'VERIFIED_FALSE':
         return 'FALSE';
       case 'INSUFFICIENT_DATA':
-        return score < 30 ? 'FALSE' : 'MIXED'; // Lean toward skepticism
+        return score < 30 ? 'FALSE' : 'MIXED';
       default:
         return 'MIXED';
     }
   }
 
-  private createFallbackSynthesis(evaluation: any, atomicVerifications: ClaimVerificationResult[]): any {
+  private createFallbackSynthesis(
+    evaluation: EvidenceEvaluationResult,
+    atomicVerifications: ClaimVerificationResult[]
+  ): any {
     const avgScore = evaluation.overallConsensus.consensusScore;
     const verifiedCount = atomicVerifications.filter(v => v.status === 'Verified').length;
     const totalClaims = atomicVerifications.length;
