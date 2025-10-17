@@ -1,504 +1,510 @@
 // src/services/EvidenceEvaluationService.ts
-// AI-POWERED EVIDENCE EVALUATION WITH CONTRADICTION DETECTION
+// Comprehensive evidence evaluation with AI-powered analysis
 
 import { vertexAiService } from './vertexAiService';
-import { Evidence } from '@/types';
 import { logger } from '../utils/logger';
+import { parseAIJsonResponse } from '../utils/jsonParser';
 
 // ===== TYPE DEFINITIONS =====
 
-export interface AIAnalysis {
-  relevanceScore: number; // 0-100
-  credibilityAssessment: string;
-  keyQuotes: string[];
-  contradictions: string[];
-  supportType: 'supporting' | 'contradicting' | 'neutral';
-  biasIndicators: string[];
-  temporalRelevance: string;
-  factualClaims: string[];
-}
-
-export interface EvaluatedEvidence extends Evidence {
-  aiAnalysis: AIAnalysis;
-  enhancedScore: number; // Combined credibility + AI analysis
+export interface Evidence {
+  id: string;
+  url: string;
+  title: string;
+  snippet: string;
+  publisher: string;
+  publicationDate?: string;
+  credibilityScore: number;
   relevanceScore: number;
+  type: 'claim' | 'news' | 'search_result';
+  source: {
+    name: string;
+    url: string;
+  };
 }
 
-export interface ConsensusAnalysis {
-  supportingCount: number;
-  contradictingCount: number;
-  neutralCount: number;
-  consensusScore: number; // 0-100
-  majorContradictions: string[];
-  reliableSourcesCount: number;
+export interface AIAnalysis {
+  overallVerdict: 'SUPPORTS' | 'CONTRADICTS' | 'NEUTRAL' | 'INSUFFICIENT';
+  confidence: number;
+  reasoning: string;
+  contradictions: string[];
+  corroboration: string[];
+  gaps: string[];
 }
 
-export interface EvidenceEvaluationResult {
-  evaluatedEvidence: EvaluatedEvidence[];
-  overallConsensus: ConsensusAnalysis;
+export interface EvidenceScore {
+  evidenceId: string;
+  credibilityScore: number;
+  relevanceScore: number;
+  freshnessScore: number;
+  consistencyScore: number;
+  finalScore: number;
+  reasoning: string;
+}
+
+export interface EvaluationResult {
+  scores: EvidenceScore[];
+  aiAnalysis: AIAnalysis;
+  aggregateMetrics: {
+    averageCredibility: number;
+    averageRelevance: number;
+    averageFreshness: number;
+    totalEvidence: number;
+    highQualityCount: number;
+    contradictionCount: number;
+    corroborationCount: number;
+  };
   recommendations: string[];
-  processingTime: number;
+  processingTimeMs: number;
 }
 
-// ===== MAIN SERVICE =====
+// ===== MAIN SERVICE CLASS =====
 
-export const evidenceEvaluationService = {
+export class EvidenceEvaluationService {
+  private static instance: EvidenceEvaluationService;
+
+  private constructor() {}
+
+  static getInstance(): EvidenceEvaluationService {
+    if (!EvidenceEvaluationService.instance) {
+      EvidenceEvaluationService.instance = new EvidenceEvaluationService();
+    }
+    return EvidenceEvaluationService.instance;
+  }
+
   /**
-   * MAIN ENTRY POINT: Evaluate a batch of evidence using AI
+   * Evaluate all evidence and generate comprehensive scoring
    */
-  async evaluateEvidenceBatch(
-    claim: string,
+  async evaluateEvidence(
     evidence: Evidence[],
-    atomicClaims?: string[]
-  ): Promise<EvidenceEvaluationResult> {
+    originalClaim: string
+  ): Promise<EvaluationResult> {
     const startTime = Date.now();
-
-    logger.info('🧠 Starting AI evidence evaluation', {
+    logger.info('🔍 Starting Evidence Evaluation', {
       evidenceCount: evidence.length,
-      atomicClaimsCount: atomicClaims?.length || 0
+      claimLength: originalClaim.length
     });
 
-    if (evidence.length === 0) {
-      return this.createEmptyResult();
-    }
-
     try {
-      // Evaluate evidence in batches to avoid token limits
-      const batchSize = 5;
-      const evaluatedBatches: EvaluatedEvidence[] = [];
+      // Step 1: Score each piece of evidence
+      const scores = evidence.map(e => this.scoreEvidence(e, originalClaim));
 
-      for (let i = 0; i < evidence.length; i += batchSize) {
-        const batch = evidence.slice(i, i + batchSize);
-        const evaluated = await this.evaluateBatch(claim, batch, atomicClaims);
-        evaluatedBatches.push(...evaluated);
+      // Step 2: Get AI analysis of evidence consistency
+      const aiAnalysis = await this.performAIAnalysis(evidence, originalClaim);
 
-        logger.info(`Evaluated batch ${Math.floor(i / batchSize) + 1}`, {
-          processed: evaluatedBatches.length,
-          total: evidence.length
-        });
-      }
+      // Step 3: Calculate aggregate metrics
+      const aggregateMetrics = this.calculateAggregateMetrics(scores, aiAnalysis);
 
-      // Analyze overall consensus
-      const consensus = this.analyzeConsensus(evaluatedBatches);
-      
-      // Generate recommendations
-      const recommendations = this.generateRecommendations(evaluatedBatches, consensus);
+      // Step 4: Generate recommendations
+      const recommendations = this.generateRecommendations(scores, aiAnalysis, aggregateMetrics);
 
-      logger.info('✅ Evidence evaluation complete', {
-        totalEvaluated: evaluatedBatches.length,
-        consensusScore: consensus.consensusScore,
-        processingTime: Date.now() - startTime
+      const processingTime = Date.now() - startTime;
+
+      logger.info('✅ Evidence Evaluation Complete', {
+        processingTimeMs: processingTime,
+        averageScore: aggregateMetrics.averageCredibility,
+        verdict: aiAnalysis.overallVerdict
       });
 
       return {
-        evaluatedEvidence: evaluatedBatches,
-        overallConsensus: consensus,
+        scores,
+        aiAnalysis,
+        aggregateMetrics,
         recommendations,
-        processingTime: Date.now() - startTime
+        processingTimeMs: processingTime
       };
 
-    } catch (error) {
-      logger.error('Evidence evaluation failed', { error });
-      return this.createFallbackResult(evidence);
+    } catch (error: any) {
+      logger.error('Evidence evaluation failed', error);
+      // Return fallback result instead of throwing
+      return this.createFallbackResult(evidence, originalClaim, Date.now() - startTime);
     }
-  },
+  }
+
+  // ===== SCORING METHODS =====
 
   /**
-   * Evaluate a batch of evidence items with AI
+   * Score individual evidence piece
    */
-  async evaluateBatch(
-    claim: string,
-    evidenceBatch: Evidence[],
-    atomicClaims?: string[]
-  ): Promise<EvaluatedEvidence[]> {
-    const evidenceSummaries = evidenceBatch.map((e, i) => ({
-      index: i,
-      publisher: e.publisher,
-      credibility: e.credibilityScore,
-      snippet: (e.snippet || e.quote || '').substring(0, 400),
-      url: e.url
-    }));
+  private scoreEvidence(evidence: Evidence, claim: string): EvidenceScore {
+    const credibilityScore = evidence.credibilityScore;
+    const relevanceScore = this.calculateRelevanceScore(evidence, claim);
+    const freshnessScore = this.calculateFreshnessScore(evidence.publicationDate);
+    const consistencyScore = evidence.relevanceScore; // Use existing relevance as consistency
 
-    const prompt = `You are an expert fact-checker evaluating evidence quality and relevance.
+    // Weighted final score
+    const finalScore = Math.round(
+      credibilityScore * 0.4 +
+      relevanceScore * 0.3 +
+      freshnessScore * 0.15 +
+      consistencyScore * 0.15
+    );
 
-CLAIM TO VERIFY: "${claim}"
-
-${atomicClaims && atomicClaims.length > 0 ? `
-ATOMIC CLAIMS:
-${atomicClaims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-` : ''}
-
-EVIDENCE TO EVALUATE:
-${JSON.stringify(evidenceSummaries, null, 2)}
-
-For EACH piece of evidence, analyze:
-1. Relevance to the claim (0-100)
-2. Support type (supporting/contradicting/neutral)
-3. Key quotes that matter
-4. Contradictions with other evidence
-5. Bias indicators
-6. Temporal relevance
-
-Respond with ONLY valid JSON array (one object per evidence item):
-[
-  {
-    "index": 0,
-    "relevanceScore": 0-100,
-    "credibilityAssessment": "brief assessment",
-    "keyQuotes": ["quote 1", "quote 2"],
-    "contradictions": ["contradiction description"],
-    "supportType": "supporting|contradicting|neutral",
-    "biasIndicators": ["bias indicator"],
-    "temporalRelevance": "current|outdated|timeless",
-    "factualClaims": ["claim extracted from evidence"]
+    return {
+      evidenceId: evidence.id,
+      credibilityScore,
+      relevanceScore,
+      freshnessScore,
+      consistencyScore,
+      finalScore,
+      reasoning: this.generateScoreReasoning(evidence, finalScore)
+    };
   }
-]`;
+
+  /**
+   * Calculate relevance score based on content similarity
+   */
+  private calculateRelevanceScore(evidence: Evidence, claim: string): number {
+    const claimLower = claim.toLowerCase();
+    const snippetLower = (evidence.snippet || '').toLowerCase();
+    const titleLower = (evidence.title || '').toLowerCase();
+
+    // Extract key terms from claim
+    const claimTerms = claimLower
+      .split(/\s+/)
+      .filter(term => term.length > 3)
+      .slice(0, 10);
+
+    // Count matching terms
+    let matches = 0;
+    claimTerms.forEach(term => {
+      if (snippetLower.includes(term) || titleLower.includes(term)) {
+        matches++;
+      }
+    });
+
+    // Calculate percentage match
+    const matchPercentage = claimTerms.length > 0 
+      ? (matches / claimTerms.length) * 100 
+      : 50;
+
+    return Math.min(100, Math.round(matchPercentage));
+  }
+
+  /**
+   * Calculate freshness score based on publication date
+   */
+  private calculateFreshnessScore(publicationDate?: string): number {
+    if (!publicationDate) return 50; // Default moderate freshness
+
+    try {
+      const published = new Date(publicationDate);
+      const now = new Date();
+      const daysDiff = Math.floor((now.getTime() - published.getTime()) / (1000 * 60 * 60 * 24));
+
+      // Freshness scoring
+      if (daysDiff <= 7) return 100;
+      if (daysDiff <= 30) return 90;
+      if (daysDiff <= 90) return 80;
+      if (daysDiff <= 180) return 70;
+      if (daysDiff <= 365) return 60;
+      if (daysDiff <= 730) return 50;
+      return 40;
+    } catch {
+      return 50;
+    }
+  }
+
+  /**
+   * Generate reasoning text for score
+   */
+  private generateScoreReasoning(evidence: Evidence, finalScore: number): string {
+    const reasons: string[] = [];
+
+    if (evidence.credibilityScore >= 90) {
+      reasons.push('highly credible source');
+    } else if (evidence.credibilityScore >= 70) {
+      reasons.push('credible source');
+    } else {
+      reasons.push('moderate credibility');
+    }
+
+    if (evidence.type === 'claim') {
+      reasons.push('fact-check claim');
+    } else if (evidence.type === 'news') {
+      reasons.push('news article');
+    }
+
+    if (finalScore >= 85) {
+      return `Strong evidence: ${reasons.join(', ')}`;
+    } else if (finalScore >= 70) {
+      return `Good evidence: ${reasons.join(', ')}`;
+    } else if (finalScore >= 50) {
+      return `Moderate evidence: ${reasons.join(', ')}`;
+    } else {
+      return `Weak evidence: ${reasons.join(', ')}`;
+    }
+  }
+
+  // ===== AI ANALYSIS =====
+
+  /**
+   * Use Vertex AI to analyze evidence consistency
+   */
+  private async performAIAnalysis(
+    evidence: Evidence[],
+    claim: string
+  ): Promise<AIAnalysis> {
+    // Limit evidence to top 10 for AI analysis
+    const topEvidence = evidence
+      .sort((a, b) => b.credibilityScore - a.credibilityScore)
+      .slice(0, 10);
+
+    const prompt = this.buildAIAnalysisPrompt(topEvidence, claim);
 
     try {
       const response = await vertexAiService.generateText(prompt, {
-        temperature: 0.2,
-        maxOutputTokens: 4096
+        temperature: 0.3,
+        maxOutputTokens: 1024
       });
 
-      const cleaned = response.replace(/```json|```/g, '').trim();
-      const analyses: AIAnalysis[] = JSON.parse(cleaned);
+      const parsed = parseAIJsonResponse(response);
 
-      // Combine evidence with AI analysis
-      return evidenceBatch.map((evidence, index) => {
-        const aiAnalysis = analyses.find(a => a.index === index) || this.createFallbackAnalysis();
-        const enhancedScore = this.calculateEnhancedScore(
-          evidence.credibilityScore || 50,
-          aiAnalysis.relevanceScore,
-          aiAnalysis.supportType
-        );
-
-        return {
-          ...evidence,
-          aiAnalysis,
-          enhancedScore,
-          relevanceScore: aiAnalysis.relevanceScore
-        } as EvaluatedEvidence;
+      logger.info('✅ Vertex AI analysis complete', {
+        verdict: parsed.overallVerdict,
+        confidence: parsed.confidence
       });
+
+      return {
+        overallVerdict: parsed.overallVerdict || 'INSUFFICIENT',
+        confidence: parsed.confidence || 50,
+        reasoning: parsed.reasoning || 'Analysis could not be completed',
+        contradictions: parsed.contradictions || [],
+        corroboration: parsed.corroboration || [],
+        gaps: parsed.gaps || []
+      };
 
     } catch (error) {
-      logger.error('Batch evaluation failed', { error });
-      return evidenceBatch.map(e => this.createFallbackEvaluatedEvidence(e));
+      logger.warn('AI analysis failed, using heuristic', error);
+      return this.performHeuristicAnalysis(evidence, claim);
     }
-  },
+  }
 
   /**
-   * Analyze consensus across all evaluated evidence
+   * Build prompt for AI analysis
    */
-  analyzeConsensus(evidence: EvaluatedEvidence[]): ConsensusAnalysis {
-    const supporting = evidence.filter(e => e.aiAnalysis.supportType === 'supporting');
-    const contradicting = evidence.filter(e => e.aiAnalysis.supportType === 'contradicting');
-    const neutral = evidence.filter(e => e.aiAnalysis.supportType === 'neutral');
-    const reliable = evidence.filter(e => e.enhancedScore >= 80);
+  private buildAIAnalysisPrompt(evidence: Evidence[], claim: string): string {
+    const evidenceSummary = evidence
+      .map((e, idx) => {
+        return `[${idx + 1}] ${e.publisher} (${e.credibilityScore}% credibility):\n"${e.snippet.substring(0, 200)}..."`;
+      })
+      .join('\n\n');
 
-    // Collect major contradictions
-    const contradictions = new Set<string>();
+    return `You are a professional fact-checker analyzing evidence for this claim:
+
+CLAIM: "${claim}"
+
+EVIDENCE:
+${evidenceSummary}
+
+Analyze the evidence and provide:
+1. Overall verdict (SUPPORTS, CONTRADICTS, NEUTRAL, or INSUFFICIENT)
+2. Confidence level (0-100)
+3. Reasoning (2-3 sentences)
+4. Any contradictions found
+5. Points of corroboration
+6. Information gaps
+
+Return ONLY valid JSON in this exact format (no markdown, no code blocks):
+{
+  "overallVerdict": "SUPPORTS|CONTRADICTS|NEUTRAL|INSUFFICIENT",
+  "confidence": 85,
+  "reasoning": "brief explanation",
+  "contradictions": ["contradiction 1", "contradiction 2"],
+  "corroboration": ["point 1", "point 2"],
+  "gaps": ["missing info 1", "missing info 2"]
+}`;
+  }
+
+  /**
+   * Fallback heuristic analysis if AI fails
+   */
+  private performHeuristicAnalysis(evidence: Evidence[], claim: string): AIAnalysis {
+    const highQuality = evidence.filter(e => e.credibilityScore >= 80);
+    const supportingKeywords = ['confirmed', 'verified', 'true', 'accurate'];
+    const contradictingKeywords = ['false', 'debunked', 'fake', 'misleading'];
+
+    let supportCount = 0;
+    let contradictCount = 0;
+
     evidence.forEach(e => {
-      e.aiAnalysis.contradictions.forEach(c => contradictions.add(c));
+      const snippetLower = e.snippet.toLowerCase();
+      if (supportingKeywords.some(kw => snippetLower.includes(kw))) {
+        supportCount++;
+      }
+      if (contradictingKeywords.some(kw => snippetLower.includes(kw))) {
+        contradictCount++;
+      }
     });
 
-    // Calculate consensus score
-    const consensusScore = this.calculateConsensusScore(
-      supporting.length,
-      contradicting.length,
-      neutral.length,
-      reliable.length
-    );
+    let verdict: AIAnalysis['overallVerdict'] = 'INSUFFICIENT';
+    let confidence = 50;
 
-    return {
-      supportingCount: supporting.length,
-      contradictingCount: contradicting.length,
-      neutralCount: neutral.length,
-      consensusScore,
-      majorContradictions: Array.from(contradictions),
-      reliableSourcesCount: reliable.length
-    };
-  },
-
-  /**
-   * Calculate consensus score based on evidence distribution
-   */
-  calculateConsensusScore(
-    supporting: number,
-    contradicting: number,
-    neutral: number,
-    reliable: number
-  ): number {
-    const total = supporting + contradicting + neutral;
-    if (total === 0) return 0;
-
-    // Base score from support ratio
-    const supportRatio = supporting / total;
-    const contradictRatio = contradicting / total;
-    
-    let score = 0;
-
-    if (supportRatio > 0.7) {
-      // Strong support
-      score = 70 + (supportRatio - 0.7) * 100;
-    } else if (supportRatio > 0.5) {
-      // Moderate support
-      score = 50 + (supportRatio - 0.5) * 100;
-    } else if (contradictRatio > 0.7) {
-      // Strong contradiction
-      score = 30 - (contradictRatio - 0.7) * 100;
-    } else {
-      // Mixed
-      score = 50;
-    }
-
-    // Adjust for reliable sources
-    if (reliable >= 3) {
-      score += 10;
-    } else if (reliable === 0) {
-      score -= 15;
-    }
-
-    return Math.max(0, Math.min(100, Math.round(score)));
-  },
-
-  /**
-   * Calculate enhanced score combining credibility and AI analysis
-   */
-  calculateEnhancedScore(
-    baseCredibility: number,
-    relevanceScore: number,
-    supportType: string
-  ): number {
-    // Weight: 60% credibility, 40% relevance
-    let score = (baseCredibility * 0.6) + (relevanceScore * 0.4);
-
-    // Boost for supporting evidence from high-credibility sources
-    if (supportType === 'supporting' && baseCredibility >= 85) {
-      score += 5;
-    }
-
-    // Penalty for contradicting low-credibility sources
-    if (supportType === 'contradicting' && baseCredibility < 70) {
-      score -= 10;
-    }
-
-    return Math.max(0, Math.min(100, Math.round(score)));
-  },
-
-  /**
-   * Generate recommendations based on evaluation
-   */
-  generateRecommendations(
-    evidence: EvaluatedEvidence[],
-    consensus: ConsensusAnalysis
-  ): string[] {
-    const recommendations: string[] = [];
-
-    // Check for insufficient high-quality sources
-    if (consensus.reliableSourcesCount < 3) {
-      recommendations.push(
-        `⚠️ Only ${consensus.reliableSourcesCount} highly reliable sources found. Consider gathering more evidence.`
-      );
-    }
-
-    // Check for major contradictions
-    if (consensus.majorContradictions.length > 0) {
-      recommendations.push(
-        `🔍 ${consensus.majorContradictions.length} major contradiction(s) detected. Review conflicting evidence carefully.`
-      );
-    }
-
-    // Check for low consensus
-    if (consensus.consensusScore < 50) {
-      recommendations.push(
-        '⚠️ Low consensus among sources. This claim may be disputed or require more context.'
-      );
-    }
-
-    // Check for bias indicators
-    const biasCount = evidence.reduce((sum, e) => 
-      sum + e.aiAnalysis.biasIndicators.length, 0
-    );
-    if (biasCount > evidence.length * 0.3) {
-      recommendations.push(
-        '🔍 Multiple bias indicators detected across sources. Consider source diversity.'
-      );
-    }
-
-    // Check for outdated evidence
-    const outdatedCount = evidence.filter(e => 
-      e.aiAnalysis.temporalRelevance === 'outdated'
-    ).length;
-    if (outdatedCount > evidence.length * 0.4) {
-      recommendations.push(
-        '📅 Significant portion of evidence may be outdated. Consider more recent sources.'
-      );
-    }
-
-    // Positive recommendation for strong consensus
-    if (consensus.consensusScore >= 85 && consensus.reliableSourcesCount >= 5) {
-      recommendations.push(
-        '✅ Strong consensus from multiple reliable sources. High confidence in verdict.'
-      );
-    }
-
-    return recommendations;
-  },
-
-  /**
-   * Detect contradictions between evidence items
-   */
-  async detectContradictions(evidence: EvaluatedEvidence[]): Promise<string[]> {
-    if (evidence.length < 2) return [];
-
-    const contradictions: string[] = [];
-
-    // Group by support type
-    const supporting = evidence.filter(e => e.aiAnalysis.supportType === 'supporting');
-    const contradicting = evidence.filter(e => e.aiAnalysis.supportType === 'contradicting');
-
-    if (supporting.length > 0 && contradicting.length > 0) {
-      // Find specific contradictions using AI
-      const supportingClaims = supporting
-        .flatMap(e => e.aiAnalysis.factualClaims)
-        .slice(0, 5);
-      
-      const contradictingClaims = contradicting
-        .flatMap(e => e.aiAnalysis.factualClaims)
-        .slice(0, 5);
-
-      if (supportingClaims.length > 0 && contradictingClaims.length > 0) {
-        try {
-          const prompt = `Identify specific contradictions between these two sets of claims:
-
-SUPPORTING CLAIMS:
-${supportingClaims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-CONTRADICTING CLAIMS:
-${contradictingClaims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-List only the most significant contradictions (max 3). Respond with JSON array:
-["contradiction 1", "contradiction 2", "contradiction 3"]`;
-
-          const response = await vertexAiService.generateText(prompt, {
-            temperature: 0.1,
-            maxOutputTokens: 500
-          });
-
-          const parsed = JSON.parse(response.replace(/```json|```/g, '').trim());
-          contradictions.push(...parsed);
-        } catch (error) {
-          logger.warn('Contradiction detection failed', { error });
-        }
+    if (highQuality.length >= 3) {
+      if (supportCount > contradictCount) {
+        verdict = 'SUPPORTS';
+        confidence = 70 + Math.min(20, highQuality.length * 5);
+      } else if (contradictCount > supportCount) {
+        verdict = 'CONTRADICTS';
+        confidence = 70 + Math.min(20, highQuality.length * 5);
+      } else {
+        verdict = 'NEUTRAL';
+        confidence = 60;
       }
     }
 
-    return contradictions;
-  },
-
-  // ===== FALLBACK METHODS =====
-
-  createEmptyResult(): EvidenceEvaluationResult {
     return {
-      evaluatedEvidence: [],
-      overallConsensus: {
-        supportingCount: 0,
-        contradictingCount: 0,
-        neutralCount: 0,
-        consensusScore: 0,
-        majorContradictions: [],
-        reliableSourcesCount: 0
-      },
-      recommendations: ['⚠️ No evidence available for evaluation'],
-      processingTime: 0
+      overallVerdict: verdict,
+      confidence,
+      reasoning: `Heuristic analysis based on ${evidence.length} sources (${highQuality.length} high-quality)`,
+      contradictions: contradictCount > 0 ? [`Found ${contradictCount} potential contradictions`] : [],
+      corroboration: supportCount > 0 ? [`Found ${supportCount} supporting sources`] : [],
+      gaps: evidence.length < 5 ? ['Limited evidence available'] : []
     };
-  },
+  }
 
-  createFallbackResult(evidence: Evidence[]): EvidenceEvaluationResult {
-    const evaluatedEvidence = evidence.map(e => this.createFallbackEvaluatedEvidence(e));
-    const consensus = this.analyzeConsensus(evaluatedEvidence);
-
-    return {
-      evaluatedEvidence,
-      overallConsensus: consensus,
-      recommendations: ['⚠️ AI evaluation unavailable - using fallback statistical analysis'],
-      processingTime: 0
-    };
-  },
-
-  createFallbackEvaluatedEvidence(evidence: Evidence): EvaluatedEvidence {
-    return {
-      ...evidence,
-      aiAnalysis: this.createFallbackAnalysis(),
-      enhancedScore: evidence.credibilityScore || 50,
-      relevanceScore: 70
-    };
-  },
-
-  createFallbackAnalysis(): AIAnalysis {
-    return {
-      relevanceScore: 70,
-      credibilityAssessment: 'Fallback evaluation - AI analysis unavailable',
-      keyQuotes: [],
-      contradictions: [],
-      supportType: 'neutral',
-      biasIndicators: [],
-      temporalRelevance: 'timeless',
-      factualClaims: []
-    };
-  },
+  // ===== AGGREGATE METRICS =====
 
   /**
-   * Extract key quotes from evidence for citation
+   * Calculate aggregate metrics across all evidence
    */
-  extractKeyQuotes(evidence: EvaluatedEvidence[]): string[] {
-    const quotes: string[] = [];
-
-    evidence
-      .filter(e => e.enhancedScore >= 75)
-      .forEach(e => {
-        quotes.push(...e.aiAnalysis.keyQuotes.slice(0, 2));
-      });
-
-    return quotes.slice(0, 10); // Limit to top 10 quotes
-  },
-
-  /**
-   * Get evidence summary for reporting
-   */
-  getSummary(result: EvidenceEvaluationResult): {
-    totalSources: number;
-    reliableSources: number;
-    supportingPercentage: number;
-    contradictingPercentage: number;
-    averageRelevance: number;
-  } {
-    const { evaluatedEvidence, overallConsensus } = result;
-    const total = evaluatedEvidence.length;
-
-    if (total === 0) {
+  private calculateAggregateMetrics(
+    scores: EvidenceScore[],
+    aiAnalysis: AIAnalysis
+  ): EvaluationResult['aggregateMetrics'] {
+    if (scores.length === 0) {
       return {
-        totalSources: 0,
-        reliableSources: 0,
-        supportingPercentage: 0,
-        contradictingPercentage: 0,
-        averageRelevance: 0
+        averageCredibility: 0,
+        averageRelevance: 0,
+        averageFreshness: 0,
+        totalEvidence: 0,
+        highQualityCount: 0,
+        contradictionCount: 0,
+        corroborationCount: 0
       };
     }
 
-    const avgRelevance = evaluatedEvidence.reduce((sum, e) => 
-      sum + e.relevanceScore, 0
-    ) / total;
+    const averageCredibility = Math.round(
+      scores.reduce((sum, s) => sum + s.credibilityScore, 0) / scores.length
+    );
+
+    const averageRelevance = Math.round(
+      scores.reduce((sum, s) => sum + s.relevanceScore, 0) / scores.length
+    );
+
+    const averageFreshness = Math.round(
+      scores.reduce((sum, s) => sum + s.freshnessScore, 0) / scores.length
+    );
+
+    const highQualityCount = scores.filter(s => s.finalScore >= 80).length;
 
     return {
-      totalSources: total,
-      reliableSources: overallConsensus.reliableSourcesCount,
-      supportingPercentage: (overallConsensus.supportingCount / total) * 100,
-      contradictingPercentage: (overallConsensus.contradictingCount / total) * 100,
-      averageRelevance: Math.round(avgRelevance)
+      averageCredibility,
+      averageRelevance,
+      averageFreshness,
+      totalEvidence: scores.length,
+      highQualityCount,
+      contradictionCount: aiAnalysis.contradictions.length,
+      corroborationCount: aiAnalysis.corroboration.length
     };
   }
-};
 
-// Export types and service
-export default evidenceEvaluationService;
+  // ===== RECOMMENDATIONS =====
+
+  /**
+   * Generate actionable recommendations
+   */
+  private generateRecommendations(
+    scores: EvidenceScore[],
+    aiAnalysis: AIAnalysis,
+    metrics: EvaluationResult['aggregateMetrics']
+  ): string[] {
+    const recommendations: string[] = [];
+
+    // Evidence quality recommendations
+    if (metrics.highQualityCount < 3) {
+      recommendations.push('⚠️ Limited high-quality evidence. Seek additional authoritative sources.');
+    }
+
+    if (metrics.averageCredibility < 70) {
+      recommendations.push('⚠️ Low average source credibility. Prioritize reputable sources.');
+    }
+
+    // Freshness recommendations
+    if (metrics.averageFreshness < 60) {
+      recommendations.push('📅 Evidence may be outdated. Look for more recent sources.');
+    }
+
+    // Consistency recommendations
+    if (aiAnalysis.contradictions.length > 0) {
+      recommendations.push(`⚠️ ${aiAnalysis.contradictions.length} contradictions found. Investigate conflicting claims.`);
+    }
+
+    if (aiAnalysis.gaps.length > 0) {
+      recommendations.push('🔍 Information gaps identified. Additional research needed.');
+    }
+
+    // Verdict-based recommendations
+    if (aiAnalysis.overallVerdict === 'INSUFFICIENT') {
+      recommendations.push('❌ Insufficient evidence for verification. Conduct more research.');
+    } else if (aiAnalysis.confidence < 70) {
+      recommendations.push('⚠️ Low confidence level. Verify with additional sources.');
+    }
+
+    // Positive recommendations
+    if (metrics.highQualityCount >= 5 && aiAnalysis.confidence >= 80) {
+      recommendations.push('✅ Strong evidence base with high-quality sources.');
+    }
+
+    return recommendations;
+  }
+
+  // ===== FALLBACK =====
+
+  /**
+   * Create fallback result if evaluation fails
+   */
+  private createFallbackResult(
+    evidence: Evidence[],
+    claim: string,
+    processingTime: number
+  ): EvaluationResult {
+    const scores = evidence.map(e => ({
+      evidenceId: e.id,
+      credibilityScore: e.credibilityScore,
+      relevanceScore: e.relevanceScore,
+      freshnessScore: 50,
+      consistencyScore: 50,
+      finalScore: Math.round((e.credibilityScore + e.relevanceScore) / 2),
+      reasoning: 'Fallback scoring due to evaluation error'
+    }));
+
+    return {
+      scores,
+      aiAnalysis: {
+        overallVerdict: 'INSUFFICIENT',
+        confidence: 40,
+        reasoning: 'Analysis could not be completed due to an error',
+        contradictions: [],
+        corroboration: [],
+        gaps: ['Evaluation failed']
+      },
+      aggregateMetrics: {
+        averageCredibility: evidence.length > 0 
+          ? Math.round(evidence.reduce((sum, e) => sum + e.credibilityScore, 0) / evidence.length)
+          : 0,
+        averageRelevance: 50,
+        averageFreshness: 50,
+        totalEvidence: evidence.length,
+        highQualityCount: evidence.filter(e => e.credibilityScore >= 80).length,
+        contradictionCount: 0,
+        corroborationCount: 0
+      },
+      recommendations: ['⚠️ Evaluation encountered errors. Results may be incomplete.'],
+      processingTimeMs: processingTime
+    };
+  }
+}
+
+// Export singleton instance
+export const evidenceEvaluator = EvidenceEvaluationService.getInstance();
