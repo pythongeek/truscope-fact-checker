@@ -239,7 +239,7 @@ async function runSynthesis(text: string, evidence: Evidence[], context: string,
     }
 
     try {
-        const prompt = buildSynthesisPrompt(text, evidence, context); // ERROR WAS HERE
+        const prompt = buildSynthesisPrompt(text, evidence, context);
         const geminiText = await callGeminiAPI(prompt, geminiApiKey, config.geminiModel || 'gemini-1.5-flash-latest');
         if (!geminiText) throw new Error('Empty response from Gemini');
 
@@ -254,7 +254,7 @@ async function runSynthesis(text: string, evidence: Evidence[], context: string,
             reasoning: synthesis.reasoning,
             evidence,
             metadata: {
-                methodUsed: 'hybrid-orchestration-synthesis', // ERROR WAS HERE
+                methodUsed: 'hybrid-orchestration-synthesis',
                 processingTimeMs: Date.now() - startTime,
                 apisUsed: tierResults.filter(t => t.success).map(t => t.tier).concat(['gemini-ai']),
                 sourcesConsulted: {
@@ -282,7 +282,7 @@ function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tie
         reasoning,
         evidence,
         metadata: {
-            methodUsed: 'statistical-fallback', // ERROR WAS HERE
+            methodUsed: 'statistical-fallback',
             processingTimeMs: Date.now() - startTime,
             apisUsed: tierResults.filter(t => t.success).map(t => t.tier),
             sourcesConsulted: { total: evidence.length, highCredibility: highCred },
@@ -292,8 +292,21 @@ function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tie
     };
 }
 
-// --- HELPER FUNCTIONS ---
-// This section contains all the necessary utility, mapping, scoring, and parsing functions.
+// --- HELPER FUNCTIONS (ALL INCLUDED) ---
+
+function buildStatisticalReasoning(evidence: Evidence[], score: number, highCred: number): string {
+    if (evidence.length === 0) {
+        return "No evidence was found to verify the claim. The final verdict is UNVERIFIED.";
+    }
+    let reasoning = `Analysis of ${evidence.length} sources produced a weighted reliability score of ${score}%. `;
+    if (highCred > 0) {
+        reasoning += `The analysis includes ${highCred} high-credibility source${highCred > 1 ? 's' : ''}. `;
+    }
+    if (score < 50) {
+        reasoning += "There is insufficient reliable evidence to support this claim.";
+    }
+    return reasoning;
+}
 
 function buildSynthesisPrompt(text: string, evidence: Evidence[], context: string): string {
     const evidenceSummary = evidence.slice(0, 15).map((e, i) => {
