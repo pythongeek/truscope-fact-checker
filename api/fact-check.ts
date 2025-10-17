@@ -1,22 +1,19 @@
-// api/fact-check.ts - FINAL CORRECTED VERSION WITH ALL FUNCTIONS AND TYPE DEFINITIONS
+// api/fact-check.ts - FINAL VERSION: RESTORED 3-TIER SYSTEM
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Vercel timeout configuration
 export const config = {
-  maxDuration: 10, // Hobby tier limit
+  maxDuration: 10, // Hobby tier limit is strict
 };
 
 // --- CONSTANTS ---
+const GOOGLE_FACT_CHECK_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const SERPER_API_URL = 'https://google.serper.dev/search';
 const WEBZ_API_URL = 'https://api.webz.io/newsApiLite';
-const API_TIMEOUT = 4000;
+const API_TIMEOUT = 3000; // Shorter timeout for individual calls to fit within 10s total
 
-// --- KEY THRESHOLDS ---
-const MIN_EVIDENCE_FOR_SYNTHESIS = 3;
-const ESCALATION_CONFIDENCE_THRESHOLD = 75;
-
-// --- INLINE TYPE DEFINITIONS (Corrected) ---
+// --- INLINE TYPE DEFINITIONS ---
 type FactVerdict = 'TRUE' | 'FALSE' | 'MIXED' | 'UNVERIFIED' | 'MISLEADING';
 
 interface Evidence {
@@ -46,7 +43,6 @@ interface TierResult {
     confidence: number;
     evidence: Evidence[];
     processingTime: number;
-    query: string;
     summary: string;
 }
 
@@ -58,7 +54,6 @@ interface FactCheckReport {
   reasoning: string;
   evidence: Evidence[];
   metadata: {
-    // FIX: Added 'methodUsed' to the type definition
     methodUsed: string;
     processingTimeMs: number;
     apisUsed: string[];
@@ -78,17 +73,14 @@ const logger = {
   error: (msg: string, meta?: any) => console.error(JSON.stringify({ level: 'ERROR', message: msg, ...meta }))
 };
 
-// --- MAIN HANDLER (HYBRID ORCHESTRATOR) ---
+
+// --- MAIN HANDLER: 3-TIER SYSTEM ---
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
     const startTime = Date.now();
     const { text, publishingContext = 'journalism', config = {}, clientSideResults = {} } = req.body;
@@ -97,40 +89,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Text is required.' });
     }
 
-    logger.info('🚀 Starting Hybrid Fact-Check Orchestration', { textLength: text.length });
+    logger.info('🚀 Starting 3-Tier Fact-Check Process', { textLength: text.length });
 
     try {
-        const tierResults: TierResult[] = [];
-        let allEvidence: Evidence[] = [];
-        let currentQuery = extractSmartQuery(text, 120);
+        const query = extractSmartQuery(text, 120);
 
-        // Phase 1: Ingest Client-Side Google Fact Check Results
-        if (clientSideResults?.evidence?.length > 0) {
-            const clientTier = processClientSideResults(clientSideResults);
-            tierResults.push(clientTier);
-            allEvidence = mergeEvidence(allEvidence, clientTier.evidence);
-            logger.info('✅ Phase 1 (Client-Side) Complete', { summary: clientTier.summary });
-        } else {
-             logger.warn('Phase 1 (Client-Side) Skipped', { reason: 'No evidence provided from client.'});
-        }
+        // Run all three tiers in parallel to gather maximum evidence within the time limit
+        const [
+            tier1Result,
+            tier2Result,
+            tier3Result
+        ] = await Promise.all([
+            runTier1_GoogleFactCheck(query, clientSideResults),
+            runTier2_WebSearch(query),
+            runTier3_NewsSearch(query)
+        ]);
 
-        // Phase 2: Broad Web Search (SERP)
-        const phase2Result = await runWebSearch(currentQuery);
-        tierResults.push(phase2Result);
-        allEvidence = mergeEvidence(allEvidence, phase2Result.evidence);
-
-        const confidenceAfterWeb = calculateOverallConfidence(allEvidence);
-
-        // Dynamic Escalation to News Search
-        if (confidenceAfterWeb < ESCALATION_CONFIDENCE_THRESHOLD) {
-            const escalationReason = `Confidence after web search is low (${confidenceAfterWeb.toFixed(0)}%). Escalating to news search.`;
-            const refinedQuery = refineQueryFromEvidence(text, allEvidence, true);
-            logger.info('🧠 Dynamic Escalation', { reason: escalationReason, newQuery: refinedQuery });
-
-            const phase3Result = await runNewsSearch(refinedQuery, text);
-            tierResults.push(phase3Result);
-            allEvidence = mergeEvidence(allEvidence, phase3Result.evidence);
-        }
+        const tierResults = [tier1Result, tier2Result, tier3Result];
+        const allEvidence = mergeEvidence(
+            tier1Result.evidence,
+            tier2Result.evidence,
+            tier3Result.evidence
+        );
+        
+        logger.info(`Evidence gathering complete. Total unique sources: ${allEvidence.length}`);
 
         // Final Phase: AI-Powered Synthesis
         const finalReport = await runSynthesis(text, allEvidence, publishingContext, tierResults, startTime, config);
@@ -138,104 +120,114 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         logger.info('✅ Fact-Check Complete', {
             finalScore: finalReport.finalScore,
             verdict: finalReport.finalVerdict,
-            evidenceCount: finalReport.evidence.length
         });
 
         return res.status(200).json(finalReport);
 
     } catch (error: any) {
-        logger.error('Orchestration failed', { errorMessage: error.message, stack: error.stack });
+        logger.error('Fact-check handler failed', { errorMessage: error.message, stack: error.stack });
         return res.status(500).json({ error: 'An internal server error occurred.' });
     }
 }
 
-// --- TIER PROCESSING & SEARCH PHASES ---
-function processClientSideResults(clientResults: any): TierResult {
-    const evidence = (clientResults.evidence || []).map((e: any) => ({...e})); // Defensive copy
-    const confidence = calculateTierConfidence(evidence);
-    return {
-        tier: 'direct-verification',
-        success: evidence.length > 0,
-        confidence,
-        evidence,
-        query: clientResults.query || 'N/A (Client-Side)',
-        summary: `Received ${evidence.length} pre-vetted results from client.`,
-        processingTime: clientResults.processingTime || 0,
-    };
+// --- TIER 1: GOOGLE FACT CHECK ---
+async function runTier1_GoogleFactCheck(query: string, clientSideResults: any): Promise<TierResult> {
+    const startTime = Date.now();
+    // **FIX**: Prioritize using the client-side results if they are provided. This restores the original logic.
+    if (clientSideResults?.evidence?.length > 0) {
+        logger.info('Phase 1: Using pre-fetched client-side Google Fact Check results.');
+        const evidence = clientSideResults.evidence.map((e: any) => ({...e}));
+        return {
+            tier: 'direct-verification',
+            success: true,
+            confidence: calculateTierConfidence(evidence),
+            evidence,
+            summary: `Used ${evidence.length} sources from client.`,
+            processingTime: Date.now() - startTime + (clientSideResults.processingTime || 0),
+        };
+    }
+    
+    // Fallback to server-side check if client-side results are missing
+    logger.warn('Phase 1: No client-side results. Running server-side Google Fact Check fallback.');
+    const apiKey = process.env.GOOGLE_FACT_CHECK_API_KEY;
+    if (!apiKey) {
+        return { tier: 'direct-verification', success: false, confidence: 0, evidence: [], summary: "Google Fact Check API key not configured.", processingTime: Date.now() - startTime };
+    }
+
+    try {
+        const url = `${GOOGLE_FACT_CHECK_URL}?query=${encodeURIComponent(query)}&key=${apiKey}`;
+        const response = await fetchWithTimeout(url, { method: 'GET' }, API_TIMEOUT);
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
+        const data = await response.json();
+        const evidence = mapGoogleFactCheckToEvidence(data.claims || []);
+        const confidence = calculateTierConfidence(evidence);
+        return {
+            tier: 'direct-verification',
+            success: evidence.length > 0,
+            confidence,
+            evidence,
+            summary: `Found ${evidence.length} fact-checks.`,
+            processingTime: Date.now() - startTime,
+        };
+    } catch (error: any) {
+        logger.error('Phase 1 (Google Fact Check) failed', { error: error.message });
+        return { tier: 'direct-verification', success: false, confidence: 0, evidence: [], summary: error.message, processingTime: Date.now() - startTime };
+    }
 }
 
-async function runWebSearch(query: string): Promise<TierResult> {
+
+// --- TIER 2: WEB SEARCH (SERPER) ---
+async function runTier2_WebSearch(query: string): Promise<TierResult> {
     const startTime = Date.now();
     const apiKey = process.env.SERP_API_KEY;
-    if (!apiKey) {
-        logger.error("SERP_API_KEY is not configured.");
-        return { tier: 'web-search', success: false, confidence: 0, evidence: [], query, summary: "SERP API key missing.", processingTime: Date.now() - startTime };
-    }
+    if (!apiKey) return { tier: 'web-search', success: false, confidence: 0, evidence: [], summary: "SERP API key missing.", processingTime: Date.now() - startTime };
+
     try {
         const response = await fetchWithTimeout(SERPER_API_URL, {
             method: 'POST',
             headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ q: query, num: 15 }),
+            body: JSON.stringify({ q: query, num: 10 }),
         }, API_TIMEOUT);
-        if (!response.ok) throw new Error(`SERP API returned status ${response.status}`);
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
         const data = await response.json();
-        const evidence = mapSerpResultsToEvidence(data.organic || [], data.knowledgeGraph);
+        const evidence = mapSerpResultsToEvidence(data.organic || []);
         const confidence = calculateTierConfidence(evidence);
-        const summary = `Found ${evidence.length} web results with a confidence of ${confidence.toFixed(0)}%.`;
-        logger.info('✅ Phase 2 (Web Search) Complete', { summary });
-        return { tier: 'web-search', success: evidence.length > 0, confidence, evidence, query, summary, processingTime: Date.now() - startTime };
+        return { tier: 'web-search', success: evidence.length > 0, confidence, evidence, summary: `Found ${evidence.length} web results.`, processingTime: Date.now() - startTime };
     } catch (error: any) {
-        logger.warn('Phase 2 (Web Search) Failed', { error: error.message });
-        return { tier: 'web-search', success: false, confidence: 0, evidence: [], query, summary: error.message, processingTime: Date.now() - startTime };
+        logger.error('Phase 2 (Web Search) failed', { error: error.message });
+        return { tier: 'web-search', success: false, confidence: 0, evidence: [], summary: error.message, processingTime: Date.now() - startTime };
     }
 }
 
-async function runNewsSearch(query: string, fallbackQuery: string): Promise<TierResult> {
+// --- TIER 3: NEWS SEARCH (WEBZ) ---
+async function runTier3_NewsSearch(query: string): Promise<TierResult> {
     const startTime = Date.now();
     const apiKey = process.env.WEBZ_API_KEY;
-    if (!apiKey) {
-        logger.error("WEBZ_API_KEY is not configured.");
-        return { tier: 'news-analysis', success: false, confidence: 0, evidence: [], query, summary: "Webz API key missing.", processingTime: Date.now() - startTime };
-    }
-    
-    let activeQuery = query;
+    if (!apiKey) return { tier: 'news-analysis', success: false, confidence: 0, evidence: [], summary: "Webz API key missing.", processingTime: Date.now() - startTime };
+
     try {
-        let evidence = await fetchNews(activeQuery, apiKey);
-
-        if (evidence.length === 0 && query !== fallbackQuery) {
-            logger.warn('Refined news query failed. Falling back to broader query.', { refinedQuery: query });
-            activeQuery = extractSmartQuery(fallbackQuery, 120);
-            evidence = await fetchNews(activeQuery, apiKey);
-        }
-
+        const params = new URLSearchParams({ token: apiKey, q: `"${query}"`, size: '10' }); // Use exact phrase for better results
+        const response = await fetchWithTimeout(`${WEBZ_API_URL}?${params.toString()}`, { method: 'GET' }, API_TIMEOUT);
+        if (!response.ok) throw new Error(`API returned status ${response.status}`);
+        const data = await response.json();
+        const evidence = mapNewsResultsToEvidence(data.posts || []);
         const confidence = calculateTierConfidence(evidence);
-        const summary = `Found ${evidence.length} news articles with a confidence of ${confidence.toFixed(0)}%.`;
-        logger.info('✅ Phase 3 (News Search) Complete', { summary });
-        return { tier: 'news-analysis', success: evidence.length > 0, confidence, evidence, query: activeQuery, summary, processingTime: Date.now() - startTime };
-
+        return { tier: 'news-analysis', success: evidence.length > 0, confidence, evidence, summary: `Found ${evidence.length} news articles.`, processingTime: Date.now() - startTime };
     } catch (error: any) {
-        logger.warn('Phase 3 (News Search) Failed', { error: error.message });
-        return { tier: 'news-analysis', success: false, confidence: 0, evidence: [], query: activeQuery, summary: error.message, processingTime: Date.now() - startTime };
+        logger.error('Phase 3 (News Search) failed', { error: error.message });
+        return { tier: 'news-analysis', success: false, confidence: 0, evidence: [], summary: error.message, processingTime: Date.now() - startTime };
     }
 }
 
-async function fetchNews(query: string, apiKey: string): Promise<Evidence[]> {
-    const params = new URLSearchParams({ token: apiKey, q: query, size: '15', sort: 'relevancy' });
-    const response = await fetchWithTimeout(`${WEBZ_API_URL}?${params.toString()}`, { method: 'GET' }, API_TIMEOUT);
-    if (!response.ok) throw new Error(`Webz API returned status ${response.status}`);
-    const data = await response.json();
-    return mapNewsResultsToEvidence(data.posts || []);
-}
 
 // --- AI SYNTHESIS & REPORTING ---
+// This section remains largely the same, but now receives a richer evidence set
 async function runSynthesis(text: string, evidence: Evidence[], context: string, tierResults: TierResult[], startTime: number, config: any): Promise<FactCheckReport> {
     const geminiApiKey = config.gemini || process.env.GEMINI_API_KEY;
-    const finalWeightedScore = calculateOverallConfidence(evidence);
+    const evidenceScore = calculateOverallConfidence(evidence);
 
-    if (!geminiApiKey || evidence.length < MIN_EVIDENCE_FOR_SYNTHESIS) {
-        if (!geminiApiKey) logger.warn('Synthesis unavailable: Gemini API key not configured.');
-        if (evidence.length < MIN_EVIDENCE_FOR_SYNTHESIS) logger.warn(`Synthesis skipped: Insufficient evidence (${evidence.length} < ${MIN_EVIDENCE_FOR_SYNTHESIS}).`);
-        return createEnhancedStatisticalReport(text, evidence, tierResults, startTime, finalWeightedScore);
+    if (!geminiApiKey || evidence.length === 0) {
+        return createEnhancedStatisticalReport(text, evidence, tierResults, startTime, evidenceScore);
     }
 
     try {
@@ -243,8 +235,8 @@ async function runSynthesis(text: string, evidence: Evidence[], context: string,
         const geminiText = await callGeminiAPI(prompt, geminiApiKey, config.geminiModel || 'gemini-1.5-flash-latest');
         if (!geminiText) throw new Error('Empty response from Gemini');
 
-        const synthesis = parseGeminiResponse(geminiText, evidence, finalWeightedScore);
-        const finalScore = Math.round((synthesis.score * 0.6) + (finalWeightedScore * 0.4));
+        const synthesis = parseGeminiResponse(geminiText, evidence, evidenceScore);
+        const finalScore = Math.round((synthesis.score * 0.5) + (evidenceScore * 0.5)); // Blend AI and evidence scores
 
         return {
             id: `fact_check_${Date.now()}`,
@@ -254,9 +246,9 @@ async function runSynthesis(text: string, evidence: Evidence[], context: string,
             reasoning: synthesis.reasoning,
             evidence,
             metadata: {
-                methodUsed: 'hybrid-orchestration-synthesis',
+                methodUsed: '3-tier-synthesis',
                 processingTimeMs: Date.now() - startTime,
-                apisUsed: tierResults.filter(t => t.success).map(t => t.tier).concat(['gemini-ai']),
+                apisUsed: ['google-fact-check', 'serp-api', 'webz-news', 'gemini-ai'],
                 sourcesConsulted: {
                     total: evidence.length,
                     highCredibility: evidence.filter(e => e.credibilityScore >= 80).length,
@@ -267,66 +259,11 @@ async function runSynthesis(text: string, evidence: Evidence[], context: string,
         };
     } catch (error: any) {
         logger.error('Synthesis failed, falling back to statistical report', { errorMessage: error.message });
-        return createEnhancedStatisticalReport(text, evidence, tierResults, startTime, finalWeightedScore);
+        return createEnhancedStatisticalReport(text, evidence, tierResults, startTime, evidenceScore);
     }
 }
 
-function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tierResults: TierResult[], startTime: number, score: number, customReasoning?: string): FactCheckReport {
-    const highCred = evidence.filter(e => e.credibilityScore >= 80).length;
-    const reasoning = customReasoning || buildStatisticalReasoning(evidence, score, highCred);
-    return {
-        id: `fact_check_${Date.now()}`,
-        originalText: text,
-        finalVerdict: generateVerdictFromScore(score, evidence),
-        finalScore: score,
-        reasoning,
-        evidence,
-        metadata: {
-            methodUsed: 'statistical-fallback',
-            processingTimeMs: Date.now() - startTime,
-            apisUsed: tierResults.filter(t => t.success).map(t => t.tier),
-            sourcesConsulted: { total: evidence.length, highCredibility: highCred },
-            warnings: ['AI synthesis was unavailable or skipped; report is based on statistical analysis.'],
-            tierBreakdown: tierResults
-        }
-    };
-}
-
-// --- HELPER FUNCTIONS (ALL INCLUDED) ---
-
-function buildStatisticalReasoning(evidence: Evidence[], score: number, highCred: number): string {
-    if (evidence.length === 0) {
-        return "No evidence was found to verify the claim. The final verdict is UNVERIFIED.";
-    }
-    let reasoning = `Analysis of ${evidence.length} sources produced a weighted reliability score of ${score}%. `;
-    if (highCred > 0) {
-        reasoning += `The analysis includes ${highCred} high-credibility source${highCred > 1 ? 's' : ''}. `;
-    }
-    if (score < 50) {
-        reasoning += "There is insufficient reliable evidence to support this claim.";
-    }
-    return reasoning;
-}
-
-function buildSynthesisPrompt(text: string, evidence: Evidence[], context: string): string {
-    const evidenceSummary = evidence.slice(0, 15).map((e, i) => {
-        const credRating = e.credibilityScore >= 80 ? 'HIGH' : e.credibilityScore >= 60 ? 'MED' : 'LOW';
-        return `${i + 1}. [${credRating}-${e.credibilityScore}%] ${e.publisher}: "${(e.snippet || '').substring(0, 200)}..."`;
-    }).join('\n');
-    return `As a professional fact-checker for a ${context} publication, analyze the claim based ONLY on the evidence.
-
-CLAIM: "${text}"
-
-EVIDENCE:
-${evidenceSummary}
-
-Your Task: Provide a concise, professional analysis in this EXACT format. Do not add any extra text.
-
-VERDICT: [TRUE, FALSE, MIXED, UNVERIFIED, MISLEADING]
-SCORE: [0-100]
-REASONING: [2-3 sentences explaining your verdict and score based on evidence quality and consistency.]
-WARNINGS: [Note concerns like source quality or contradictions. If none, write "None"]`;
-}
+// --- HELPER FUNCTIONS ---
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
     const controller = new AbortController();
@@ -341,150 +278,183 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
         throw error;
     }
 }
-async function callGeminiAPI(prompt: string, apiKey: string, model: string = 'gemini-1.5-flash-latest'): Promise<string> {
-    try {
-        const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
-        const response = await fetchWithTimeout(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
-            })
-        }, API_TIMEOUT * 2);
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`Gemini API error: ${response.status} - ${errorBody}`);
-        }
-        const data = await response.json();
-        return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    } catch (error: any) {
-        logger.error('Gemini API call failed', { errorMessage: error.message });
-        throw error;
-    }
+
+async function callGeminiAPI(prompt: string, apiKey: string, model: string): Promise<string> {
+    const url = `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`;
+    const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        })
+    }, API_TIMEOUT * 2); // Give Gemini more time
+    if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
-function mapSerpResultsToEvidence(results: any[] = [], knowledgeGraph?: any): Evidence[] {
-    const evidence: Evidence[] = [];
-    if (knowledgeGraph?.description) {
-        evidence.push({
-            id: `serp_kg_${Date.now()}`,
-            quote: knowledgeGraph.description,
-            title: knowledgeGraph.title || 'Knowledge Graph',
-            snippet: knowledgeGraph.description,
-            publisher: 'Google Knowledge Graph',
-            url: knowledgeGraph.website || 'https://google.com',
-            credibilityScore: 90, relevanceScore: 95,
-            publicationDate: new Date().toISOString(),
-            type: 'official_source',
-            source: { name: 'Google Knowledge Graph', url: 'https://google.com', credibility: { rating: 'High', classification: 'Knowledge Graph', warnings: [] } }
-        } as Evidence);
-    }
-    const mapped = results.map((result: any, index: number): Evidence | null => {
+
+function mapGoogleFactCheckToEvidence(claims: any[]): Evidence[] {
+    return claims.map((claim: any, index: number) => {
+        const review = claim.claimReview?.[0];
+        if (!review) return null;
+        const domain = extractDomain(review.url);
+        const credScore = calculateSourceScore(domain);
+        return {
+            id: `gfc_${Date.now()}_${index}`,
+            url: review.url,
+            title: review.title || claim.text,
+            snippet: review.textualRating,
+            publisher: review.publisher?.name || domain,
+            publicationDate: claim.claimDate,
+            credibilityScore: credScore,
+            relevanceScore: 90,
+            type: 'claim',
+            source: {
+                name: review.publisher?.name || domain,
+                url: review.publisher?.site || `https://${domain}`,
+                credibility: { rating: 'High', classification: 'Fact-Checking Organization', warnings: [] }
+            }
+        } as Evidence;
+    }).filter((e): e is Evidence => e !== null);
+}
+
+function mapSerpResultsToEvidence(results: any[]): Evidence[] {
+    return results.map((result: any, index: number): Evidence | null => {
         if (!result.link) return null;
         const domain = extractDomain(result.link);
         const credScore = calculateSourceScore(domain);
         return {
             id: `serp_${Date.now()}_${index}`,
-            quote: result.snippet || '', title: result.title, snippet: result.snippet || '',
-            publisher: result.source || domain, url: result.link,
+            url: result.link, title: result.title, snippet: result.snippet || '',
+            publisher: result.source || domain,
             credibilityScore: credScore,
             relevanceScore: calculateRelevanceScore(result.position),
-            publicationDate: result.date || extractDateFromSnippet(result.snippet),
+            publicationDate: result.date,
             type: 'search_result',
             source: {
                 name: result.source || domain, url: result.link,
-                credibility: { rating: credScore >= 80 ? 'High' : credScore >= 60 ? 'Medium' : 'Low', classification: classifySource(domain), warnings: getSourceWarnings(domain, credScore) }
+                credibility: { rating: credScore >= 80 ? 'High' : credScore >= 60 ? 'Medium' : 'Low', classification: classifySource(domain), warnings: [] }
             }
         } as Evidence;
     }).filter((e): e is Evidence => e !== null);
-    return [...evidence, ...mapped];
 }
-function mapNewsResultsToEvidence(posts: any[] = []): Evidence[] {
+
+function mapNewsResultsToEvidence(posts: any[]): Evidence[] {
     return posts.map((post: any, index: number): Evidence | null => {
         if (!post.url) return null;
         const domain = extractDomain(post.url);
-        const publisher = post.thread?.site_full || post.author || domain;
-        const credScore = calculateNewsSourceScore(domain, post);
+        const credScore = calculateSourceScore(domain);
         return {
             id: `news_${Date.now()}_${index}`,
-            quote: post.text?.substring(0, 300) || '', title: post.title, snippet: post.text?.substring(0, 250) || '',
-            publisher, url: post.url, credibilityScore: credScore, relevanceScore: 80,
+            url: post.url, title: post.title, snippet: post.text?.substring(0, 250) || '',
+            publisher: post.thread?.site_full || domain,
+            credibilityScore: credScore, relevanceScore: 85,
             publicationDate: post.published, type: 'news',
             source: {
-                name: publisher, url: post.url,
-                credibility: { rating: credScore >= 80 ? 'High' : credScore >= 60 ? 'Medium' : 'Low', classification: 'News Publication', warnings: getSourceWarnings(domain, credScore) }
+                name: post.thread?.site_full || domain, url: post.url,
+                credibility: { rating: credScore >= 80 ? 'High' : 'Medium', classification: 'News Publication', warnings: [] }
             }
         } as Evidence;
     }).filter((e): e is Evidence => e !== null);
 }
-function calculateTierConfidence(evidence: Evidence[]): number {
-    if (evidence.length === 0) return 0;
-    const avgCredibility = evidence.reduce((sum, e) => sum + e.credibilityScore, 0) / evidence.length;
-    const highCredCount = evidence.filter(e => e.credibilityScore >= 85).length;
-    const qualityBonus = Math.min(30, highCredCount * 10);
-    return Math.min(100, (avgCredibility * 0.7) + qualityBonus);
+
+function createEnhancedStatisticalReport(text: string, evidence: Evidence[], tierResults: TierResult[], startTime: number, score: number): FactCheckReport {
+    return {
+        id: `fact_check_${Date.now()}`,
+        originalText: text,
+        finalVerdict: generateVerdictFromScore(score, evidence),
+        finalScore: score,
+        reasoning: `AI synthesis failed or was skipped. Based on a statistical analysis of ${evidence.length} sources, the claim has a reliability score of ${score}%.`,
+        evidence,
+        metadata: {
+            methodUsed: 'statistical-fallback',
+            processingTimeMs: Date.now() - startTime,
+            apisUsed: tierResults.filter(t => t.success).map(t => t.tier),
+            sourcesConsulted: { total: evidence.length, highCredibility: evidence.filter(e => e.credibilityScore >= 80).length },
+            warnings: ['AI synthesis was unavailable or skipped.'],
+            tierBreakdown: tierResults
+        }
+    };
 }
-function calculateOverallConfidence(evidence: Evidence[]): number {
-    if (evidence.length === 0) return 0;
-    const highCredSources = evidence.filter(e => e.credibilityScore >= 80);
-    const otherSources = evidence.filter(e => e.credibilityScore < 80);
-    if (highCredSources.length === 0) return calculateTierConfidence(otherSources);
-    const highCredAvg = highCredSources.reduce((sum, e) => sum + e.credibilityScore, 0) / highCredSources.length;
-    return Math.round(highCredAvg);
+
+function buildSynthesisPrompt(text: string, evidence: Evidence[], context: string): string {
+    const evidenceSummary = evidence.slice(0, 12).map(e => `[${e.credibilityScore}% credibility] ${e.publisher}: "${(e.snippet || '').substring(0, 200)}..."`).join('\n');
+    return `As a professional fact-checker for a ${context} publication, analyze the claim based ONLY on the evidence provided.
+
+CLAIM: "${text}"
+
+EVIDENCE:
+${evidenceSummary}
+
+Your Task: Provide a concise, professional analysis in this EXACT format. Do not add any extra text.
+
+VERDICT: [TRUE, FALSE, MIXED, UNVERIFIED, MISLEADING]
+SCORE: [0-100]
+REASONING: [2-3 sentences explaining your verdict and score based on evidence quality and consistency.]
+WARNINGS: [Note concerns like source quality or contradictions. If none, write "None"]`;
 }
-function calculateNewsSourceScore(domain: string, post: any): number {
-    const baseScore = calculateSourceScore(domain);
-    if (post.published) {
-        const daysOld = (Date.now() - new Date(post.published).getTime()) / (1000 * 60 * 60 * 24);
-        if (daysOld < 7) return Math.min(100, baseScore + 5);
-    }
-    return baseScore;
-}
-function calculateSourceScore(domain: string): number {
-    const d = domain.toLowerCase();
-    if (['reuters.com', 'apnews.com'].some(s => d.includes(s))) return 98;
-    if (['bbc.com', 'bbc.co.uk'].some(s => d.includes(s))) return 95;
-    if (['pbs.org', 'npr.org'].some(s => d.includes(s))) return 94;
-    if (['factcheck.org', 'snopes.com', 'politifact.com'].some(s => d.includes(s))) return 92;
-    if (['nytimes.com', 'washingtonpost.com', 'wsj.com'].some(s => d.includes(s))) return 88;
-    if (d.includes('.gov')) return 90;
-    if (d.includes('.edu')) return 85;
-    if (d.includes('who.int') || d.includes('un.org')) return 93;
-    return 60; // Default score
-}
-function parseGeminiResponse(text: string, evidence: Evidence[], weightedScore: number): { verdict: FactVerdict; score: number; reasoning: string; warnings: string[] } {
+
+function parseGeminiResponse(text: string, evidence: Evidence[], evidenceScore: number): { verdict: FactVerdict; score: number; reasoning: string; warnings: string[] } {
     const verdictMatch = text.match(/VERDICT:\s*(TRUE|FALSE|MIXED|UNVERIFIED|MISLEADING)/i);
     const scoreMatch = text.match(/SCORE:\s*(\d+)/i);
     const reasoningMatch = text.match(/REASONING:\s*(.+?)(?=WARNINGS:|$)/is);
     const warningsMatch = text.match(/WARNINGS:\s*(.+)/is);
-    const aiScore = scoreMatch ? parseInt(scoreMatch[1], 10) : weightedScore;
+    const aiScore = scoreMatch ? parseInt(scoreMatch[1], 10) : evidenceScore;
     const verdict = verdictMatch ? (verdictMatch[1].toUpperCase() as FactVerdict) : generateVerdictFromScore(aiScore, evidence);
     const reasoning = reasoningMatch?.[1]?.trim() || "AI analysis could not be parsed.";
-    const warnings: string[] = [];
-    if (warningsMatch && warningsMatch[1].toLowerCase().trim() !== 'none') warnings.push(warningsMatch[1].trim());
-    if (evidence.length < 3) warnings.push('Limited number of sources available.');
+    const warnings = warningsMatch && warningsMatch[1].toLowerCase().trim() !== 'none' ? [warningsMatch[1].trim()] : [];
     return { verdict, score: aiScore, reasoning, warnings };
 }
-function mergeEvidence(existing: Evidence[], newEvidence: Evidence[]): Evidence[] {
+
+function mergeEvidence(...evidenceArrays: Evidence[][]): Evidence[] {
     const evidenceMap = new Map<string, Evidence>();
-    [...existing, ...newEvidence].forEach(e => { if (e.url) evidenceMap.set(e.url, e); });
-    return Array.from(evidenceMap.values());
-}
-function refineQueryFromEvidence(originalText: string, evidence: Evidence[], targeted = false): string {
-    const keyEntities = new Set(extractKeyEntities(originalText));
-    evidence.forEach(e => { extractKeyEntities(e.title).forEach(entity => keyEntities.add(entity)); });
-    const queryTerms = [...keyEntities].slice(0, 5);
-    if (targeted) {
-        const bestSnippet = evidence.sort((a, b) => b.credibilityScore - a.credibilityScore)[0]?.snippet;
-        if (bestSnippet) {
-            const phrase = bestSnippet.split(/[.!?]/)[0];
-            if (phrase.length > 10) queryTerms.push(`"${phrase}"`);
+    for (const arr of evidenceArrays) {
+        for (const e of arr) {
+            if (e.url) evidenceMap.set(e.url, e);
         }
     }
-    return queryTerms.join(' ');
+    return Array.from(evidenceMap.values());
 }
+
+function calculateTierConfidence(evidence: Evidence[]): number {
+    if (evidence.length === 0) return 0;
+    const avgCredibility = evidence.reduce((sum, e) => sum + e.credibilityScore, 0) / evidence.length;
+    const highCredCount = evidence.filter(e => e.credibilityScore >= 85).length;
+    const qualityBonus = Math.min(25, highCredCount * 8);
+    return Math.min(100, Math.round((avgCredibility * 0.75) + qualityBonus));
+}
+
+function calculateOverallConfidence(evidence: Evidence[]): number {
+    if (evidence.length === 0) return 0;
+    const highCredSources = evidence.filter(e => e.credibilityScore >= 80);
+    if (highCredSources.length > 0) {
+        return Math.round(highCredSources.reduce((sum, e) => sum + e.credibilityScore, 0) / highCredSources.length);
+    }
+    return calculateTierConfidence(evidence);
+}
+
+function calculateSourceScore(domain: string): number {
+    const d = domain.toLowerCase();
+    if (['reuters.com', 'apnews.com', 'ap.org'].some(s => d.includes(s))) return 98;
+    if (['bbc.com', 'bbc.co.uk', 'factcheck.org', 'snopes.com', 'politifact.com'].some(s => d.includes(s))) return 95;
+    if (['nytimes.com', 'washingtonpost.com', 'wsj.com'].some(s => d.includes(s))) return 90;
+    if (d.includes('.gov') || d.includes('who.int') || d.includes('un.org')) return 88;
+    if (d.includes('.edu')) return 85;
+    return 65;
+}
+
+function generateVerdictFromScore(score: number, evidence: Evidence[]): FactVerdict {
+    const highQualitySources = evidence.filter(e => e.credibilityScore >= 85).length;
+    if (score >= 90 && highQualitySources >= 2) return 'TRUE';
+    if (score >= 70) return 'MIXED';
+    if (score >= 50) return 'MISLEADING';
+    if (score < 50 && evidence.length > 0) return 'FALSE';
+    return 'UNVERIFIED';
+}
+
 function extractSmartQuery(text: string, maxLength: number): string {
-    const cleaned = text.replace(/\s+/g, ' ').trim();
+    const cleaned = text.replace(/[^\w\s.,'"]/g, '').replace(/\s+/g, ' ').trim();
     const firstSentence = cleaned.match(/^[^.!?]+[.!?]/)?.[0] || cleaned;
     const trimmed = firstSentence.trim();
     if (trimmed.length <= maxLength) return trimmed;
@@ -492,44 +462,21 @@ function extractSmartQuery(text: string, maxLength: number): string {
     const lastSpace = truncated.lastIndexOf(' ');
     return lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated;
 }
-function extractKeyEntities(text: string): string[] {
-    const words = text.replace(/[^\w\s]/g, '').split(/\s+/);
-    const entities = words.filter(w => /^[A-Z]/.test(w) && w.length > 3 && !/^(The|And|But|For)$/.test(w));
-    return [...new Set(entities)].slice(0, 5);
-}
+
 function extractDomain(url: string): string {
-    try { return new URL(url).hostname.replace('www.', ''); }
-    catch { return url.split('/')[2]?.replace('www.', '') || url; }
+    try { return new URL(url).hostname.replace('www.', ''); } catch { return ''; }
 }
+
 function classifySource(domain: string): string {
-    const d = domain.toLowerCase();
-    if (d.includes('.gov')) return 'Government';
-    if (d.includes('.edu')) return 'Academic';
-    if (['reuters', 'apnews', 'bbc'].some(s => d.includes(s))) return 'News Agency';
-    if (['factcheck', 'snopes', 'politifact'].some(s => d.includes(s))) return 'Fact-Checker';
+    if (domain.includes('.gov')) return 'Government';
+    if (domain.includes('.edu')) return 'Academic';
+    if (['reuters', 'apnews', 'bbc', 'nytimes', 'washingtonpost'].some(s => domain.includes(s))) return 'Major News Outlet';
+    if (['factcheck', 'snopes', 'politifact'].some(s => domain.includes(s))) return 'Fact-Checker';
     return 'Web Source';
 }
-function getSourceWarnings(domain: string, score: number): string[] {
-    const warnings: string[] = [];
-    if (score < 60) warnings.push('Low credibility source');
-    if (domain.includes('blog')) warnings.push('Potential opinion content');
-    return warnings;
-}
+
 function calculateRelevanceScore(position?: number): number {
     if (position && position <= 3) return 95;
     if (position && position <= 10) return 85;
     return 75;
-}
-function extractDateFromSnippet(snippet?: string): string | undefined {
-    if (!snippet) return undefined;
-    const match = snippet.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/i);
-    return match ? new Date(match[0]).toISOString() : undefined;
-}
-function generateVerdictFromScore(score: number, evidence: Evidence[]): FactVerdict {
-    const highQualitySources = evidence.filter(e => e.credibilityScore >= 80).length;
-    if (score >= 85 && highQualitySources >= 2) return 'TRUE';
-    if (score >= 70 && evidence.length >= 3) return 'MIXED';
-    if (score >= 50) return 'MIXED';
-    if (score >= 30) return 'MISLEADING';
-    return 'UNVERIFIED';
 }
