@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// src/components/TruScopeJournalismPlatform.tsx - COMPLETE VERSION
+import React, { useState, useEffect } from 'react';
 import { getApiKeys, saveApiKeys } from '../services/apiKeyService';
 import { GoogleFactCheckService } from '../services/googleFactCheckService';
 import { ApiKeys, FactCheckReport } from '@/types';
@@ -7,8 +8,7 @@ import SchemaInputForm from './SchemaInputForm';
 import {
   FileText, CheckCircle, AlertTriangle, Link as LinkIcon,
   Download, Copy, Check, X, Search, Edit3, BookOpen, Globe,
-  Calendar, Award, Shield, ExternalLink, Info, RefreshCw,
-  Settings, TrendingUp, Database
+  Award, Shield, ExternalLink, Info, RefreshCw, Database
 } from 'lucide-react';
 import HistoryView from './HistoryView';
 import TrendingMisinformation from './TrendingMisinformation';
@@ -57,12 +57,7 @@ export default function TruScopeJournalismPlatform() {
         const keys = getApiKeys();
         setSettings({ apiKeys: keys });
 
-        if (keys.gemini) {
-            console.log('✅ API keys configured and ready');
-        } else {
-            console.warn('⚠️ No Gemini API key found');
-        }
-
+        console.log('✅ TruScope initialized - All AI processing via Vertex AI');
         checkAPIAvailability();
     }, []);
 
@@ -80,8 +75,24 @@ export default function TruScopeJournalismPlatform() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
-            setApiStatus(response.ok ? 'available' : 'unavailable');
-        } catch {
+            
+            if (!response.ok) {
+                setApiStatus('unavailable');
+                return;
+            }
+
+            const data = await response.json();
+            
+            // Check if server-side APIs are configured
+            const hasServerAPIs = data.apis?.serp && data.apis?.webz;
+            
+            setApiStatus(hasServerAPIs ? 'available' : 'unavailable');
+            
+            if (!hasServerAPIs) {
+                console.warn('⚠️ Server-side APIs not fully configured');
+            }
+        } catch (error) {
+            console.error('❌ Health check failed:', error);
             setApiStatus('unavailable');
         }
     };
@@ -92,11 +103,9 @@ export default function TruScopeJournalismPlatform() {
             return;
         }
 
-        const apiKeys = getApiKeys();
-
-        if (!apiKeys.gemini || apiKeys.gemini.trim() === '') {
-            alert('⚠️ Gemini API key is required. Please configure it in Settings.');
-            setIsSettingsModalOpen(true);
+        // Check if server APIs are available
+        if (apiStatus === 'unavailable') {
+            alert('⚠️ Server APIs are not configured. Please contact your administrator to set up SERP_API_KEY and NEWSAPI_API_KEY in the deployment environment.');
             return;
         }
 
@@ -104,33 +113,37 @@ export default function TruScopeJournalismPlatform() {
         setActiveTab('analyze');
         setAnalysisError(null);
 
-        console.log('🚀 Starting fact-check analysis');
+        console.log('🚀 Starting fact-check analysis via Vertex AI');
         console.log('📝 Content length:', content.length, 'characters');
         console.log('📋 Publishing context:', publishingContext);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
         try {
-            const modelToUse = apiKeys.geminiModel || 'gemini-2.0-flash-exp';
-            console.log('🔑 Using Gemini model:', modelToUse);
+            console.log('🔑 Using Vertex AI for all AI processing (server-side)');
 
             let clientSideResults: { phase1?: any } = {};
+            
+            // Optional: Run Google Fact Check if available
+            const apiKeys = getApiKeys();
             if (apiKeys.factCheck) {
-                console.log('🚀 Running client-side Google Fact Check...');
-                const googleFactCheck = new GoogleFactCheckService();
-                const phase1Report = await googleFactCheck.searchClaims(content, 5);
-                if (phase1Report) {
-                    console.log('✅ Client-side Google Fact Check complete:', phase1Report);
-                    clientSideResults.phase1 = {
-                        tier: 'direct-verification',
-                        success: true,
-                        confidence: phase1Report.finalScore,
-                        evidence: phase1Report.evidence,
-                        processingTime: phase1Report.metadata?.processingTimeMs || 0,
-                    };
-                } else {
-                    console.log('ℹ️ No results from client-side Google Fact Check.');
+                console.log('🔍 Running client-side Google Fact Check...');
+                try {
+                    const googleFactCheck = new GoogleFactCheckService();
+                    const phase1Report = await googleFactCheck.searchClaims(content, 5);
+                    if (phase1Report) {
+                        console.log('✅ Client-side Google Fact Check complete:', phase1Report);
+                        clientSideResults.phase1 = {
+                            tier: 'direct-verification',
+                            success: true,
+                            confidence: phase1Report.finalScore,
+                            evidence: phase1Report.evidence,
+                            processingTime: phase1Report.metadata?.processingTimeMs || 0,
+                        };
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Google Fact Check failed, continuing without it:', error);
                 }
             }
 
@@ -138,15 +151,11 @@ export default function TruScopeJournalismPlatform() {
                 text: content,
                 publishingContext,
                 clientSideResults,
-                config: {
-                    gemini: apiKeys.gemini,
-                    geminiModel: modelToUse,
-                    search: apiKeys.search || undefined,
-                    searchId: apiKeys.searchId || undefined
-                }
+                // No API keys needed - all handled server-side now
+                config: {}
             };
 
-            console.log('📤 Sending request to /api/fact-check');
+            console.log('📤 Sending request to /api/fact-check (Vertex AI backend)');
             const response = await fetch('/api/fact-check', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -204,7 +213,6 @@ export default function TruScopeJournalismPlatform() {
             }
 
             setFactCheckResult(normalizedResult);
-            // ✅ CRITICAL FIX: Pass the original content to trigger Verity with full context
             setCurrentReport(normalizedResult, content);
             setActiveTab('report');
 
@@ -212,13 +220,20 @@ export default function TruScopeJournalismPlatform() {
             clearTimeout(timeoutId);
             console.error('❌ Analysis failed:', error);
             let errorMessage = 'An unexpected error occurred';
+            
             if (error.name === 'AbortError') {
-                errorMessage = 'Request timeout - The analysis is taking longer than expected. Please try with shorter content or check your API keys.';
+                errorMessage = 'Request timeout - The analysis is taking longer than expected. Please try with shorter content or check the server logs.';
+            } else if (error.message?.includes('authenticate')) {
+                errorMessage = 'Authentication failed with Google Cloud. Please check that GCLOUD_SERVICE_ACCOUNT_KEY_JSON is properly configured in Vercel environment variables.';
+            } else if (error.message?.includes('quota')) {
+                errorMessage = 'API quota exceeded. Please check your Google Cloud billing and quotas.';
             } else if (error.message) {
                 errorMessage = error.message;
             }
+            
             setAnalysisError(errorMessage);
-            alert(`❌ Analysis failed:\n\n${errorMessage}\n\nPlease check:\n• Your Gemini API key is valid\n• Your internet connection\n• The content length is reasonable\n• Server logs for more details`);
+            
+            alert(`❌ Analysis failed:\n\n${errorMessage}\n\nPlease check:\n• Server environment variables are configured\n• Google Cloud credentials are valid\n• Internet connection is stable\n• Server logs for more details`);
         } finally {
             setIsAnalyzing(false);
         }
@@ -228,7 +243,7 @@ export default function TruScopeJournalismPlatform() {
         if (!factCheckResult) return;
 
         setIsAnalyzing(true);
-        console.log('🔧 Starting auto-correction...');
+        console.log('🔧 Starting auto-correction via Vertex AI...');
         try {
             const response = await fetch('/api/auto-correct', {
                 method: 'POST',
@@ -239,14 +254,19 @@ export default function TruScopeJournalismPlatform() {
                     mode: mode,
                 })
             });
-            if (!response.ok) throw new Error('Auto-correction failed');
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Auto-correction failed');
+            }
+            
             const result = await response.json();
             setEditorResult(result);
             setActiveTab('edit');
             console.log('✅ Auto-correction completed');
         } catch (error: any) {
             console.error('❌ Auto-correction failed:', error);
-            alert(`Auto-correction failed: ${error.message}`);
+            alert(`Auto-correction failed: ${error.message}\n\nThis feature requires Vertex AI to be properly configured.`);
         } finally {
             setIsAnalyzing(false);
         }
@@ -274,7 +294,6 @@ export default function TruScopeJournalismPlatform() {
 
     const handleSelectReport = (report: FactCheckReport, claimText: string) => {
         setFactCheckResult(report);
-        // ✅ CRITICAL FIX: Pass the claim text as the original content when selecting from history
         setCurrentReport(report, claimText);
         setContent(claimText);
         setActiveTab('report');
@@ -310,7 +329,7 @@ export default function TruScopeJournalismPlatform() {
                   </div>
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">TruScope Professional</h1>
-                    <p className="text-sm text-gray-600">Enterprise Fact-Checking & Editorial Suite</p>
+                    <p className="text-sm text-gray-600">Enterprise Fact-Checking powered by Vertex AI</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -322,11 +341,11 @@ export default function TruScopeJournalismPlatform() {
                       : 'bg-yellow-100 text-yellow-700'
                   }`}>
                     {apiStatus === 'checking' && '🔄 Checking...'}
-                    {apiStatus === 'available' && '✅ API Ready'}
-                    {apiStatus === 'unavailable' && '⚠️ API Offline'}
+                    {apiStatus === 'available' && '✅ APIs Ready'}
+                    {apiStatus === 'unavailable' && '⚠️ Setup Required'}
                   </div>
                   <span className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-semibold shadow-lg">
-                    Pro Edition
+                    Vertex AI
                   </span>
                 </div>
               </div>
@@ -340,7 +359,7 @@ export default function TruScopeJournalismPlatform() {
                   <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <h3 className="font-semibold text-red-900 mb-1">Analysis Error</h3>
-                    <p className="text-sm text-red-700">{analysisError}</p>
+                    <p className="text-sm text-red-700 whitespace-pre-wrap">{analysisError}</p>
                     <button
                       onClick={() => setAnalysisError(null)}
                       className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
@@ -369,6 +388,7 @@ export default function TruScopeJournalismPlatform() {
                       setPublishingContext={setPublishingContext}
                       onAnalyze={handleAnalyze}
                       isAnalyzing={isAnalyzing}
+                      apiStatus={apiStatus}
                     />
                   )}
                   {activeTab === 'report' && factCheckResult && (
@@ -471,7 +491,7 @@ function TabNavigation({ activeTab, onTabChange, hasResult, correctionCount }: a
     );
 }
   
-function AnalysisPanel({ content, setContent, publishingContext, setPublishingContext, onAnalyze, isAnalyzing }: any) {
+function AnalysisPanel({ content, setContent, publishingContext, setPublishingContext, onAnalyze, isAnalyzing, apiStatus }: any) {
     const contexts = [
       {
         id: 'journalism',
@@ -498,6 +518,20 @@ function AnalysisPanel({ content, setContent, publishingContext, setPublishingCo
   
     return (
       <div className="space-y-6">
+        {apiStatus === 'unavailable' && (
+          <div className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+              <div>
+                <h3 className="font-semibold text-yellow-900 mb-1">Server Configuration Required</h3>
+                <p className="text-sm text-yellow-700">
+                  Server-side APIs (SERP_API_KEY, NEWSAPI_API_KEY) are not configured. Please set these in your Vercel environment variables.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Publishing Context</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -537,22 +571,22 @@ function AnalysisPanel({ content, setContent, publishingContext, setPublishingCo
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Paste your article, news content, or claim here for comprehensive fact-checking..."
+            placeholder="Paste your article, news content, or claim here for comprehensive fact-checking powered by Google Vertex AI..."
             className="w-full h-64 p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all resize-none"
           />
           <div className="mt-4 flex items-center justify-between">
             <span className="text-sm text-gray-600">
-              {content.split(/\s+/).filter(Boolean).length} words
+              {content.split(/\s+/).filter(Boolean).length} words • {content.length} characters
             </span>
             <button
               onClick={onAnalyze}
-              disabled={isAnalyzing || !content.trim()}
+              disabled={isAnalyzing || !content.trim() || apiStatus === 'unavailable'}
               className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
             >
               {isAnalyzing ? (
                 <>
                   <RefreshCw className="w-5 h-5 animate-spin" />
-                  <span>Analyzing...</span>
+                  <span>Analyzing with Vertex AI...</span>
                 </>
               ) : (
                 <>
@@ -583,7 +617,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Fact-Check Report</h2>
-              <p className="text-sm text-gray-600">Tiered verification analysis</p>
+              <p className="text-sm text-gray-600">Multi-tier verification powered by Vertex AI</p>
             </div>
             <div className={`px-6 py-3 rounded-xl border-2 font-bold text-2xl ${getScoreColor(displayScore)}`}>
               {displayScore}/100
@@ -612,13 +646,13 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
                 <Award className="w-6 h-6 text-purple-600" />
                 <span className="text-sm font-semibold text-purple-900">Method</span>
               </div>
-              <p className="text-lg font-bold text-purple-700">{result.metadata?.methodUsed || result.metadata?.method_used || 'Tiered'}</p>
+              <p className="text-lg font-bold text-purple-700">{result.metadata?.methodUsed || result.metadata?.method_used || '3-Tier + AI'}</p>
             </div>
           </div>
   
           {result.reasoning && (
             <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Analysis Summary</h4>
+              <h4 className="font-semibold text-gray-900 mb-2">AI Analysis Summary</h4>
               <p className="text-gray-700">{result.reasoning}</p>
             </div>
           )}
@@ -722,7 +756,7 @@ function ReportPanel({ result, onAutoCorrect, onShowSchema, isProcessing }: any)
             >
               <Edit3 className="w-6 h-6 mx-auto mb-2" />
               <p className="font-semibold">Auto-Correct</p>
-              <p className="text-xs text-gray-600 mt-1">Apply corrections</p>
+              <p className="text-xs text-gray-600 mt-1">Apply AI corrections</p>
             </button>
   
             <button
@@ -770,7 +804,7 @@ function EditorialPanel({ originalContent, result, editorResult, onContentUpdate
           {editorResult && (
             <>
               <div className="p-4 bg-green-50 rounded-lg border border-green-200 mb-6">
-                <h3 className="font-semibold text-green-900 mb-2">Corrected Content</h3>
+                <h3 className="font-semibold text-green-900 mb-2">Corrected Content (Vertex AI)</h3>
                 <p className="text-gray-700 whitespace-pre-wrap">{editorResult.editedText || editorResult.correctedText || 'No corrections available'}</p>
               </div>
   
@@ -791,7 +825,7 @@ function EditorialPanel({ originalContent, result, editorResult, onContentUpdate
   
           {!editorResult && (
             <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 text-center">
-              <p className="text-gray-600">Click "Auto-Correct" in the Report tab to generate corrections</p>
+              <p className="text-gray-600">Click "Auto-Correct" in the Report tab to generate AI-powered corrections</p>
             </div>
           )}
         </div>
